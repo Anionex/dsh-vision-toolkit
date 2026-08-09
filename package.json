@@ -1,0 +1,54 @@
+{
+  "name": "@dsh-external/dsh-vision-toolkit",
+  "version": "0.1.0",
+  "description": "DSH native vision engineering toolkit: structured glance/ground/detect/trace/crop tools, unified vision config and credentials, and a bundled vision-tools skill",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "src",
+    "cordis.patch.yml",
+    "README.md",
+    "README.zh.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepack": "npm run build",
+    "test": "vitest run tests"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "visionToolkit": {
+      "upstreamRepository": "https://github.com/Anionex/agent-vision-toolkit",
+      "upstreamVersion": "v0.1.0",
+      "upstreamCommit": "d194943f27bdb74dbee50760bc2c95f7d0f64fe7"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-credentials": "^0.0.1",
+    "@deepseek-ai/dsh-skill": "^0.0.1",
+    "@deepseek-ai/dsh-subprocess": "^0.0.1",
+    "@deepseek-ai/dsh-tools": "^0.0.1",
+    "cordis": "^4.0.0-rc.7",
+    "schemastery": "^3.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.0",
+    "typescript": "^6.0.3",
+    "vite-tsconfig-paths": "^6.1.1",
+    "vitest": "^4.1.8"
+  },
+  "license": "MIT"
+}

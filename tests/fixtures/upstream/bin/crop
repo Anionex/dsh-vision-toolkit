@@ -1,0 +1,20 @@
+#!/usr/bin/env python3
+"""Fixture crop: write a stub image and report the upstream result line."""
+import os
+import sys
+
+args = sys.argv[1:]
+out = None
+scale = 1
+for index, arg in enumerate(args):
+    if arg == '-o' and index + 1 < len(args):
+        out = args[index + 1]
+    if arg == '--scale' and index + 1 < len(args):
+        scale = int(args[index + 1])
+if out is None:
+    print('crop: missing output', file=sys.stderr)
+    sys.exit(2)
+os.makedirs(os.path.dirname(os.path.abspath(out)) or '.', exist_ok=True)
+with open(out, 'wb') as handle:
+    handle.write(b'\x89PNG\r\n\x1a\n')
+print(f'wrote {out} ({40 * scale}x{20 * scale})')

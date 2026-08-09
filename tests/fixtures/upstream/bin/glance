@@ -1,0 +1,11 @@
+#!/usr/bin/env python3
+"""Fixture glance: deterministic description/OCR/QA output."""
+import sys
+
+args = sys.argv[1:]
+if '--ocr' in args:
+    print('Fixture OCR text')
+elif '-q' in args:
+    print('Fixture answer to the question')
+else:
+    print('Fixture detailed description')

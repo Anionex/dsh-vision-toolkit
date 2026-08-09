@@ -1,0 +1,3 @@
+#!/usr/bin/env python3
+"""Fixture ground: one located element in the upstream line format."""
+print('1. top-left send button x1: 100, y1: 50, x2: 200, y2: 90')
