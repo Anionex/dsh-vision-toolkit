@@ -46,22 +46,21 @@ Skill 永远不会介绍不可用的工具。
 在 Profile 中 patch 同 id 的配置行：
 
 ```yaml
-- update:
-    - id: vision-toolkit
-      config:
-        provider:
-          baseUrl: https://api.inferera.com/v1
-          credential: VISION_API_KEY
-          model: gemini-3.6-flash
-        language: zh
-        timeoutMs: 60000
-        maxImageBytes: 10485760
-        concurrency: 4
-        runtime:
-          mode: external
-          agentVisionToolkitPath: /Users/me/agent-vision-toolkit
-          python: python3
-        allowedDirs: []
+- id: vision-toolkit
+  config:
+    provider:
+      baseUrl: https://api.inferera.com/v1
+      credential: VISION_API_KEY
+      model: gemini-3.6-flash
+    language: zh
+    timeoutMs: 60000
+    maxImageBytes: 10485760
+    concurrency: 4
+    runtime:
+      mode: external
+      agentVisionToolkitPath: /Users/me/agent-vision-toolkit
+      python: python3
+    allowedDirs: []
 ```
 
 | 字段 | 默认值 | 说明 |

@@ -54,22 +54,21 @@ are not available.
 Patch the profile row (same `id: vision-toolkit`) with your deployment:
 
 ```yaml
-- update:
-    - id: vision-toolkit
-      config:
-        provider:
-          baseUrl: https://api.inferera.com/v1
-          credential: VISION_API_KEY
-          model: gemini-3.6-flash
-        language: zh
-        timeoutMs: 60000
-        maxImageBytes: 10485760
-        concurrency: 4
-        runtime:
-          mode: external
-          agentVisionToolkitPath: /Users/me/agent-vision-toolkit
-          python: python3
-        allowedDirs: []
+- id: vision-toolkit
+  config:
+    provider:
+      baseUrl: https://api.inferera.com/v1
+      credential: VISION_API_KEY
+      model: gemini-3.6-flash
+    language: zh
+    timeoutMs: 60000
+    maxImageBytes: 10485760
+    concurrency: 4
+    runtime:
+      mode: external
+      agentVisionToolkitPath: /Users/me/agent-vision-toolkit
+      python: python3
+    allowedDirs: []
 ```
 
 | Field | Default | Meaning |
