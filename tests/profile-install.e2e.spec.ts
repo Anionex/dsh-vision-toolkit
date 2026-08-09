@@ -125,6 +125,36 @@ describe.skipIf(!hasDsh() || !hasPnpm())('dsh-vision-toolkit profile install (ke
       await server.close()
     }
 
+    const disablePatch = join(home, 'disable.yml')
+    writeFileSync(disablePatch, [
+      '- id: vision-toolkit',
+      '  disabled: true',
+      '',
+    ].join('\n'))
+    const disabledServer = await startMockLlmServer({
+      sequence: ['success'],
+      repeatLast: true,
+      successText: 'disabled ok',
+    })
+    try {
+      const disabled = await runDsh([
+        'run', '--profile', 'headless', '--patch', patch, '--patch', disablePatch,
+        'say ok',
+      ], {
+        DSH_HOME: home,
+        DSH_TELEMETRY_DISABLED: '1',
+        DEEPSEEK_API_KEY: 'mock-vision-e2e-key',
+        DEEPSEEK_BASE_URL: disabledServer.baseURL,
+        VISION_API_KEY: 'fixture-vision-key',
+      })
+      expect(disabled.code, disabled.stderr).toBe(0)
+      expect(disabled.stdout).toBe('disabled ok')
+      const disabledBodies = JSON.stringify(disabledServer.requests.map(request => request.body))
+      expect(disabledBodies).not.toContain('vision_glance')
+    } finally {
+      await disabledServer.close()
+    }
+
     const remove = await runDsh(['plugin', '--profile', 'headless', 'remove', '@dsh-external/dsh-vision-toolkit'], {
       DSH_HOME: home,
     })
