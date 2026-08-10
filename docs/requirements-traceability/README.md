@@ -1,0 +1,74 @@
+# Vision Toolkit requirements traceability
+
+English | [中文](README.zh.md)
+
+This reference maps the DSH Vision Toolkit product brief's committed P0/P1 requirements to their owning implementation, automated coverage, and runnable acceptance evidence. A row marked **Delivered** is part of the package contract; P2/P3 rows document intentional product boundaries rather than unfinished P0/P1 work.
+
+## P0 product requirements
+
+| Requirement | Status | Owning implementation | Verification |
+|---|---|---|---|
+| P0-1 Standard Profile Bundle | **Delivered** | [`package.json`](../../package.json), [`cordis.patch.yml`](../../cordis.patch.yml), [`src/index.ts`](../../src/index.ts), committed `lib/` | [`tests/package-layout.spec.ts`](../../tests/package-layout.spec.ts), [`tests/profile-install.e2e.spec.ts`](../../tests/profile-install.e2e.spec.ts), clean `--dump-config`, Web/Headless boot, disable, and removal checks |
+| P0-2 Upstream reuse | **Delivered** | [`src/version.ts`](../../src/version.ts), [`src/runtime-install.ts`](../../src/runtime-install.ts), [`scripts/upstream-manifest.mjs`](../../scripts/upstream-manifest.mjs), [`scripts/sync-upstream.mjs`](../../scripts/sync-upstream.mjs), [`vendor/agent-vision-toolkit/UPSTREAM_MANIFEST.json`](../../vendor/agent-vision-toolkit/UPSTREAM_MANIFEST.json) | [`tests/upstream.spec.ts`](../../tests/upstream.spec.ts), [`tests/runtime-install.spec.ts`](../../tests/runtime-install.spec.ts), build-time manifest verification |
+| P0-3 Native tools | **Delivered** | [`src/tools.ts`](../../src/tools.ts), [`src/runtime.ts`](../../src/runtime.ts), [`src/upstream.ts`](../../src/upstream.ts) | [`tests/tools.spec.ts`](../../tests/tools.spec.ts), [`tests/runtime.spec.ts`](../../tests/runtime.spec.ts), [`tests/upstream.spec.ts`](../../tests/upstream.spec.ts), real-profile `vision_glance` call |
+| P0-4 Configuration and Credentials | **Delivered** | [`src/config.ts`](../../src/config.ts), per-operation resolution in [`src/runtime.ts`](../../src/runtime.ts), isolated environment construction in [`src/upstream.ts`](../../src/upstream.ts) | [`tests/config.spec.ts`](../../tests/config.spec.ts), Credential/error/redaction cases in [`tests/runtime.spec.ts`](../../tests/runtime.spec.ts) and [`tests/errors.spec.ts`](../../tests/errors.spec.ts) |
+| P0-5 Skill lifecycle | **Delivered** | Readiness ordering and disposer in [`src/index.ts`](../../src/index.ts), bundled content in [`src/skill.ts`](../../src/skill.ts) | [`tests/tools.spec.ts`](../../tests/tools.spec.ts), disable/uninstall path in [`tests/profile-install.e2e.spec.ts`](../../tests/profile-install.e2e.spec.ts) |
+| P0-6 Text-only model results | **Delivered** | JSON output schemas and pure renderers in [`src/tools.ts`](../../src/tools.ts); canonical Artifact descriptors in [`src/artifacts.ts`](../../src/artifacts.ts) | Tool schema/presentation assertions in [`tests/tools.spec.ts`](../../tests/tools.spec.ts), model-facing transcript assertions in [`tests/profile-install.e2e.spec.ts`](../../tests/profile-install.e2e.spec.ts) |
+| P0-7 Stable errors | **Delivered** | [`src/errors.ts`](../../src/errors.ts), boundary validation in [`src/paths.ts`](../../src/paths.ts), [`src/runtime.ts`](../../src/runtime.ts), and [`src/upstream.ts`](../../src/upstream.ts) | [`tests/errors.spec.ts`](../../tests/errors.spec.ts), [`tests/paths.spec.ts`](../../tests/paths.spec.ts), parser, timeout, cancellation, credential, and capacity cases in runtime/upstream tests |
+| P0-8 Tests and documentation | **Delivered** | Bilingual [`README.md`](../../README.md), package tests, managed runtime, example, and committed build output | `pnpm run build`, `pnpm test`, `pnpm pack --dry-run`, translation/Markdown gates, and the keyless clean-profile e2e |
+
+## P1 product requirements
+
+| Requirement | Status | Owning implementation | Verification |
+|---|---|---|---|
+| P1-1 Artifact delivery | **Delivered** | Descriptor creation in [`src/artifacts.ts`](../../src/artifacts.ts), fenced atomic paths in [`src/paths.ts`](../../src/paths.ts), signed capability delivery in [`src/artifact-access.ts`](../../src/artifact-access.ts) | [`tests/artifacts.spec.ts`](../../tests/artifacts.spec.ts), [`tests/artifact-access.spec.ts`](../../tests/artifact-access.spec.ts), Artifact-producing runtime/profile tests |
+| P1-2 Extended tools | **Delivered** | `vision_pixel_diff`, `vision_long_screenshot_ocr`, `vision_extract_foreground`, `vision_dominant_colors`, and `vision_html_screenshot` in [`src/tools.ts`](../../src/tools.ts) and [`src/runtime.ts`](../../src/runtime.ts) | P1 parser and runtime cases in [`tests/upstream.spec.ts`](../../tests/upstream.spec.ts) and [`tests/runtime.spec.ts`](../../tests/runtime.spec.ts); pixel-diff and long-OCR real-profile calls |
+| P1-3 Dedicated Web presentation | **Delivered** | Browser plugin and dedicated cards in [`src/client/index.tsx`](../../src/client/index.tsx); presentation-only capability metadata in [`src/artifact-access.ts`](../../src/artifact-access.ts) | [`tests/client.spec.ts`](../../tests/client.spec.ts), safe preview tests in [`tests/artifact-access.spec.ts`](../../tests/artifact-access.spec.ts), Web visual/console QA |
+| P1-4 Health checks | **Delivered** | `vision_toolkit_health` in [`src/runtime.ts`](../../src/runtime.ts), schema in [`src/tools.ts`](../../src/tools.ts), Web action in [`src/web.ts`](../../src/web.ts) | Health cases in [`tests/runtime.spec.ts`](../../tests/runtime.spec.ts) and explicit-connection behavior in [`tests/web.spec.ts`](../../tests/web.spec.ts) |
+| P1-5 Settings | **Delivered** | Namespace/config in [`src/config.ts`](../../src/config.ts), prepare-before-swap manager in [`src/runtime-manager.ts`](../../src/runtime-manager.ts), private same-origin route in [`src/web.ts`](../../src/web.ts), section in [`src/client/index.tsx`](../../src/client/index.tsx) | [`tests/runtime-manager.spec.ts`](../../tests/runtime-manager.spec.ts), [`tests/web.spec.ts`](../../tests/web.spec.ts), [`tests/client.spec.ts`](../../tests/client.spec.ts), clean Web-profile save/restart QA |
+| P1-6 Install and upgrade experience | **Delivered** | Bundle lifecycle in [`src/index.ts`](../../src/index.ts), content-addressed managed runtime in [`src/runtime-install.ts`](../../src/runtime-install.ts), generation manager in [`src/runtime-manager.ts`](../../src/runtime-manager.ts) | Runtime interruption/concurrency tests, package-layout test, clean-profile lifecycle, persisted Settings and failed-candidate retention checks |
+
+## Cross-cutting requirements
+
+| Area | Contract and evidence |
+|---|---|
+| Security | [`src/paths.ts`](../../src/paths.ts) confines reads and writes by realpath; [`src/runtime.ts`](../../src/runtime.ts) decodes and limits images before upload; [`src/artifact-access.ts`](../../src/artifact-access.ts) revalidates signed files on every read and sandboxes SVG; [`src/errors.ts`](../../src/errors.ts) redacts secrets. Path, symlink, format, size, token-forgery, file-replacement, and CSP cases are automated. |
+| Portability | Runtime and browser calls use argv vectors and Node filesystem/process APIs rather than POSIX shell composition. Managed preparation has `uv` and `venv`/pip paths; Python and Chrome discovery include platform-specific candidates. Package tests avoid machine-local dependency specifiers, and the checked-in fixture/profile flow is keyless. |
+| Performance and cancellation | [`src/runtime.ts`](../../src/runtime.ts) applies one hard deadline, propagates `AbortSignal`, bounds per-session concurrency, rejects oversized decoded images before remote I/O, and deduplicates repeated resolved images within one glance operation. Timeout, cancellation, semaphore, and independent-session behavior are automated. |
+| Observability | [`src/runtime.ts`](../../src/runtime.ts) logs bounded tool name, outcome, total/upstream duration, image count/bytes/pixels, cache hits, model, and error category while excluding base64, credentials, headers, and unbounded upstream output. |
+| Maintainability | Every tool calls one [`VisionToolkitRuntime`](../../src/runtime.ts); DSH-specific adaptation remains in [`src/tools.ts`](../../src/tools.ts), [`src/index.ts`](../../src/index.ts), [`src/web.ts`](../../src/web.ts), and [`src/client/index.tsx`](../../src/client/index.tsx), while the pinned upstream remains the sole algorithm source. Tool schemas and the bundled skill are registered in one lifecycle generation. |
+| HTML screenshot isolation | The pinned screenshot guard uses a disposable Chrome profile, `--use-mock-keychain`, and `--incognito`, removes the profile after each call, and keeps network disabled. [`tests/html-screenshot-guard.spec.ts`](../../tests/html-screenshot-guard.spec.ts) captures the actual argv and cleanup behavior. |
+| UI restoration acceptance | [`scripts/ui-restoration-example.ts`](../../scripts/ui-restoration-example.ts) performs reference → HTML render → pixel diff through the real runtime. [`examples/ui-restoration/README.md`](../../examples/ui-restoration/README.md) owns the reproducible procedure and checked-in evidence; [`tests/ui-restoration-example.spec.ts`](../../tests/ui-restoration-example.spec.ts) enforces it. |
+
+## Error and lifecycle scenarios
+
+| Scenario | Expected behavior | Evidence |
+|---|---|---|
+| Missing/invalid image, format, region, or path | Reject before upstream execution with an input, capacity, or path-safe error | [`tests/paths.spec.ts`](../../tests/paths.spec.ts), [`tests/runtime.spec.ts`](../../tests/runtime.spec.ts) |
+| Missing Credential | Local tools remain usable; remote tools and explicit connection tests report a redacted configuration/service action | [`tests/runtime.spec.ts`](../../tests/runtime.spec.ts), [`tests/web.spec.ts`](../../tests/web.spec.ts) |
+| 401/403, 429, timeout, malformed output, or cancellation | Return a stable actionable category, preserve bounded diagnostics, and stop the request/subprocess | [`tests/errors.spec.ts`](../../tests/errors.spec.ts), [`tests/runtime.spec.ts`](../../tests/runtime.spec.ts), [`tests/upstream.spec.ts`](../../tests/upstream.spec.ts) |
+| Runtime unavailable during initial load | Register neither tools nor skill; keep Web Settings available for repair | [`src/index.ts`](../../src/index.ts), lifecycle tests in [`tests/tools.spec.ts`](../../tests/tools.spec.ts) and [`tests/web.spec.ts`](../../tests/web.spec.ts) |
+| Runtime candidate fails during live update | Preserve the current serving generation and stored usable configuration | [`tests/runtime-manager.spec.ts`](../../tests/runtime-manager.spec.ts), [`tests/web.spec.ts`](../../tests/web.spec.ts) |
+| Concurrent Settings candidates complete out of order | The newer ticket wins; an obsolete slower candidate cannot activate | [`tests/runtime-manager.spec.ts`](../../tests/runtime-manager.spec.ts) |
+| Disable, re-enable, or uninstall | Tools and skill disappear and return as one lifecycle unit; uninstall removes the bundle layer | [`tests/tools.spec.ts`](../../tests/tools.spec.ts), [`tests/profile-install.e2e.spec.ts`](../../tests/profile-install.e2e.spec.ts) |
+
+## P2 and P3 boundary
+
+| Scope | Status | Decision |
+|---|---|---|
+| P2 stable `ctx.visionToolkit` service and capability discovery | **Deferred by design** | The product brief requires at least one independent plugin consumer before stabilizing this API. `VisionToolkitRuntime` remains package-internal, so P0/P1 can evolve without creating a false compatibility promise. |
+| P2 provider ecosystem | **Deferred by design** | The package supports its pinned upstream and one configured OpenAI-compatible vision endpoint; it does not prebuild an unused provider registry. |
+| P3 exploratory inputs and automation | **Out of scope** | Upload/drag-and-drop, camera/video/audio/document ingestion, interactive annotations, automatic clicking, remote clusters, model routing/voting, and cross-session caches are not part of this release contract. |
+
+## Reproducible verification
+
+Run package checks from `dsh-vision-toolkit/`:
+
+```sh
+pnpm run build
+pnpm test
+pnpm run example:ui-restoration
+pnpm pack --dry-run
+```
+
+The release acceptance pass additionally runs the repository's plugin checker, installs the package into clean Web and Headless `DSH_HOME` directories, inspects `--dump-config`, exercises local and keyless mock-backed remote tool calls, verifies Settings persistence and live switching, checks dedicated Web cards with zero browser-console errors, disables/re-enables the row, and removes the package. These runtime checks complement the automated tests; they do not replace them.
