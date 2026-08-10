@@ -65,19 +65,19 @@ dsh --profile headless --dump-config | grep vision-toolkit
 
 ```mermaid
 flowchart LR
-    User["工作区图片或本地 HTML"] --> Skill["vision-tools Skill"]
-    Skill --> Activate["当前 Agent 动态激活"]
-    Activate --> Tools["10 个独立 vision_* 工具"]
-    Tools --> Runtime["共享 VisionToolkitRuntime"]
+    User["Workspace image or local HTML"] --> Skill["vision-tools Skill"]
+    Skill --> Activate["Agent-scoped activation"]
+    Activate --> Tools["10 independent vision_* tools"]
+    Tools --> Runtime["Shared VisionToolkitRuntime"]
     Credentials["DSH Credentials"] --> Runtime
-    Settings["Web Settings 与健康检查"] --> Runtime
-    Runtime --> Upstream["固定 agent-vision-toolkit"]
-    Runtime --> Remote["已配置视觉 API"]
-    Upstream --> Result["文字、坐标、JSON"]
+    Settings["Web Settings and health"] --> Runtime
+    Runtime --> Upstream["Pinned agent-vision-toolkit"]
+    Runtime --> Remote["Configured vision API"]
+    Upstream --> Result["Text, coordinates, JSON"]
     Remote --> Result
-    Runtime --> Artifacts["工作区产物"]
-    Result --> Session["可重建 Session 日志"]
-    Artifacts --> Web["预览、下载或打开文件"]
+    Runtime --> Artifacts["Workspace Artifacts"]
+    Result --> Session["Reconstructable Session log"]
+    Artifacts --> Web["Preview, download, or open file"]
 ```
 
 所有工具定义都调用同一个 Runtime；Runtime 在分发到固定上游快照或已配置的 OpenAI 兼容视觉端点前，统一验证路径、限制、Credential、取消和超时。Web 展示读取相同的结构化结果与产物描述，因此不会改变 Headless 语义。健康、连接测试和版本检查只留在 Settings，不进入模型工具 schema。
