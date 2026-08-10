@@ -72,8 +72,17 @@ async function startMockVisionServer() {
         return
       }
       requests.push({ authorization: request.headers.authorization, body })
+      const bodyText = JSON.stringify(body)
+      const content = bodyText.includes('every distinct buttons')
+        ? JSON.stringify([
+          { box_2d: [78, 39, 156, 234], label: 'button' },
+          { box_2d: [390, 508, 547, 859], label: 'input' },
+        ])
+        : bodyText.includes('send button')
+          ? JSON.stringify([{ box_2d: [195, 390, 351, 781], label: 'send button' }])
+          : 'Fixture detailed description'
       response.writeHead(200, { 'content-type': 'application/json' })
-      response.end(JSON.stringify({ choices: [{ message: { content: 'Fixture detailed description' } }] }))
+      response.end(JSON.stringify({ choices: [{ message: { content } }] }))
     })
   })
   await new Promise<void>((resolve, reject) => {
@@ -89,6 +98,12 @@ async function startMockVisionServer() {
       server.closeAllConnections()
     }),
   }
+}
+
+function latestToolResultText(requests: ReadonlyArray<{ body: unknown }>): string {
+  const body = requests.at(-1)?.body as { messages?: Array<{ role?: string; content?: unknown }> } | undefined
+  const content = body?.messages?.find(message => message.role === 'tool')?.content
+  return typeof content === 'string' ? content : JSON.stringify(content)
 }
 
 function fixturePatch(home: string, visionBaseUrl: string): string {
@@ -173,6 +188,146 @@ describe.skipIf(!hasDsh() || !hasPnpm())('dsh-vision-toolkit profile install (ke
       copyFileSync(join(repoRoot, SAMPLE_IMAGE), join(workspace, 'reference.png'))
       copyFileSync(join(repoRoot, SAMPLE_IMAGE), join(workspace, 'actual.png'))
 
+      const groundServer = await startMockLlmServer({
+        sequence: ['tool_call_success', 'success'],
+        toolName: 'vision_ground',
+        toolArguments: JSON.stringify({
+          image: 'reference.png',
+          target: 'send button',
+          preview: true,
+          previewOutput: 'e2e-ground.png',
+        }),
+        successText: 'ground done',
+      })
+      try {
+        const ground = await runDsh([
+          'run', '--profile', 'headless', '--patch', patch,
+          'locate the send button in the local screenshot',
+        ], {
+          DSH_HOME: home,
+          DSH_TELEMETRY_DISABLED: '1',
+          DEEPSEEK_API_KEY: 'mock-vision-e2e-key',
+          DEEPSEEK_BASE_URL: groundServer.baseURL,
+          VISION_API_KEY: 'fixture-vision-key',
+        }, workspace)
+        expect(ground.code, ground.stderr).toBe(0)
+        expect(ground.stdout).toBe('ground done')
+        const groundBodies = JSON.stringify(groundServer.requests.map(request => request.body))
+        expect(groundBodies).toContain('vision_ground')
+        const groundResult = latestToolResultText(groundServer.requests)
+        expect(groundResult).toContain('"x1": 100')
+        expect(groundResult).toContain('e2e-ground.png')
+        expect(existsSync(join(workspace, '.dsh-vision-toolkit', 'artifacts', 'e2e-ground.png'))).toBe(true)
+        expect(visionServer.requests).toHaveLength(2)
+        expect(JSON.stringify(visionServer.requests[1]?.body)).toContain(UNTRUSTED_IMAGE_POLICY)
+      } finally {
+        await groundServer.close()
+      }
+
+      const detectServer = await startMockLlmServer({
+        sequence: ['tool_call_success', 'success'],
+        toolName: 'vision_detect',
+        toolArguments: JSON.stringify({
+          image: 'reference.png',
+          category: 'buttons',
+          preview: true,
+          previewOutput: 'e2e-detect.png',
+        }),
+        successText: 'detect done',
+      })
+      try {
+        const detect = await runDsh([
+          'run', '--profile', 'headless', '--patch', patch,
+          'inventory buttons in the local screenshot',
+        ], {
+          DSH_HOME: home,
+          DSH_TELEMETRY_DISABLED: '1',
+          DEEPSEEK_API_KEY: 'mock-vision-e2e-key',
+          DEEPSEEK_BASE_URL: detectServer.baseURL,
+          VISION_API_KEY: 'fixture-vision-key',
+        }, workspace)
+        expect(detect.code, detect.stderr).toBe(0)
+        expect(detect.stdout).toBe('detect done')
+        const detectBodies = JSON.stringify(detectServer.requests.map(request => request.body))
+        expect(detectBodies).toContain('vision_detect')
+        const detectResult = latestToolResultText(detectServer.requests)
+        expect(detectResult).toContain('"label": "button"')
+        expect(detectResult).toContain('"label": "input"')
+        expect(existsSync(join(workspace, '.dsh-vision-toolkit', 'artifacts', 'e2e-detect.png'))).toBe(true)
+        expect(visionServer.requests).toHaveLength(3)
+        expect(JSON.stringify(visionServer.requests[2]?.body)).toContain(UNTRUSTED_IMAGE_POLICY)
+      } finally {
+        await detectServer.close()
+      }
+
+      const cropServer = await startMockLlmServer({
+        sequence: ['tool_call_success', 'success'],
+        toolName: 'vision_crop',
+        toolArguments: JSON.stringify({
+          image: 'reference.png',
+          region: '100,50,200,90',
+          output: 'e2e-crop.png',
+        }),
+        successText: 'crop done',
+      })
+      try {
+        const crop = await runDsh([
+          'run', '--profile', 'headless', '--patch', patch,
+          'crop the previously grounded region',
+        ], {
+          DSH_HOME: home,
+          DSH_TELEMETRY_DISABLED: '1',
+          DEEPSEEK_API_KEY: 'mock-vision-e2e-key',
+          DEEPSEEK_BASE_URL: cropServer.baseURL,
+          VISION_API_KEY: 'fixture-vision-key',
+        }, workspace)
+        expect(crop.code, crop.stderr).toBe(0)
+        expect(crop.stdout).toBe('crop done')
+        const cropBodies = JSON.stringify(cropServer.requests.map(request => request.body))
+        expect(cropBodies).toContain('vision_crop')
+        const cropResult = latestToolResultText(cropServer.requests)
+        expect(cropResult).toContain('"width": 100')
+        expect(cropResult).toContain('"height": 40')
+        expect(existsSync(join(workspace, '.dsh-vision-toolkit', 'artifacts', 'e2e-crop.png'))).toBe(true)
+        expect(visionServer.requests).toHaveLength(3)
+      } finally {
+        await cropServer.close()
+      }
+
+      const traceServer = await startMockLlmServer({
+        sequence: ['tool_call_success', 'success'],
+        toolName: 'vision_trace',
+        toolArguments: JSON.stringify({
+          image: 'reference.png',
+          scale: 2,
+          output: 'e2e-trace.svg',
+        }),
+        successText: 'trace done',
+      })
+      try {
+        const trace = await runDsh([
+          'run', '--profile', 'headless', '--patch', patch,
+          'trace the local image into SVG',
+        ], {
+          DSH_HOME: home,
+          DSH_TELEMETRY_DISABLED: '1',
+          DEEPSEEK_API_KEY: 'mock-vision-e2e-key',
+          DEEPSEEK_BASE_URL: traceServer.baseURL,
+          VISION_API_KEY: 'fixture-vision-key',
+        }, workspace)
+        expect(trace.code, trace.stderr).toBe(0)
+        expect(trace.stdout).toBe('trace done')
+        const traceBodies = JSON.stringify(traceServer.requests.map(request => request.body))
+        expect(traceBodies).toContain('vision_trace')
+        const traceResult = latestToolResultText(traceServer.requests)
+        expect(traceResult).toContain('image/svg+xml')
+        expect(traceResult).toContain('e2e-trace.svg')
+        expect(existsSync(join(workspace, '.dsh-vision-toolkit', 'artifacts', 'e2e-trace.svg'))).toBe(true)
+        expect(visionServer.requests).toHaveLength(3)
+      } finally {
+        await traceServer.close()
+      }
+
       const pixelServer = await startMockLlmServer({
         sequence: ['tool_call_success', 'success'],
         toolName: 'vision_pixel_diff',
@@ -202,7 +357,7 @@ describe.skipIf(!hasDsh() || !hasPnpm())('dsh-vision-toolkit profile install (ke
         expect(pixelBodies).toContain('heatmap.png')
         expect(existsSync(join(workspace, '.dsh-vision-toolkit', 'artifacts', 'e2e-pixel-diff', 'heatmap.png'))).toBe(true)
         expect(existsSync(join(workspace, '.dsh-vision-toolkit', 'artifacts', 'e2e-pixel-diff', 'report.json'))).toBe(true)
-        expect(visionServer.requests).toHaveLength(1)
+        expect(visionServer.requests).toHaveLength(3)
       } finally {
         await pixelServer.close()
       }
@@ -239,8 +394,8 @@ describe.skipIf(!hasDsh() || !hasPnpm())('dsh-vision-toolkit profile install (ke
         expect(existsSync(ocrOutput)).toBe(true)
         expect(readFileSync(ocrOutput, 'utf8')).toContain('Fixture detailed description')
         expect(existsSync(join(workspace, '.dsh-vision-toolkit', 'artifacts', 'e2e-long-ocr', 'chunks', 'manifest.json'))).toBe(true)
-        expect(visionServer.requests).toHaveLength(2)
-        expect(JSON.stringify(visionServer.requests[1]?.body)).toContain(UNTRUSTED_IMAGE_POLICY)
+        expect(visionServer.requests).toHaveLength(4)
+        expect(JSON.stringify(visionServer.requests[3]?.body)).toContain(UNTRUSTED_IMAGE_POLICY)
       } finally {
         await longOcrServer.close()
       }

@@ -166,7 +166,7 @@ Web Profile 会注册 Vision Toolkit Settings 分区，可配置提供方 URL、
 
 ## 产物与展示
 
-会生成产物的工具只能写入 `<workspace>/.dsh-vision-toolkit/artifacts`，写入形式为单个已验证文件或原子提交的运行目录。每个模型可见产物描述都包含路径、文件名、MIME 类型、种类、说明、来源工具、预览意图和字节数，因此 Headless agent 无需浏览器支持，也能在后续调用中复用该路径。
+会生成产物的工具只能写入 `<workspace>/.dsh-vision-toolkit/artifacts`，写入形式为单个已验证文件或原子提交的运行目录。每个模型可见产物描述都包含路径、文件名、MIME 类型、种类、说明、来源工具、预览意图和字节数，因此 Headless agent 无需浏览器支持，也能在后续调用中复用该路径。提交 trace SVG 前，运行时会把它作为 XML 解析：允许标准声明与注释，但拒绝 doctype、格式错误或多根文档、非 SVG namespace，以及上游报告与实际路径数/字节数不一致的结果。
 
 存在 Web HTTP 宿主时，仅供展示的元数据会加入带签名的预览和下载能力 URL，而不改变规范工具结果。每次读取都会重新验证签名、managed 根目录围栏、路径组件、普通文件状态、大小、可用时的 device/inode 身份、扩展名和 MIME。SVG 响应使用禁止外部资源的 sandbox CSP，客户端通过 sandbox iframe 渲染。没有 HTTP 宿主时，同一张卡片保留 `openFile` 提供的“打开文件”能力，并显示产物描述，不会伪造无法访问的 URL。
 
@@ -240,7 +240,7 @@ pnpm run example:ui-restoration
 pnpm pack --dry-run
 ```
 
-`pnpm run build` 会先验证 vendored manifest，再生成 JavaScript、声明文件和 loader 兼容 Web 客户端。本包提交 `lib/`，因此从 checkout 安装时不要求消费方构建。无真实 Key 的真实 Profile 测试会安装到干净 `DSH_HOME`、启动 Headless、通过真实工具调用执行远程与本地工具、验证禁用行为并卸载 Bundle。每项 P0/P1 需求对应的实现与验证位置见[需求追踪参考](docs/requirements-traceability/README.md)。
+`pnpm run build` 会先验证 vendored manifest，再生成 JavaScript、声明文件和 loader 兼容 Web 客户端。本包提交 `lib/`，因此从 checkout 安装时不要求消费方构建。无真实 Key 的真实 Profile 测试会安装到干净 `DSH_HOME`、启动 Headless、通过真实工具调用执行全部五个 P0 工具和具有代表性的 P1 本地/远程工具、验证禁用与重新启用行为，并卸载 Bundle。每项 P0/P1 需求对应的实现与验证位置见[需求追踪参考](docs/requirements-traceability/README.md)。
 
 更新上游快照时只能执行 `pnpm run upstream:sync -- <checkout>`，检查源码和许可证，重新生成 manifest，并在同一变更中更新适配器兼容性测试和已提交 `lib/`。运行时绝不拉取上游 `main`。
 

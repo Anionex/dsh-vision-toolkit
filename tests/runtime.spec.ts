@@ -74,6 +74,27 @@ async function setup(
   return { ctx, config, adapter, runtime }
 }
 
+function mockTraceDocument(
+  adapter: UpstreamAdapter,
+  svg: string,
+  reportedPathCount = 1,
+  reportedBytes = Buffer.byteLength(svg),
+): void {
+  vi.spyOn(adapter, 'run').mockImplementationOnce(async (_tool, args) => {
+    const outputIndex = args.indexOf('-o')
+    const outputPath = outputIndex === -1 ? undefined : args[outputIndex + 1]
+    if (outputPath === undefined) throw new Error('trace output path was not provided')
+    await writeFile(outputPath, svg)
+    return {
+      stdout: `wrote ${outputPath} (${reportedBytes} bytes, ${reportedPathCount} paths, traced at 1x)\n`,
+      stderr: '',
+      stdoutTruncated: false,
+      stderrTruncated: false,
+      outcome: { exitCode: 0, signal: null },
+    }
+  })
+}
+
 const signal = new AbortController().signal
 
 describe('VisionToolkitRuntime', () => {
@@ -230,6 +251,56 @@ describe('VisionToolkitRuntime', () => {
       geometry: { status: 'generated', pathCount: 1, tracedScale: 2 },
     })
     expect(result.geometry.bytes).toBeGreaterThan(0)
+  })
+
+  it('accepts declarations, comments, and namespace-prefixed SVG elements', async () => {
+    const { adapter, runtime } = await setup({}, null)
+    const workspace = await tempWorkspace()
+    const svg = [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<!-- literal text such as <!DOCTYPE svg> is not a document type -->',
+      '<s:svg xmlns:s="http://www.w3.org/2000/svg"><s:g><s:path d="M0 0"/></s:g></s:svg>',
+      '',
+    ].join('\n')
+    mockTraceDocument(adapter, svg)
+
+    const result = await runtime.trace({ image: 'sample.png' }, { signal, workspace })
+
+    expect(result.geometry).toMatchObject({ status: 'generated', pathCount: 1 })
+    await expect(readFile(result.outputPath, 'utf8')).resolves.toBe(svg)
+  })
+
+  it.each([
+    ['a doctype', '<!DOCTYPE svg><svg xmlns="http://www.w3.org/2000/svg"><path/></svg>\n'],
+    ['malformed nesting', '<svg xmlns="http://www.w3.org/2000/svg"><path></svg>\n'],
+    ['multiple roots', '<svg xmlns="http://www.w3.org/2000/svg"/><svg xmlns="http://www.w3.org/2000/svg"/>\n'],
+    ['a non-SVG root', '<html xmlns="http://www.w3.org/2000/svg"><path/></html>\n'],
+    ['the wrong namespace', '<svg xmlns="urn:not-svg"><path/></svg>\n'],
+    ['trailing document text', '<svg xmlns="http://www.w3.org/2000/svg"><path/></svg>not-xml\n'],
+  ] as const)('rejects trace SVG documents with %s before artifact commit', async (_label, svg) => {
+    const { adapter, runtime } = await setup({}, null)
+    const workspace = await tempWorkspace()
+    mockTraceDocument(adapter, svg)
+
+    await expect(runtime.trace({ image: 'sample.png' }, { signal, workspace }))
+      .rejects.toMatchObject({ code: 'output', message: 'trace: output SVG is not a parseable document' })
+    await expect(readFile(join(workspace, '.dsh-vision-toolkit', 'artifacts', 'sample.svg'), 'utf8'))
+      .rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it.each([
+    ['path count', 2, undefined, 'trace: reported path count does not match the generated SVG'],
+    ['byte count', 1, 1, 'trace: reported byte count does not match the generated SVG'],
+  ] as const)('rejects a mismatched trace %s before artifact commit', async (_label, pathCount, bytes, message) => {
+    const { adapter, runtime } = await setup({}, null)
+    const workspace = await tempWorkspace()
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg"><path/></svg>\n'
+    mockTraceDocument(adapter, svg, pathCount, bytes)
+
+    await expect(runtime.trace({ image: 'sample.png' }, { signal, workspace }))
+      .rejects.toMatchObject({ code: 'output', message })
+    await expect(readFile(join(workspace, '.dsh-vision-toolkit', 'artifacts', 'sample.svg'), 'utf8'))
+      .rejects.toMatchObject({ code: 'ENOENT' })
   })
 
   it('enforces byte and decoded-pixel limits as capacity errors', async () => {

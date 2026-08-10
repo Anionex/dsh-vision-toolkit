@@ -13,6 +13,7 @@ const PACKAGE = JSON.parse(await readFile(join(ROOT, 'package.json'), 'utf8')) a
   scripts: Record<string, string>
   dsh?: { bundle?: { patch?: string } }
   dshClient?: { platform?: string; inject?: string[] }
+  dependencies?: Record<string, string>
   peerDependencies?: Record<string, string>
   devDependencies?: Record<string, string>
 }
@@ -66,7 +67,7 @@ describe('package layout contract', () => {
   })
 
   it('keeps every dependency specifier portable', () => {
-    for (const section of [PACKAGE.peerDependencies ?? {}, PACKAGE.devDependencies ?? {}]) {
+    for (const section of [PACKAGE.dependencies ?? {}, PACKAGE.peerDependencies ?? {}, PACKAGE.devDependencies ?? {}]) {
       for (const [name, spec] of Object.entries(section)) {
         expect(spec, `${name}`).not.toMatch(/^\/|^[A-Za-z]:\\|^file:|^link:|^workspace:/)
       }

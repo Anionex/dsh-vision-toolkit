@@ -11,6 +11,7 @@ import { readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
 import type { Context } from 'cordis'
 import type { ResolvedCredential } from '@deepseek-ai/dsh-credentials'
+import { SaxesParser } from 'saxes'
 import { describeArtifact, type ArtifactDescriptor } from './artifacts.ts'
 import type { ResolvedVisionToolkitConfig } from './config.ts'
 import { VisionToolkitError } from './errors.ts'
@@ -46,6 +47,38 @@ import {
   type UpstreamVersionInfo,
 } from './upstream.ts'
 import { PLUGIN_VERSION } from './version.ts'
+
+const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
+
+function svgDocumentPathCount(svg: string): number | undefined {
+  const parser = new SaxesParser({ xmlns: true })
+  let depth = 0
+  let invalid = false
+  let pathCount = 0
+  let rootSeen = false
+  let rootClosed = false
+  parser.on('doctype', () => { invalid = true })
+  parser.on('error', () => { invalid = true })
+  parser.on('opentag', (tag) => {
+    if (depth === 0) {
+      if (rootSeen || tag.local !== 'svg' || tag.uri !== SVG_NAMESPACE) invalid = true
+      rootSeen = true
+    }
+    if (tag.local === 'path' && tag.uri === SVG_NAMESPACE) pathCount += 1
+    depth += 1
+  })
+  parser.on('closetag', () => {
+    depth -= 1
+    if (depth === 0) rootClosed = true
+    if (depth < 0) invalid = true
+  })
+  try {
+    parser.write(svg).close()
+  } catch {
+    return undefined
+  }
+  return invalid || !rootSeen || !rootClosed || depth !== 0 ? undefined : pathCount
+}
 
 /** Per-invocation cancellation and timeout facts. */
 export interface Deadline {
@@ -1110,10 +1143,10 @@ export class VisionToolkitRuntime {
         ], operation)
         const parsed = parseTraceOutput(result.stdout)
         const svg = await readFile(staged, 'utf8').catch(() => '')
-        if (!/^\s*<svg\b[\s\S]*<\/svg>\s*$/i.test(svg)) {
+        const actualPathCount = svgDocumentPathCount(svg)
+        if (actualPathCount === undefined) {
           throw new VisionToolkitError('output', 'trace: output SVG is not a parseable document')
         }
-        const actualPathCount = (svg.match(/<path\b/gi) ?? []).length
         if (actualPathCount !== parsed.pathCount) {
           throw new VisionToolkitError('output', 'trace: reported path count does not match the generated SVG')
         }
