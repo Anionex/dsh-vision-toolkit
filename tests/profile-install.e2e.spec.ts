@@ -275,6 +275,32 @@ describe.skipIf(!hasDsh() || !hasPnpm())('dsh-vision-toolkit profile install (ke
         await disabledServer.close()
       }
 
+      const reenabledServer = await startMockLlmServer({
+        sequence: ['tool_call_success', 'success'],
+        toolName: 'vision_toolkit_health',
+        toolArguments: '{}',
+        successText: 're-enabled ok',
+      })
+      try {
+        const reenabled = await runDsh([
+          'run', '--profile', 'headless', '--patch', patch,
+          'confirm the Vision Toolkit is available again',
+        ], {
+          DSH_HOME: home,
+          DSH_TELEMETRY_DISABLED: '1',
+          DEEPSEEK_API_KEY: 'mock-vision-e2e-key',
+          DEEPSEEK_BASE_URL: reenabledServer.baseURL,
+          VISION_API_KEY: 'fixture-vision-key',
+        })
+        expect(reenabled.code, reenabled.stderr).toBe(0)
+        expect(reenabled.stdout).toBe('re-enabled ok')
+        const reenabledBodies = JSON.stringify(reenabledServer.requests.map(request => request.body))
+        expect(reenabledBodies).toContain('vision_toolkit_health')
+        expect(reenabledBodies).toContain('pluginVersion')
+      } finally {
+        await reenabledServer.close()
+      }
+
       const remove = await runDsh(['plugin', '--profile', 'headless', 'remove', '@dsh-external/dsh-vision-toolkit'], {
         DSH_HOME: home,
       })
