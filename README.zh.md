@@ -62,6 +62,8 @@ dsh --profile web --dump-config | grep vision-toolkit
 dsh --profile headless --dump-config | grep vision-toolkit
 ```
 
+安装后需要重启长期运行的 Web Profile。宿主在进程启动时通过 `package.json` 的 `dsh.client` 声明发现已构建的浏览器 Bundle；旧的顶层 `dshClient` 字段不会被扫描。
+
 首次 managed 启动会验证打包的上游 manifest（元数据清单），并在 `DSH_HOME/cache/dsh-vision-toolkit` 下原子准备隔离环境。插件只在准备成功后发布同版本的 `vision-tools` skill 与激活引导工具；每个 Agent 只有在加载该 skill 后才获得执行工具。初次准备失败时，Web Settings 修复入口仍然可用，但插件不会暴露任何模型能力或误导模型的 skill。
 
 ### 禁用与重新启用
@@ -223,6 +225,7 @@ npm run example:ui-restoration:write
 
 | 症状 | 解决方法 |
 |---|---|
+| `Model "..." does not support image input. (attachment-error)` | 图片走了 DSH 的模型原生附件通道，纯文本模型会在 Skill 或 Vision Toolkit 运行前拒绝该轮。请使用 DSH Paste Input 的附件按钮、粘贴或拖放流程，让文件先复制到会话工作区并以路径形式进入消息，再调用 `/vision-tools`。安装或升级任一浏览器插件后，需要重启 Web Profile 并刷新页面。 |
 | Credential 显示缺失 | 执行 `dsh credentials set <REF>`，确认 `provider.credential` 指向该引用，再重新运行健康检查。本地工具不需要它。 |
 | 运行时准备失败 | 查看 Settings 中的运行时错误，检查 Python 3.11+、软件包缓存/网络、磁盘权限和精确 external 固定版本。修正候选后再保存；当前 generation 不受影响。 |
 | 找不到 Chrome | 安装 Chrome、Chromium 或 Edge，或让其中一个可被运行环境发现。只有 `vision_html_screenshot` 不可用。 |

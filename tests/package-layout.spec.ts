@@ -11,8 +11,10 @@ const PACKAGE = JSON.parse(await readFile(join(ROOT, 'package.json'), 'utf8')) a
   exports: Record<string, unknown>
   files: string[]
   scripts: Record<string, string>
-  dsh?: { bundle?: { patch?: string } }
-  dshClient?: { platform?: string; inject?: string[] }
+  dsh?: {
+    bundle?: { patch?: string }
+    client?: { platform?: string; inject?: string[] }
+  }
   dependencies?: Record<string, string>
   peerDependencies?: Record<string, string>
   devDependencies?: Record<string, string>
@@ -42,8 +44,8 @@ describe('package layout contract', () => {
   })
 
   it('declares a loader-compatible Web client and its slot dependencies', () => {
-    expect(PACKAGE.dshClient?.platform).toBe('web')
-    expect(PACKAGE.dshClient?.inject).toEqual(expect.arrayContaining([
+    expect(PACKAGE.dsh?.client?.platform).toBe('web')
+    expect(PACKAGE.dsh?.client?.inject).toEqual(expect.arrayContaining([
       '@deepseek-ai/dsh-client-runtime',
       '@deepseek-ai/dsh-client-ui-tool',
       '@deepseek-ai/dsh-client-ui-settings',

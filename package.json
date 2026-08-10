@@ -42,20 +42,20 @@
     "bundle": {
       "patch": "./cordis.patch.yml"
     },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-tool",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-locale"
+      ],
+      "platform": "web"
+    },
     "visionToolkit": {
       "upstreamRepository": "https://github.com/Anionex/agent-vision-toolkit",
       "upstreamVersion": "v0.1.0+snapshot.c27d1a3",
       "upstreamCommit": "c27d1a300962b553c0884993c575cd3e819465ce"
     }
-  },
-  "dshClient": {
-    "inject": [
-      "@deepseek-ai/dsh-client-runtime",
-      "@deepseek-ai/dsh-client-ui-tool",
-      "@deepseek-ai/dsh-client-ui-settings",
-      "@deepseek-ai/dsh-client-locale"
-    ],
-    "platform": "web"
   },
   "dependencies": {
     "saxes": "6.0.0"
