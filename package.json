@@ -20,6 +20,8 @@
   "files": [
     "lib",
     "src",
+    "examples",
+    "docs",
     "runtime",
     "vendor",
     "cordis.patch.yml",
@@ -31,6 +33,8 @@
     "build": "node scripts/upstream-manifest.mjs && tsc -p tsconfig.json && tsc -p tsconfig.client.json && node scripts/build-client.mjs",
     "prepack": "npm run build",
     "test": "vitest run tests",
+    "example:ui-restoration": "node scripts/run-ui-restoration-example.mjs --check",
+    "example:ui-restoration:write": "node scripts/run-ui-restoration-example.mjs --write",
     "upstream:manifest": "node scripts/upstream-manifest.mjs --write",
     "upstream:sync": "node scripts/sync-upstream.mjs"
   },

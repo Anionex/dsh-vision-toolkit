@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "sourceTool": "vision_pixel_diff",
+  "original": {
+    "path": "assets/reference.png",
+    "bytes": 137315,
+    "width": 1200,
+    "height": 720,
+    "format": "png"
+  },
+  "rebuilt": {
+    "path": "assets/initial.png",
+    "bytes": 69296,
+    "width": 1200,
+    "height": 720,
+    "format": "png"
+  },
+  "scaled": false,
+  "overallDifferencePct": 6.04,
+  "grid": 8,
+  "worstRegions": [
+    {
+      "index": 1,
+      "differencePct": 27.51,
+      "box": {
+        "x1": 300,
+        "y1": 540,
+        "x2": 450,
+        "y2": 630
+      }
+    },
+    {
+      "index": 2,
+      "differencePct": 25.99,
+      "box": {
+        "x1": 750,
+        "y1": 360,
+        "x2": 900,
+        "y2": 450
+      }
+    },
+    {
+      "index": 3,
+      "differencePct": 24.16,
+      "box": {
+        "x1": 750,
+        "y1": 450,
+        "x2": 900,
+        "y2": 540
+      }
+    },
+    {
+      "index": 4,
+      "differencePct": 24.03,
+      "box": {
+        "x1": 600,
+        "y1": 540,
+        "x2": 750,
+        "y2": 630
+      }
+    },
+    {
+      "index": 5,
+      "differencePct": 23.88,
+      "box": {
+        "x1": 450,
+        "y1": 540,
+        "x2": 600,
+        "y2": 630
+      }
+    },
+    {
+      "index": 6,
+      "differencePct": 22.93,
+      "box": {
+        "x1": 300,
+        "y1": 450,
+        "x2": 450,
+        "y2": 540
+      }
+    }
+  ]
+}

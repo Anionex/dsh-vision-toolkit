@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vision QA Reconstruction</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { width: 1200px; height: 720px; margin: 0; overflow: hidden; }
+    body { background: #eef1f8; color: #182033; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+    button { font: inherit; }
+    .app { position: absolute; left: 48px; top: 36px; width: 1104px; height: 648px; overflow: hidden; border: 1px solid #dfe3ee; border-radius: 28px; background: #fff; box-shadow: 0 24px 60px rgba(45,56,90,.14); }
+    .toolbar { position: absolute; inset: 0 0 auto; height: 78px; border-bottom: 1px solid #e8eaf1; background: #fff; }
+    .identity { position: absolute; left: 27px; top: 22px; display: flex; align-items: center; gap: 11px; font-size: 17px; font-weight: 760; letter-spacing: -.25px; }
+    .identity-icon { position: relative; width: 32px; height: 32px; border-radius: 10px; background: #5a4ff3; box-shadow: inset 0 0 0 1px rgba(255,255,255,.22); }
+    .identity-icon::before, .identity-icon::after { content: ""; position: absolute; border-radius: 99px; background: #fff; transform: rotate(-25deg); }
+    .identity-icon::before { left: 8px; top: 8px; width: 16px; height: 5px; }
+    .identity-icon::after { left: 11px; top: 17px; width: 13px; height: 5px; opacity: .72; }
+    .switcher { position: absolute; left: 380px; top: 19px; display: flex; height: 40px; align-items: center; gap: 8px; padding: 4px; border: 1px solid #e8eaf1; border-radius: 13px; background: #f7f8fb; }
+    .switcher span { min-width: 82px; padding: 8px 14px; border-radius: 9px; color: #71798e; font-size: 13px; font-weight: 650; text-align: center; }
+    .switcher .selected { color: #2b255e; background: #fff; box-shadow: 0 2px 8px rgba(37,43,70,.08); }
+    .person { position: absolute; right: 26px; top: 20px; width: 38px; height: 38px; border: 3px solid #fff; border-radius: 50%; background: linear-gradient(135deg,#ffcf88,#f08bb7); box-shadow: 0 0 0 1px #e5e8f0; }
+    .ready { position: absolute; right: 79px; top: 28px; display: flex; align-items: center; gap: 7px; color: #697187; font-size: 12px; font-weight: 650; }
+    .ready::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #29b77a; box-shadow: 0 0 0 4px #e7f8f1; }
+    .rail { position: absolute; left: 0; top: 78px; bottom: 0; width: 216px; padding: 28px 20px; border-right: 1px solid #e8eaf1; background: #fbfbfd; }
+    .rail-title { margin: 0 10px 13px; color: #a0a6b6; font-size: 10px; font-weight: 760; letter-spacing: 1.15px; text-transform: uppercase; }
+    .rail-link { position: relative; height: 44px; margin-bottom: 6px; padding: 13px 14px 13px 43px; border-radius: 12px; color: #737b90; font-size: 13px; font-weight: 650; }
+    .rail-link.current { color: #3f36cf; background: #eeecff; }
+    .rail-link::before { content: ""; position: absolute; left: 15px; top: 14px; width: 14px; height: 14px; border: 2px solid currentColor; border-radius: 5px; opacity: .88; }
+    .runtime-card { position: absolute; left: 20px; right: 20px; bottom: 22px; padding: 16px; border: 1px solid #e4e6ef; border-radius: 16px; background: #fff; }
+    .runtime-card strong { display: block; margin-bottom: 5px; font-size: 12px; }
+    .runtime-card small { display: block; color: #8a91a3; font-size: 10px; line-height: 1.45; }
+    .runtime-bar { height: 5px; margin-top: 13px; overflow: hidden; border-radius: 99px; background: #eceef4; }
+    .runtime-bar::after { content: ""; display: block; width: 72%; height: 100%; border-radius: inherit; background: #6559f5; }
+    .workspace { position: absolute; left: 216px; right: 0; top: 78px; bottom: 0; padding: 30px 34px 28px; background: #f6f7fb; }
+    .kicker { margin: 0 0 7px; color: #675bf2; font-size: 10px; font-weight: 800; letter-spacing: 1.25px; text-transform: uppercase; }
+    h1 { margin: 0; color: #20263a; font-size: 27px; font-weight: 780; letter-spacing: -.75px; line-height: 1.1; }
+    .lede { margin: 7px 0 0; color: #8990a2; font-size: 12px; }
+    .run { position: absolute; right: 34px; top: 31px; height: 38px; padding: 0 17px; border: 0; border-radius: 11px; background: #5b50ed; color: #fff; font-size: 12px; font-weight: 720; box-shadow: 0 8px 18px rgba(83,72,225,.24); }
+    .summary { display: flex; gap: 13px; margin-top: 23px; }
+    .stat { width: 260px; height: 80px; padding: 15px 17px; border: 1px solid #e2e5ef; border-radius: 15px; background: #fff; box-shadow: 0 5px 14px rgba(39,47,76,.035); }
+    .stat-label { display: flex; align-items: center; justify-content: space-between; color: #8b92a4; font-size: 10px; font-weight: 700; }
+    .stat-label i { width: 8px; height: 8px; border-radius: 50%; }
+    .stat-value { margin-top: 7px; font-size: 24px; font-weight: 790; letter-spacing: -.6px; }
+    .stat-value em { margin-left: 7px; color: #37a878; font-size: 10px; font-style: normal; font-weight: 760; }
+    .comparison { display: grid; grid-template-columns: 500px 286px; gap: 13px; margin-top: 13px; }
+    .card { height: 236px; border: 1px solid #e2e5ef; border-radius: 17px; background: #fff; box-shadow: 0 5px 14px rgba(39,47,76,.035); }
+    .card-header { display: flex; align-items: center; justify-content: space-between; height: 48px; padding: 0 17px; border-bottom: 1px solid #eceef4; }
+    .card-header b { font-size: 12px; font-weight: 760; }
+    .badge { padding: 5px 8px; border-radius: 8px; background: #ebf8f2; color: #25825c; font-size: 9px; font-weight: 780; }
+    .visual { position: relative; height: 187px; padding: 15px; }
+    .visual-stage { position: relative; width: 100%; height: 157px; overflow: hidden; border-radius: 12px; background: linear-gradient(145deg,#11182a,#1b2440); }
+    .visual-stage::before { content: ""; position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px); background-size: 22px 22px; }
+    .shape { position: absolute; left: 51px; top: 33px; width: 112px; height: 112px; border-radius: 35px; background: linear-gradient(135deg,#7d6cff,#41d5ca); transform: rotate(-9deg); box-shadow: 0 22px 42px rgba(73,95,225,.36); }
+    .shape::after { content: ""; position: absolute; right: 18px; top: 17px; width: 37px; height: 37px; border-radius: 50%; background: rgba(255,255,255,.52); filter: blur(1px); }
+    .copy-lines { position: absolute; left: 199px; top: 42px; width: 229px; }
+    .copy-lines i { display: block; height: 10px; margin-bottom: 12px; border-radius: 99px; background: #394563; }
+    .copy-lines i:nth-child(1) { width: 86%; background: #eef1ff; }
+    .copy-lines i:nth-child(2) { width: 64%; }
+    .copy-lines i:nth-child(3) { width: 94%; }
+    .copy-lines i:nth-child(4) { width: 74%; }
+    .copy-lines i:nth-child(5) { width: 48%; background: #665af4; }
+    .target { position: absolute; left: 38px; top: 21px; width: 144px; height: 139px; border: 2px solid #ffcf5a; border-radius: 14px; box-shadow: 0 0 0 1px rgba(255,207,90,.18); }
+    .target-label { position: absolute; left: 38px; top: 12px; padding: 4px 7px; border-radius: 6px; background: #ffcf5a; color: #322a19; font-size: 8px; font-weight: 820; }
+    .analysis { padding: 14px 17px; }
+    .score { display: flex; align-items: baseline; gap: 6px; }
+    .score strong { font-size: 32px; font-weight: 800; letter-spacing: -1px; }
+    .score span { color: #9298a8; font-size: 10px; font-weight: 650; }
+    .score-bar { position: relative; height: 7px; margin: 10px 0 12px; border-radius: 99px; background: #eceef4; }
+    .score-bar::after { content: ""; display: block; width: 93%; height: 100%; border-radius: inherit; background: linear-gradient(90deg,#6b5ef5,#34c6ac); }
+    .detail { display: flex; align-items: center; justify-content: space-between; height: 28px; border-top: 1px solid #eef0f5; color: #7f8799; font-size: 10px; }
+    .detail strong { color: #30374a; font-size: 10px; }
+    .artifacts { margin-top: 13px; height: 82px; overflow: hidden; border: 1px solid #e2e5ef; border-radius: 15px; background: #fff; }
+    .artifact-head, .artifact-row { display: grid; grid-template-columns: 1.5fr .8fr .8fr .65fr; align-items: center; padding: 0 16px; }
+    .artifact-head { height: 30px; border-bottom: 1px solid #eceef4; color: #9aa0b0; font-size: 9px; font-weight: 760; letter-spacing: .4px; text-transform: uppercase; }
+    .artifact-row { height: 26px; color: #50586c; font-size: 10px; }
+    .artifact-name { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+    .artifact-name::before { content: ""; width: 16px; height: 16px; border-radius: 5px; background: #eeecff; box-shadow: inset 0 0 0 1px #d9d5ff; }
+    .artifact-state { justify-self: start; padding: 4px 7px; border-radius: 7px; background: #eaf8f2; color: #27815d; font-size: 9px; font-weight: 800; }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="toolbar"><div class="identity"><span class="identity-icon"></span>Vision Forge</div><nav class="switcher"><span class="selected">Workspace</span><span>Runs</span><span>Artifacts</span></nav><div class="ready">Runtime ready</div><span class="person"></span></header>
+    <aside class="rail"><p class="rail-title">Vision tools</p><div class="rail-link current">Visual QA</div><div class="rail-link">Grounding</div><div class="rail-link">OCR batches</div><div class="rail-link">Asset trace</div><div class="runtime-card"><strong>Runtime generation 4</strong><small>Pinned upstream and local browser checks passed.</small><div class="runtime-bar"></div></div></aside>
+    <section class="workspace">
+      <p class="kicker">Latest verification</p><h1>Visual QA run</h1><p class="lede">Reference and rebuilt page compared at 1200 × 720.</p><button class="run">Run comparison</button>
+      <section class="summary"><article class="stat"><div class="stat-label">Similarity <i style="background:#5c50ee"></i></div><div class="stat-value">99.86% <em>+3.2%</em></div></article><article class="stat"><div class="stat-label">Largest delta <i style="background:#ffbd4a"></i></div><div class="stat-value">18 × 12 <em>px</em></div></article><article class="stat"><div class="stat-label">Artifacts <i style="background:#35b98a"></i></div><div class="stat-value">4 <em>ready</em></div></article></section>
+      <section class="comparison"><article class="card"><header class="card-header"><b>Annotated comparison</b><span class="badge">PASS</span></header><div class="visual"><div class="visual-stage"><span class="shape"></span><div class="copy-lines"><i></i><i></i><i></i><i></i><i></i></div><span class="target"></span><span class="target-label">#1 0.14%</span></div></div></article><article class="card"><header class="card-header"><b>Difference score</b><span class="badge">LOW</span></header><div class="analysis"><div class="score"><strong>0.14%</strong><span>overall</span></div><div class="score-bar"></div><div class="detail"><span>Viewport</span><strong>1200 × 720</strong></div><div class="detail"><span>Worst region</span><strong>Top left</strong></div><div class="detail"><span>Threshold</span><strong>≤ 0.50%</strong></div></div></article></section>
+      <section class="artifacts"><div class="artifact-head"><span>Artifact</span><span>Tool</span><span>Size</span><span>Status</span></div><div class="artifact-row"><span class="artifact-name">implementation.png</span><span>html_screenshot</span><span>86 KB</span><span class="artifact-state">READY</span></div><div class="artifact-row"><span class="artifact-name">heatmap.png</span><span>pixel_diff</span><span>41 KB</span><span class="artifact-state">READY</span></div></section>
+    </section>
+  </main>
+</body>
+</html>

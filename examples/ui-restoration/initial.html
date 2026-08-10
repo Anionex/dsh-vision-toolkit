@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vision QA Initial Reconstruction</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { width: 1200px; height: 720px; margin: 0; overflow: hidden; }
+    body { background: #e8edf7; color: #20263a; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+    .app { position: absolute; left: 58px; top: 46px; width: 1084px; height: 628px; overflow: hidden; border: 1px solid #d7dce8; border-radius: 20px; background: #fff; box-shadow: 0 18px 48px rgba(45,56,90,.12); }
+    .top { height: 72px; border-bottom: 1px solid #e5e8f0; padding: 20px 24px; font-size: 18px; font-weight: 760; }
+    .mark { display: inline-block; width: 28px; height: 28px; margin-right: 10px; vertical-align: middle; border-radius: 8px; background: #695cf4; }
+    .nav { position: absolute; left: 390px; top: 22px; color: #747c90; font-size: 13px; word-spacing: 32px; }
+    .side { position: absolute; left: 0; top: 72px; bottom: 0; width: 198px; padding: 26px 17px; border-right: 1px solid #e5e8f0; background: #fafbfe; }
+    .side h2 { margin: 0 10px 15px; color: #a2a8b6; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; }
+    .link { margin-bottom: 7px; padding: 13px 14px; border-radius: 10px; color: #71798d; font-size: 13px; font-weight: 650; }
+    .link.active { color: #483ed8; background: #e8e6ff; }
+    .content { position: absolute; left: 198px; right: 0; top: 72px; bottom: 0; padding: 28px 30px; background: #f7f8fc; }
+    .content small { color: #6c60ef; font-size: 10px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
+    h1 { margin: 8px 0 6px; font-size: 29px; letter-spacing: -.7px; }
+    p { margin: 0; color: #8c93a4; font-size: 12px; }
+    button { position: absolute; right: 30px; top: 29px; height: 36px; padding: 0 16px; border: 0; border-radius: 9px; background: #6659f3; color: #fff; font-size: 12px; font-weight: 700; }
+    .metrics { display: flex; gap: 12px; margin-top: 22px; }
+    .metric { width: 248px; height: 78px; padding: 14px 15px; border: 1px solid #e1e4ed; border-radius: 12px; background: #fff; }
+    .metric span { display: block; color: #8c93a4; font-size: 10px; }
+    .metric strong { display: block; margin-top: 8px; font-size: 23px; }
+    .work { display: grid; grid-template-columns: 470px 280px; gap: 12px; margin-top: 12px; }
+    .panel { height: 250px; border: 1px solid #e1e4ed; border-radius: 14px; background: #fff; }
+    .panel h3 { height: 46px; margin: 0; padding: 16px; border-bottom: 1px solid #eceef4; font-size: 12px; }
+    .preview { position: relative; height: 176px; margin: 14px; overflow: hidden; border-radius: 10px; background: #19223b; }
+    .shape { position: absolute; left: 36px; top: 27px; width: 104px; height: 104px; border-radius: 50%; background: linear-gradient(135deg,#7c6df7,#54c9c1); }
+    .copy { position: absolute; left: 178px; top: 38px; width: 220px; }
+    .copy i { display: block; width: 80%; height: 9px; margin-bottom: 13px; border-radius: 99px; background: #3b4765; }
+    .copy i:first-child { background: #eef1ff; }
+    .score { padding: 18px; }
+    .score strong { font-size: 36px; }
+    .bar { height: 8px; margin: 18px 0; border-radius: 99px; background: linear-gradient(90deg,#695df4 76%,#eceef4 76%); }
+    .row { display: flex; justify-content: space-between; padding: 11px 0; border-top: 1px solid #eef0f5; color: #81889a; font-size: 10px; }
+    .table { height: 86px; margin-top: 12px; border: 1px solid #e1e4ed; border-radius: 12px; background: #fff; }
+    .table div { display: grid; grid-template-columns: 1.5fr .8fr .7fr .6fr; padding: 9px 14px; color: #596175; font-size: 10px; }
+    .table div:first-child { border-bottom: 1px solid #eceef4; color: #9aa0b0; font-size: 9px; font-weight: 760; text-transform: uppercase; }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="top"><span class="mark"></span>Vision Forge <span class="nav">Workspace Runs Artifacts</span></header>
+    <aside class="side"><h2>Vision tools</h2><div class="link active">Visual QA</div><div class="link">Grounding</div><div class="link">OCR batches</div><div class="link">Asset trace</div></aside>
+    <section class="content">
+      <small>Latest verification</small><h1>Visual QA run</h1><p>Reference and rebuilt page compared at 1200 × 720.</p><button>Run comparison</button>
+      <div class="metrics"><article class="metric"><span>Similarity</span><strong>96.66%</strong></article><article class="metric"><span>Largest delta</span><strong>44 × 28</strong></article><article class="metric"><span>Artifacts</span><strong>4 ready</strong></article></div>
+      <div class="work"><article class="panel"><h3>Annotated comparison</h3><div class="preview"><span class="shape"></span><div class="copy"><i></i><i></i><i></i><i></i><i></i></div></div></article><article class="panel"><h3>Difference score</h3><div class="score"><strong>3.34%</strong><div class="bar"></div><div class="row"><span>Viewport</span><b>1200 × 720</b></div><div class="row"><span>Worst region</span><b>Top left</b></div><div class="row"><span>Threshold</span><b>≤ 0.50%</b></div></div></article></div>
+      <div class="table"><div><span>Artifact</span><span>Tool</span><span>Size</span><span>Status</span></div><div><b>implementation.png</b><span>html_screenshot</span><span>86 KB</span><b>READY</b></div></div>
+    </section>
+  </main>
+</body>
+</html>

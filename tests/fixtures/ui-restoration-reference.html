@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vision QA Reference</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { width: 1200px; height: 720px; margin: 0; overflow: hidden; }
+    body {
+      background: #eef1f8;
+      color: #182033;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    button { font: inherit; }
+    .r-window {
+      position: absolute;
+      left: 48px;
+      top: 36px;
+      width: 1104px;
+      height: 648px;
+      overflow: hidden;
+      border: 1px solid #dfe3ee;
+      border-radius: 28px;
+      background: #fff;
+      box-shadow: 0 24px 60px rgba(45, 56, 90, .14);
+    }
+    .r-topbar {
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 78px;
+      border-bottom: 1px solid #e8eaf1;
+      background: #fff;
+    }
+    .r-brand {
+      position: absolute;
+      left: 27px;
+      top: 22px;
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      font-size: 17px;
+      font-weight: 760;
+      letter-spacing: -.25px;
+    }
+    .r-mark {
+      position: relative;
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
+      background: #5a4ff3;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.22);
+    }
+    .r-mark::before, .r-mark::after {
+      content: "";
+      position: absolute;
+      border-radius: 99px;
+      background: #fff;
+      transform: rotate(-25deg);
+    }
+    .r-mark::before { left: 8px; top: 8px; width: 16px; height: 5px; }
+    .r-mark::after { left: 11px; top: 17px; width: 13px; height: 5px; opacity: .72; }
+    .r-topnav {
+      position: absolute;
+      left: 380px;
+      top: 19px;
+      display: flex;
+      height: 40px;
+      align-items: center;
+      gap: 8px;
+      padding: 4px;
+      border: 1px solid #e8eaf1;
+      border-radius: 13px;
+      background: #f7f8fb;
+    }
+    .r-tab {
+      min-width: 82px;
+      padding: 8px 14px;
+      border-radius: 9px;
+      color: #71798e;
+      font-size: 13px;
+      font-weight: 650;
+      text-align: center;
+    }
+    .r-tab.active { color: #2b255e; background: #fff; box-shadow: 0 2px 8px rgba(37, 43, 70, .08); }
+    .r-avatar {
+      position: absolute;
+      right: 26px;
+      top: 20px;
+      width: 38px;
+      height: 38px;
+      border: 3px solid #fff;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #ffcf88, #f08bb7);
+      box-shadow: 0 0 0 1px #e5e8f0;
+    }
+    .r-status {
+      position: absolute;
+      right: 79px;
+      top: 28px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      color: #697187;
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .r-status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #29b77a; box-shadow: 0 0 0 4px #e7f8f1; }
+    .r-sidebar {
+      position: absolute;
+      left: 0;
+      top: 78px;
+      bottom: 0;
+      width: 216px;
+      padding: 28px 20px;
+      border-right: 1px solid #e8eaf1;
+      background: #fbfbfd;
+    }
+    .r-label { margin: 0 10px 13px; color: #a0a6b6; font-size: 10px; font-weight: 760; letter-spacing: 1.15px; text-transform: uppercase; }
+    .r-item {
+      position: relative;
+      height: 44px;
+      margin-bottom: 6px;
+      padding: 13px 14px 13px 43px;
+      border-radius: 12px;
+      color: #737b90;
+      font-size: 13px;
+      font-weight: 650;
+    }
+    .r-item.active { color: #3f36cf; background: #eeecff; }
+    .r-item::before {
+      content: "";
+      position: absolute;
+      left: 15px;
+      top: 14px;
+      width: 14px;
+      height: 14px;
+      border: 2px solid currentColor;
+      border-radius: 5px;
+      opacity: .88;
+    }
+    .r-sidecard {
+      position: absolute;
+      left: 20px;
+      right: 20px;
+      bottom: 22px;
+      padding: 16px;
+      border: 1px solid #e4e6ef;
+      border-radius: 16px;
+      background: #fff;
+    }
+    .r-sidecard strong { display: block; margin-bottom: 5px; font-size: 12px; }
+    .r-sidecard span { display: block; color: #8a91a3; font-size: 10px; line-height: 1.45; }
+    .r-progress { height: 5px; margin-top: 13px; overflow: hidden; border-radius: 99px; background: #eceef4; }
+    .r-progress::after { content: ""; display: block; width: 72%; height: 100%; border-radius: inherit; background: #6559f5; }
+    .r-content {
+      position: absolute;
+      left: 216px;
+      right: 0;
+      top: 78px;
+      bottom: 0;
+      padding: 30px 34px 28px;
+      background: #f6f7fb;
+    }
+    .r-eyebrow { margin: 0 0 7px; color: #675bf2; font-size: 10px; font-weight: 800; letter-spacing: 1.25px; text-transform: uppercase; }
+    .r-title { margin: 0; color: #20263a; font-size: 27px; font-weight: 780; letter-spacing: -.75px; line-height: 1.1; }
+    .r-subtitle { margin: 7px 0 0; color: #8990a2; font-size: 12px; }
+    .r-button {
+      position: absolute;
+      right: 34px;
+      top: 31px;
+      height: 38px;
+      padding: 0 17px;
+      border: 0;
+      border-radius: 11px;
+      background: #5b50ed;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 720;
+      box-shadow: 0 8px 18px rgba(83, 72, 225, .24);
+    }
+    .r-metrics { display: flex; gap: 13px; margin-top: 23px; }
+    .r-metric {
+      width: 260px;
+      height: 80px;
+      padding: 15px 17px;
+      border: 1px solid #e2e5ef;
+      border-radius: 15px;
+      background: #fff;
+      box-shadow: 0 5px 14px rgba(39, 47, 76, .035);
+    }
+    .r-metric-top { display: flex; align-items: center; justify-content: space-between; color: #8b92a4; font-size: 10px; font-weight: 700; }
+    .r-metric-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .r-metric-value { margin-top: 7px; font-size: 24px; font-weight: 790; letter-spacing: -.6px; }
+    .r-metric-note { margin-left: 7px; color: #37a878; font-size: 10px; font-weight: 760; }
+    .r-workgrid { display: grid; grid-template-columns: 500px 286px; gap: 13px; margin-top: 13px; }
+    .r-panel {
+      height: 236px;
+      border: 1px solid #e2e5ef;
+      border-radius: 17px;
+      background: #fff;
+      box-shadow: 0 5px 14px rgba(39, 47, 76, .035);
+    }
+    .r-panel-head { display: flex; align-items: center; justify-content: space-between; height: 48px; padding: 0 17px; border-bottom: 1px solid #eceef4; }
+    .r-panel-title { font-size: 12px; font-weight: 760; }
+    .r-chip { padding: 5px 8px; border-radius: 8px; background: #ebf8f2; color: #25825c; font-size: 9px; font-weight: 780; }
+    .r-preview { position: relative; height: 187px; padding: 15px; }
+    .r-canvas {
+      position: relative;
+      width: 100%;
+      height: 157px;
+      overflow: hidden;
+      border-radius: 12px;
+      background: linear-gradient(145deg, #11182a, #1b2440);
+    }
+    .r-canvas::before { content: ""; position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px); background-size: 22px 22px; }
+    .r-orb { position: absolute; left: 51px; top: 33px; width: 112px; height: 112px; border-radius: 35px; background: linear-gradient(135deg, #7d6cff, #41d5ca); transform: rotate(-9deg); box-shadow: 0 22px 42px rgba(73, 95, 225, .36); }
+    .r-orb::after { content: ""; position: absolute; right: 18px; top: 17px; width: 37px; height: 37px; border-radius: 50%; background: rgba(255,255,255,.52); filter: blur(1px); }
+    .r-lines { position: absolute; left: 199px; top: 42px; width: 229px; }
+    .r-line { height: 10px; margin-bottom: 12px; border-radius: 99px; background: #394563; }
+    .r-line:nth-child(1) { width: 86%; background: #eef1ff; }
+    .r-line:nth-child(2) { width: 64%; }
+    .r-line:nth-child(3) { width: 94%; }
+    .r-line:nth-child(4) { width: 74%; }
+    .r-line:nth-child(5) { width: 48%; background: #665af4; }
+    .r-box { position: absolute; left: 38px; top: 21px; width: 144px; height: 139px; border: 2px solid #ffcf5a; border-radius: 14px; box-shadow: 0 0 0 1px rgba(255,207,90,.18); }
+    .r-box-label { position: absolute; left: 38px; top: 12px; padding: 4px 7px; border-radius: 6px; background: #ffcf5a; color: #322a19; font-size: 8px; font-weight: 820; }
+    .r-score { padding: 14px 17px; }
+    .r-score-big { display: flex; align-items: baseline; gap: 6px; }
+    .r-score-big strong { font-size: 32px; font-weight: 800; letter-spacing: -1px; }
+    .r-score-big span { color: #9298a8; font-size: 10px; font-weight: 650; }
+    .r-meter { position: relative; height: 7px; margin: 10px 0 12px; border-radius: 99px; background: #eceef4; }
+    .r-meter::after { content: ""; display: block; width: 93%; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #6b5ef5, #34c6ac); }
+    .r-row { display: flex; align-items: center; justify-content: space-between; height: 28px; border-top: 1px solid #eef0f5; color: #7f8799; font-size: 10px; }
+    .r-row strong { color: #30374a; font-size: 10px; }
+    .r-table {
+      margin-top: 13px;
+      height: 82px;
+      overflow: hidden;
+      border: 1px solid #e2e5ef;
+      border-radius: 15px;
+      background: #fff;
+    }
+    .r-table-head, .r-table-row { display: grid; grid-template-columns: 1.5fr .8fr .8fr .65fr; align-items: center; padding: 0 16px; }
+    .r-table-head { height: 30px; border-bottom: 1px solid #eceef4; color: #9aa0b0; font-size: 9px; font-weight: 760; letter-spacing: .4px; text-transform: uppercase; }
+    .r-table-row { height: 26px; color: #50586c; font-size: 10px; }
+    .r-file { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+    .r-file::before { content: ""; width: 16px; height: 16px; border-radius: 5px; background: #eeecff; box-shadow: inset 0 0 0 1px #d9d5ff; }
+    .r-pass { justify-self: start; padding: 4px 7px; border-radius: 7px; background: #eaf8f2; color: #27815d; font-size: 9px; font-weight: 800; }
+  </style>
+</head>
+<body>
+  <main class="r-window">
+    <header class="r-topbar">
+      <div class="r-brand"><span class="r-mark"></span>Vision Forge</div>
+      <nav class="r-topnav"><span class="r-tab active">Workspace</span><span class="r-tab">Runs</span><span class="r-tab">Artifacts</span></nav>
+      <div class="r-status">Runtime ready</div><span class="r-avatar"></span>
+    </header>
+    <aside class="r-sidebar">
+      <p class="r-label">Vision tools</p>
+      <div class="r-item active">Visual QA</div><div class="r-item">Grounding</div><div class="r-item">OCR batches</div><div class="r-item">Asset trace</div>
+      <div class="r-sidecard"><strong>Runtime generation 4</strong><span>Pinned upstream and local browser checks passed.</span><div class="r-progress"></div></div>
+    </aside>
+    <section class="r-content">
+      <p class="r-eyebrow">Latest verification</p><h1 class="r-title">Visual QA run</h1><p class="r-subtitle">Reference and rebuilt page compared at 1200 × 720.</p>
+      <button class="r-button">Run comparison</button>
+      <div class="r-metrics">
+        <article class="r-metric"><div class="r-metric-top">Similarity <span class="r-metric-dot" style="background:#5c50ee"></span></div><div class="r-metric-value">99.86% <span class="r-metric-note">+3.2%</span></div></article>
+        <article class="r-metric"><div class="r-metric-top">Largest delta <span class="r-metric-dot" style="background:#ffbd4a"></span></div><div class="r-metric-value">18 × 12 <span class="r-metric-note">px</span></div></article>
+        <article class="r-metric"><div class="r-metric-top">Artifacts <span class="r-metric-dot" style="background:#35b98a"></span></div><div class="r-metric-value">4 <span class="r-metric-note">ready</span></div></article>
+      </div>
+      <div class="r-workgrid">
+        <article class="r-panel"><div class="r-panel-head"><span class="r-panel-title">Annotated comparison</span><span class="r-chip">PASS</span></div><div class="r-preview"><div class="r-canvas"><span class="r-orb"></span><div class="r-lines"><div class="r-line"></div><div class="r-line"></div><div class="r-line"></div><div class="r-line"></div><div class="r-line"></div></div><span class="r-box"></span><span class="r-box-label">#1 0.14%</span></div></div></article>
+        <article class="r-panel"><div class="r-panel-head"><span class="r-panel-title">Difference score</span><span class="r-chip">LOW</span></div><div class="r-score"><div class="r-score-big"><strong>0.14%</strong><span>overall</span></div><div class="r-meter"></div><div class="r-row"><span>Viewport</span><strong>1200 × 720</strong></div><div class="r-row"><span>Worst region</span><strong>Top left</strong></div><div class="r-row"><span>Threshold</span><strong>≤ 0.50%</strong></div></div></article>
+      </div>
+      <div class="r-table"><div class="r-table-head"><span>Artifact</span><span>Tool</span><span>Size</span><span>Status</span></div><div class="r-table-row"><span class="r-file">implementation.png</span><span>html_screenshot</span><span>86 KB</span><span class="r-pass">READY</span></div><div class="r-table-row"><span class="r-file">heatmap.png</span><span>pixel_diff</span><span>41 KB</span><span class="r-pass">READY</span></div></div>
+    </section>
+  </main>
+</body>
+</html>

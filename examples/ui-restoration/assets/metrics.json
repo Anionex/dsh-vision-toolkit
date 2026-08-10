@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "viewport": {
+    "width": 1200,
+    "height": 720,
+    "scale": 1
+  },
+  "initialDifferencePct": 6.04,
+  "finalDifferencePct": 0,
+  "initialWorstRegions": 6,
+  "finalWorstRegions": 0
+}
