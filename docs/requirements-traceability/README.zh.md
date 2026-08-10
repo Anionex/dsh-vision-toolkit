@@ -10,9 +10,9 @@
 |---|---|---|---|
 | P0-1 标准 Profile Bundle | **已交付** | [`package.json`](../../package.json)、[`cordis.patch.yml`](../../cordis.patch.yml)、[`src/index.ts`](../../src/index.ts)、已提交的 `lib/` | [`tests/package-layout.spec.ts`](../../tests/package-layout.spec.ts)、[`tests/profile-install.e2e.spec.ts`](../../tests/profile-install.e2e.spec.ts)、干净 `--dump-config`、Web/Headless 启动、禁用和移除检查 |
 | P0-2 上游复用 | **已交付** | [`src/version.ts`](../../src/version.ts)、[`src/runtime-install.ts`](../../src/runtime-install.ts)、[`scripts/upstream-manifest.mjs`](../../scripts/upstream-manifest.mjs)、[`scripts/sync-upstream.mjs`](../../scripts/sync-upstream.mjs)、[`vendor/agent-vision-toolkit/UPSTREAM_MANIFEST.json`](../../vendor/agent-vision-toolkit/UPSTREAM_MANIFEST.json) | [`tests/upstream.spec.ts`](../../tests/upstream.spec.ts)、[`tests/runtime-install.spec.ts`](../../tests/runtime-install.spec.ts)、构建时 manifest 验证 |
-| P0-3 原生工具 | **已交付** | [`src/tools.ts`](../../src/tools.ts)、[`src/runtime.ts`](../../src/runtime.ts)、[`src/upstream.ts`](../../src/upstream.ts) | [`tests/tools.spec.ts`](../../tests/tools.spec.ts)、[`tests/runtime.spec.ts`](../../tests/runtime.spec.ts)、[`tests/upstream.spec.ts`](../../tests/upstream.spec.ts)、真实 Profile `vision_glance` 调用 |
+| P0-3 原生工具 | **已交付** | [`src/tools.ts`](../../src/tools.ts)、[`src/runtime.ts`](../../src/runtime.ts)、[`src/upstream.ts`](../../src/upstream.ts) | [`tests/tools.spec.ts`](../../tests/tools.spec.ts)、[`tests/runtime.spec.ts`](../../tests/runtime.spec.ts)、[`tests/upstream.spec.ts`](../../tests/upstream.spec.ts)、[`tests/vision-prompt-guard.spec.ts`](../../tests/vision-prompt-guard.spec.ts)、真实 Profile `vision_glance` 调用 |
 | P0-4 配置与 Credential | **已交付** | [`src/config.ts`](../../src/config.ts)、[`src/runtime.ts`](../../src/runtime.ts) 中的逐操作解析、[`src/upstream.ts`](../../src/upstream.ts) 中的隔离环境构造 | [`tests/config.spec.ts`](../../tests/config.spec.ts)、[`tests/runtime.spec.ts`](../../tests/runtime.spec.ts) 和 [`tests/errors.spec.ts`](../../tests/errors.spec.ts) 中的 Credential/错误/脱敏用例 |
-| P0-5 skill 生命周期 | **已交付** | [`src/index.ts`](../../src/index.ts) 中的就绪顺序和 disposer、[`src/skill.ts`](../../src/skill.ts) 中的打包内容 | [`tests/tools.spec.ts`](../../tests/tools.spec.ts)、[`tests/profile-install.e2e.spec.ts`](../../tests/profile-install.e2e.spec.ts) 中的禁用/卸载路径 |
+| P0-5 skill 生命周期 | **已交付** | [`src/index.ts`](../../src/index.ts) 中的就绪顺序、生命周期中止和 disposer、[`src/skill.ts`](../../src/skill.ts) 中的打包内容 | [`tests/tools.spec.ts`](../../tests/tools.spec.ts) 中的注册、内容、在途取消和释放用例；[`tests/profile-install.e2e.spec.ts`](../../tests/profile-install.e2e.spec.ts) 中的禁用/卸载路径 |
 | P0-6 纯文本模型结果 | **已交付** | [`src/tools.ts`](../../src/tools.ts) 中的 JSON 输出 schema 与纯渲染函数；[`src/artifacts.ts`](../../src/artifacts.ts) 中的规范产物描述 | [`tests/tools.spec.ts`](../../tests/tools.spec.ts) 中的工具 schema/展示断言、[`tests/profile-install.e2e.spec.ts`](../../tests/profile-install.e2e.spec.ts) 中的模型可见 transcript（文本记录）断言 |
 | P0-7 稳定错误 | **已交付** | [`src/errors.ts`](../../src/errors.ts)，以及 [`src/paths.ts`](../../src/paths.ts)、[`src/runtime.ts`](../../src/runtime.ts)、[`src/upstream.ts`](../../src/upstream.ts) 中的边界验证 | [`tests/errors.spec.ts`](../../tests/errors.spec.ts)、[`tests/paths.spec.ts`](../../tests/paths.spec.ts)，以及运行时/上游测试中的解析、超时、取消、Credential 和容量用例 |
 | P0-8 测试与文档 | **已交付** | 双语 [`README.md`](../../README.md)、软件包测试、managed 运行时、示例和已提交构建产物 | `pnpm run build`、`pnpm test`、`pnpm pack --dry-run`、翻译/Markdown 门禁和无真实 Key 的干净 Profile e2e |
@@ -32,9 +32,9 @@
 
 | 领域 | 契约与证据 |
 |---|---|
-| 安全 | [`src/paths.ts`](../../src/paths.ts) 通过 realpath 限制读写范围；[`src/runtime.ts`](../../src/runtime.ts) 在上传前解码并限制图片；[`src/artifact-access.ts`](../../src/artifact-access.ts) 每次读取都重新验证签名文件并 sandbox SVG；[`src/errors.ts`](../../src/errors.ts) 对密钥脱敏。路径、符号链接、格式、大小、伪造 token、文件替换和 CSP 用例均有自动化覆盖。 |
+| 安全 | [`src/paths.ts`](../../src/paths.ts) 通过 realpath 限制读写范围；[`src/runtime.ts`](../../src/runtime.ts) 在上传前解码并限制图片；[`src/upstream.ts`](../../src/upstream.ts) 在每个直接和长截图 OCR 视觉模型提示词中把图片文字/指令标记为不可信；[`src/tools.ts`](../../src/tools.ts) 和 [`src/skill.ts`](../../src/skill.ts) 要求文本 agent 只把衍生输出当作证据而非命令；[`src/artifact-access.ts`](../../src/artifact-access.ts) 每次读取都重新验证签名文件并 sandbox SVG；[`src/errors.ts`](../../src/errors.ts) 对密钥脱敏。路径、符号链接、格式、大小、提示词 guard、伪造 token、文件替换和 CSP 用例均有自动化覆盖。 |
 | 可移植性 | 运行时和浏览器调用使用 argv 向量与 Node 文件系统/进程 API，不拼接 POSIX Shell。Managed 准备同时提供 `uv` 和 `venv`/pip 路径；Python 与 Chrome 探测包含平台候选。软件包测试拒绝机器本地依赖声明，已提交 fixture/Profile 流程无需真实 Key。 |
-| 性能与取消 | [`src/runtime.ts`](../../src/runtime.ts) 应用一个硬截止时间、传递 `AbortSignal`、限制每个会话的并发数、在远程 I/O 前拒绝解码后过大的图片，并在一次 glance 操作中对重复真实图片去重。超时、取消、信号量和独立会话行为均有自动化覆盖。 |
+| 性能与取消 | [`src/runtime.ts`](../../src/runtime.ts) 应用一个硬截止时间、传递 `AbortSignal`、限制每个会话的并发数、在远程 I/O 前拒绝解码后过大的图片、在一次 glance 操作中对重复输入去重，并为每个活动会话保留一条按内容/配置键控的最近成功相同 glance 缓存。[`src/index.ts`](../../src/index.ts) 会在注销工具前中止插件拥有的调用。超时、调用方/插件取消、缓存命中/未命中、信号量和独立会话行为均有自动化覆盖。 |
 | 可观察性 | [`src/runtime.ts`](../../src/runtime.ts) 记录有界的工具名、结果、总耗时/上游耗时、图片数量/字节/像素、缓存命中、模型和错误类别，同时排除 base64、Credential、鉴权头和无界上游输出。 |
 | 可维护性 | 每个工具都调用同一个 [`VisionToolkitRuntime`](../../src/runtime.ts)；DSH 专用适配保留在 [`src/tools.ts`](../../src/tools.ts)、[`src/index.ts`](../../src/index.ts)、[`src/web.ts`](../../src/web.ts) 和 [`src/client/index.tsx`](../../src/client/index.tsx)，固定上游继续作为算法唯一来源。工具 schema 与打包 skill 在同一生命周期 generation 中注册。 |
 | HTML 截图隔离 | 固定截图 guard 使用一次性 Chrome Profile、`--use-mock-keychain` 和 `--incognito`，每次调用后删除 Profile，并保持网络禁用。[`tests/html-screenshot-guard.spec.ts`](../../tests/html-screenshot-guard.spec.ts) 捕获实际 argv 与清理行为。 |
@@ -50,7 +50,7 @@
 | 初始加载时运行时不可用 | 不注册工具或 skill；保留 Web Settings 以供修复 | [`src/index.ts`](../../src/index.ts)、[`tests/tools.spec.ts`](../../tests/tools.spec.ts) 与 [`tests/web.spec.ts`](../../tests/web.spec.ts) 中的生命周期测试 |
 | 实时更新时运行时候选失败 | 保留当前服务 generation 和已存储的可用配置 | [`tests/runtime-manager.spec.ts`](../../tests/runtime-manager.spec.ts)、[`tests/web.spec.ts`](../../tests/web.spec.ts) |
 | 并发 Settings 候选乱序完成 | 较新的 ticket 获胜；较慢的陈旧候选不能激活 | [`tests/runtime-manager.spec.ts`](../../tests/runtime-manager.spec.ts) |
-| 禁用、重新启用或卸载 | 工具与 skill 作为一个生命周期单元一起消失和恢复；卸载会移除 Bundle layer | [`tests/tools.spec.ts`](../../tests/tools.spec.ts)、[`tests/profile-install.e2e.spec.ts`](../../tests/profile-install.e2e.spec.ts) |
+| 禁用、重新启用或卸载 | 取消插件拥有的活动调用，工具与 skill 作为一个生命周期单元一起消失和恢复，卸载会移除 Bundle layer | [`tests/tools.spec.ts`](../../tests/tools.spec.ts)、[`tests/profile-install.e2e.spec.ts`](../../tests/profile-install.e2e.spec.ts) |
 
 ## P2 与 P3 边界
 

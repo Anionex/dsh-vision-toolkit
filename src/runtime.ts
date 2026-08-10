@@ -423,6 +423,13 @@ export interface ToolCallOptions {
   workspace: string
   /** Session identity for the per-session concurrency cap. */
   sessionId?: string
+  /** Live Session object whose lifetime bounds the one-entry glance cache. */
+  sessionScope?: object
+}
+
+interface GlanceCacheEntry {
+  key: string
+  result: GlanceResult
 }
 
 interface OperationMetrics {
@@ -621,6 +628,7 @@ export function parseRegion(region: string): { x1: number; y1: number; x2: numbe
 /** Runtime facade used by every native tool. */
 export class VisionToolkitRuntime {
   private readonly semaphores = new Map<string, Semaphore>()
+  private readonly glanceCache = new WeakMap<object, GlanceCacheEntry>()
   private readonly adapter: UpstreamAdapter
 
   constructor(
@@ -762,6 +770,41 @@ export class VisionToolkitRuntime {
     operation.metrics.imagePixels += image.width * image.height
   }
 
+  private async glanceCacheKey(
+    request: GlanceRequest,
+    images: readonly ImageInfo[],
+    env: UpstreamEnvironment,
+    signal: AbortSignal,
+  ): Promise<string> {
+    const imageFingerprints = await Promise.all(images.map(async (image) => {
+      let bytes: Buffer
+      try {
+        bytes = await readFile(image.path, { signal })
+      } catch (error) {
+        throw new VisionToolkitError('input', `image changed while preparing the vision request: ${image.path}`, { cause: error })
+      }
+      if (bytes.length !== image.bytes) {
+        throw new VisionToolkitError('input', `image changed while preparing the vision request: ${image.path}`)
+      }
+      return {
+        path: image.path,
+        sha256: createHash('sha256').update(bytes).digest('hex'),
+      }
+    }))
+    return JSON.stringify({
+      images: imageFingerprints,
+      query: request.query ?? null,
+      ocr: request.ocr === true,
+      region: request.region ?? null,
+      provider: {
+        baseUrl: env.VISION_BASE_URL,
+        model: env.VISION_MODEL,
+        language: env.LANG,
+        credentialSha256: createHash('sha256').update(env.VISION_API_KEY).digest('hex'),
+      },
+    })
+  }
+
   private async runUpstream(
     tool: UpstreamTool,
     args: readonly string[],
@@ -861,6 +904,16 @@ export class VisionToolkitRuntime {
         images.push(image)
       }
       const env = await this.resolveVisionEnv()
+      const cacheKey = options.sessionScope === undefined
+        ? undefined
+        : await this.glanceCacheKey(request, images, env, operation.signal)
+      if (options.sessionScope !== undefined && cacheKey !== undefined) {
+        const cached = this.glanceCache.get(options.sessionScope)
+        if (cached?.key === cacheKey) {
+          operation.metrics.cacheHits += 1
+          return cached.result
+        }
+      }
       const result = await this.runUpstream('glance', [
         ...images.map(image => image.path),
         ...(request.region !== undefined ? ['--region', request.region] : []),
@@ -869,12 +922,16 @@ export class VisionToolkitRuntime {
       ], operation, env)
       const answer = result.stdout.trim()
       if (answer.length === 0) throw new VisionToolkitError('output', 'glance: vision API returned an empty description')
-      return {
+      const value: GlanceResult = {
         images,
         mode: request.ocr === true ? 'ocr' : request.query !== undefined ? 'qa' : 'describe',
         answer,
         truncated: false,
       }
+      if (options.sessionScope !== undefined && cacheKey !== undefined && !operation.signal.aborted) {
+        this.glanceCache.set(options.sessionScope, { key: cacheKey, result: value })
+      }
+      return value
     })
   }
 

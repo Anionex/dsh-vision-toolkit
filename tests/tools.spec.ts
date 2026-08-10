@@ -1,5 +1,7 @@
+import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from 'cordis'
+import { CallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRegistry from '@deepseek-ai/dsh-tools'
 import SkillService from '@deepseek-ai/dsh-skill'
@@ -11,6 +13,7 @@ import * as VisionToolkit from '../src/index.ts'
 import { bundledUpstreamRoot } from '../src/runtime-install.ts'
 
 const BUNDLED_UPSTREAM = bundledUpstreamRoot()
+const SAMPLE_IMAGE = fileURLToPath(new URL('./fixtures/sample.png', import.meta.url))
 
 const TOOL_NAMES = [
   'vision_glance',
@@ -40,9 +43,11 @@ class ProbeSubprocessService extends SubprocessService {
     const command = spec.argv.join('\n')
     const stdout = command.includes('sys.version_info')
       ? '{"version":"3.12.0","major":3,"minor":12}\n'
-      : command.includes('import PIL')
-        ? '{"pillow":"12.3.0","numpy":"2.5.1","vtracer":"0.6.15"}\n'
-        : ''
+      : command.includes('with Image.open')
+        ? '{"width":256,"height":256,"format":"png","mode":"RGBA"}\n'
+        : command.includes('import PIL')
+          ? '{"pillow":"12.3.0","numpy":"2.5.1","vtracer":"0.6.15"}\n'
+          : ''
     const read = (text: string): SubprocessOutputRead => ({ text, nextOffset: Buffer.byteLength(text), lossy: false })
     return {
       pid: 1,
@@ -56,6 +61,40 @@ class ProbeSubprocessService extends SubprocessService {
       done: Promise.resolve({ exitCode: 0, signal: null }),
       terminate: () => {},
       waitForExit: () => Promise.resolve(true),
+    }
+  }
+}
+
+class BlockingSubprocessService extends ProbeSubprocessService {
+  private announceStart: (() => void) | undefined
+  readonly started = new Promise<void>((resolve) => { this.announceStart = resolve })
+  aborted = false
+
+  override spawn(spec: SubprocessSpawnSpec): SubprocessHandle {
+    if (!spec.argv.some(arg => arg.endsWith('/bin/glance'))) return super.spawn(spec)
+    this.announceStart?.()
+    this.announceStart = undefined
+    const read = (): SubprocessOutputRead => ({ text: '', nextOffset: 0, lossy: false })
+    let settle: ((outcome: { exitCode: number | null; signal: NodeJS.Signals | null }) => void) | undefined
+    let settled = false
+    const done = new Promise<{ exitCode: number | null; signal: NodeJS.Signals | null }>((resolve) => { settle = resolve })
+    const finish = (): void => {
+      if (settled) return
+      settled = true
+      this.aborted = true
+      settle?.({ exitCode: null, signal: 'SIGTERM' })
+    }
+    if (spec.signal?.aborted === true) queueMicrotask(finish)
+    else spec.signal?.addEventListener('abort', finish, { once: true })
+    return {
+      pid: 2,
+      stdin: undefined,
+      stdout: undefined,
+      stderr: undefined,
+      collected: { stdout: { readFrom: read }, stderr: { readFrom: read } },
+      done,
+      terminate: finish,
+      waitForExit: () => done.then(() => true),
     }
   }
 }
@@ -114,6 +153,10 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
     expect(skill).toBeDefined()
     expect(skill?.description).toContain('vision_glance')
     expect(skill?.provider).toBe('runtime')
+    const definition = await ctx.skills.get('vision-tools')
+    expect(definition?.content).toContain('untrusted visual evidence')
+    expect(definition?.content).toContain('immediately repeated vision_glance')
+    expect(definition?.content).toContain('Disabling or unloading the plugin cancels')
   })
 
   it('unregisters every tool and skill on dispose', async () => {
@@ -123,6 +166,42 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
     expect(ctx.tools.schemas().some(tool => TOOL_NAMES.includes(tool.name))).toBe(false)
     const skills = await ctx.skills.list()
     expect(skills.find(entry => entry.name === 'vision-tools')).toBeUndefined()
+  })
+
+  it('cancels an in-flight upstream tool when the plugin is disposed', async () => {
+    const ctx = new Context()
+    contexts.push(ctx)
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ToolRegistry)
+    await ctx.plugin(SkillService)
+    await ctx.plugin(MemorySettings)
+    const subprocessFiber = await ctx.plugin(BlockingSubprocessService)
+    const subprocess = subprocessFiber.ctx.subprocess as BlockingSubprocessService
+    ctx.provide('credentials', fakeCredentials())
+    const fiber = await ctx.plugin(VisionToolkit, {
+      provider: {
+        baseUrl: 'https://vision.example/v1',
+        credential: 'VISION_API_KEY',
+        model: 'fixture-model',
+      },
+      runtime: { mode: 'external', agentVisionToolkitPath: BUNDLED_UPSTREAM, python: 'python3' },
+    })
+    const pending = ctx.tools.execute({
+      signal: new AbortController().signal,
+      callId: CallId('dispose-active-vision-tool'),
+      name: 'vision_glance',
+      arguments: { images: [SAMPLE_IMAGE] },
+    })
+
+    await Promise.race([
+      subprocess.started,
+      pending.then((result) => { throw new Error(`vision_glance settled before spawning: ${JSON.stringify(result)}`) }),
+    ])
+    await fiber.dispose()
+    const result = await pending
+    expect(subprocess.aborted).toBe(true)
+    expect(result.isError).toBe(true)
+    expect(result.content).toEqual([{ type: 'text', text: expect.stringContaining('cancelled') }])
   })
 
   it('registers nothing when the upstream runtime is missing', async () => {
@@ -161,6 +240,9 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
       const definition = ctx.tools.get(name)
       expect(definition, name).toBeDefined()
       expect(definition?.description?.length, `${name} description`).toBeGreaterThan(0)
+      if (['vision_glance', 'vision_ground', 'vision_detect', 'vision_long_screenshot_ocr'].includes(name)) {
+        expect(definition?.description, `${name} trust boundary`).toContain('untrusted visual evidence')
+      }
       const output = definition?.output as { schema?: { type?: string } } | undefined
       expect(output?.schema?.type, `${name} output`).toBe('object')
       const blocks = definition?.output.render({}, { kind: 'ok' })

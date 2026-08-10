@@ -69,7 +69,7 @@ Set the bundle row to `disabled: true` in a profile patch or overlay:
   disabled: true
 ```
 
-Remove the flag or set it to `false` to re-enable the plugin. Disposal removes the tools and skill together; reactivation prepares the configured runtime before either becomes visible.
+Remove the flag or set it to `false` to re-enable the plugin. Disposal first cancels plugin-owned visual operations, then removes the tools and skill together; reactivation prepares the configured runtime before either becomes visible. User configuration and completed Artifacts remain intact.
 
 ### Upgrade
 
@@ -207,7 +207,9 @@ The committed evidence records an initial `6.04%` difference across six non-zero
 - Inputs resolve against the session workspace and configured `allowedDirs`; realpath containment prevents traversal and symlink escape.
 - Pillow decodes every image before a remote request and verifies bytes, pixels, dimensions, and extension/content agreement. Unsupported or oversized images fail before upload.
 - Outputs use random staging files or directories inside the real managed destination, reject symbolic links, and commit only after format and contract validation.
-- All upstream processes use argv vectors through `ctx.subprocess`, inherit caller cancellation, share one hard operation deadline, and terminate with the operation instead of continuing in the background.
+- Remote vision prompts explicitly classify text and instructions visible inside images as untrusted content. The native tool descriptions and bundled skill likewise tell the text agent to treat derived descriptions, labels, and OCR as visual evidence rather than executable instructions.
+- All upstream processes use argv vectors through `ctx.subprocess`, inherit caller cancellation, share one hard operation deadline, and terminate with the operation instead of continuing in the background. Plugin disposal aborts active calls before unregistering their tools.
+- One live Session retains only the most recent successful `vision_glance` result. An immediate repeat reuses it only when image content, query/OCR mode, region, endpoint, model, language, and Credential are unchanged; failures and other Sessions never share the entry.
 - Model-visible data is text, numbers, coordinates, structured JSON, and file descriptors. Tool calls/results remain reconstructable from the Session log; browser previews are presentation metadata only.
 - Metrics include tool name, total/upstream duration, bounded image counts/bytes/pixels, cache hits, model, and error category; they exclude base64, authentication headers, secrets, and unbounded upstream output.
 

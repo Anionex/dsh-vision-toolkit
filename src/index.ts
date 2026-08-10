@@ -42,18 +42,24 @@ export async function apply(ctx: Context, config: VisionToolkitConfig = {}): Pro
   })
   const manager = new VisionToolkitRuntimeManager(ctx)
   const artifacts = new ArtifactAccessController(await prepareArtifactAccessKey())
+  const lifecycle = new AbortController()
   const disposers: Array<() => void> = []
-  let operationalDisposers: Array<() => void> | undefined
+  let operationalDisposers: { tools: Array<() => void>; skill: () => void } | undefined
 
   const ensureOperational = (): void => {
     if (!manager.ready || operationalDisposers !== undefined) return
-    const mounted: Array<() => void> = []
+    const tools: Array<() => void> = []
+    let skill: (() => void) | undefined
     try {
-      for (const tool of createVisionTools(() => manager.current(), value => artifacts.presentationMeta(value))) {
-        mounted.push(ctx.tools.register(tool))
+      for (const tool of createVisionTools(
+        () => manager.current(),
+        value => artifacts.presentationMeta(value),
+        lifecycle.signal,
+      )) {
+        tools.push(ctx.tools.register(tool))
       }
-      mounted.push(ctx.skills.register(VISION_TOOLS_SKILL))
-      operationalDisposers = mounted
+      skill = ctx.skills.register(VISION_TOOLS_SKILL)
+      operationalDisposers = { tools, skill }
       const info = manager.current().upstreamVersion
       ctx.logger.info(
         'dsh-vision-toolkit %s ready (upstream %s @ %s, checkout %s)',
@@ -63,7 +69,8 @@ export async function apply(ctx: Context, config: VisionToolkitConfig = {}): Pro
         info.path,
       )
     } catch (error) {
-      for (const dispose of mounted.reverse()) dispose()
+      if (skill !== undefined) skill()
+      for (const dispose of tools.reverse()) dispose()
       throw error
     }
   }
@@ -93,8 +100,10 @@ export async function apply(ctx: Context, config: VisionToolkitConfig = {}): Pro
   }))
 
   return () => {
+    lifecycle.abort()
     if (operationalDisposers !== undefined) {
-      for (const dispose of operationalDisposers.reverse()) dispose()
+      for (const dispose of operationalDisposers.tools.reverse()) dispose()
+      operationalDisposers.skill()
       operationalDisposers = undefined
     }
     for (const dispose of disposers.reverse()) dispose()

@@ -323,6 +323,8 @@ export interface ToolCallOptions {
     workspace: string;
     /** Session identity for the per-session concurrency cap. */
     sessionId?: string;
+    /** Live Session object whose lifetime bounds the one-entry glance cache. */
+    sessionScope?: object;
 }
 /** Parse a non-empty four-integer pixel box. */
 export declare function parseRegion(region: string): {
@@ -336,6 +338,7 @@ export declare class VisionToolkitRuntime {
     private readonly ctx;
     private readonly config;
     private readonly semaphores;
+    private readonly glanceCache;
     private readonly adapter;
     constructor(ctx: Context, config: ResolvedVisionToolkitConfig, adapter?: UpstreamAdapter);
     /** Pinned and prepared upstream identity. */
@@ -349,6 +352,7 @@ export declare class VisionToolkitRuntime {
     private pathPolicy;
     private validateImage;
     private accountImage;
+    private glanceCacheKey;
     private runUpstream;
     private probeGeneratedImage;
     private annotateLocations;

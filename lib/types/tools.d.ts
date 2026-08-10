@@ -11,6 +11,12 @@ import { VisionToolkitRuntime } from './runtime.ts';
 export type VisionToolkitRuntimeSource = VisionToolkitRuntime | (() => VisionToolkitRuntime);
 /** Browser-only metadata projector; the model-visible value remains unchanged. */
 export type VisionToolkitPresentationProjector = (value: JsonValue) => JsonValue;
-/** Build the complete P0/P1 tool set from one live runtime source. */
-export declare function createVisionTools(source: VisionToolkitRuntimeSource, projectPresentation?: VisionToolkitPresentationProjector): ReturnType<typeof defineTool>[];
+/**
+ * Build the complete P0/P1 tool set from one live runtime source.
+ * @param source - Current runtime or atomic runtime lookup.
+ * @param projectPresentation - Browser-only projection for Artifact capabilities.
+ * @param lifecycleSignal - Plugin lifetime; aborting it cancels every active tool call.
+ * @returns Native tool definitions registered as one lifecycle generation.
+ */
+export declare function createVisionTools(source: VisionToolkitRuntimeSource, projectPresentation?: VisionToolkitPresentationProjector, lifecycleSignal?: AbortSignal): ReturnType<typeof defineTool>[];
 //# sourceMappingURL=tools.d.ts.map

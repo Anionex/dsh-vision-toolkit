@@ -3,7 +3,7 @@ import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from 'cordis'
 import LocalSubprocessService from '@deepseek-ai/dsh-subprocess-local'
 import type { Credentials } from '@deepseek-ai/dsh-credentials'
@@ -103,6 +103,63 @@ describe('VisionToolkitRuntime', () => {
     const result = await runtime.glance({ images: ['sample.png', './sample.png'] }, { signal, workspace })
     expect(result.images).toHaveLength(1)
     expect(result.answer).toBe('Fixture detailed description')
+  })
+
+  it('reuses the last identical glance result only inside the same live session', async () => {
+    const { adapter, runtime } = await setup()
+    const workspace = await tempWorkspace()
+    const run = vi.spyOn(adapter, 'run')
+    const firstSession = {}
+    const options = { signal, workspace, sessionId: 'first', sessionScope: firstSession }
+
+    const first = await runtime.glance({ images: ['sample.png'], query: 'what color?' }, options)
+    const second = await runtime.glance({ images: ['./sample.png'], query: 'what color?' }, options)
+    expect(second).toEqual(first)
+    expect(run).toHaveBeenCalledTimes(1)
+
+    await runtime.glance({ images: ['sample.png'], query: 'what shape?' }, options)
+    expect(run).toHaveBeenCalledTimes(2)
+
+    await runtime.glance(
+      { images: ['sample.png'], query: 'what shape?' },
+      { signal, workspace, sessionId: 'second', sessionScope: {} },
+    )
+    expect(run).toHaveBeenCalledTimes(3)
+  })
+
+  it('does not cache a failed glance request', async () => {
+    const { adapter, runtime } = await setup()
+    const workspace = await tempWorkspace()
+    const originalRun = adapter.run.bind(adapter)
+    const run = vi.spyOn(adapter, 'run')
+      .mockResolvedValueOnce({
+        stdout: '',
+        stderr: 'HTTP 429 fixture limit',
+        stdoutTruncated: false,
+        stderrTruncated: false,
+        outcome: { exitCode: 1, signal: null },
+      })
+      .mockImplementation(originalRun)
+    const options = { signal, workspace, sessionId: 'retry', sessionScope: {} }
+
+    await expect(runtime.glance({ images: ['sample.png'] }, options)).rejects.toMatchObject({ code: 'service' })
+    await expect(runtime.glance({ images: ['sample.png'] }, options)).resolves.toMatchObject({ answer: 'Fixture detailed description' })
+    expect(run).toHaveBeenCalledTimes(2)
+  })
+
+  it('rejects truncated upstream output instead of exposing a partial model result', async () => {
+    const { adapter, runtime } = await setup()
+    const workspace = await tempWorkspace()
+    vi.spyOn(adapter, 'run').mockResolvedValueOnce({
+      stdout: 'partial response',
+      stderr: '',
+      stdoutTruncated: true,
+      stderrTruncated: false,
+      outcome: { exitCode: 0, signal: null },
+    })
+
+    await expect(runtime.glance({ images: ['sample.png'] }, { signal, workspace }))
+      .rejects.toMatchObject({ code: 'output' })
   })
 
   it('glance rejects region with multiple images and mutually exclusive modes', async () => {
