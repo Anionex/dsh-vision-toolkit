@@ -3,6 +3,7 @@ import { Context } from 'cordis'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRegistry from '@deepseek-ai/dsh-tools'
 import SkillService from '@deepseek-ai/dsh-skill'
+import Settings, { type SettingsNamespace } from '@deepseek-ai/dsh-settings'
 import { SubprocessService } from '@deepseek-ai/dsh-subprocess'
 import type { SubprocessHandle, SubprocessOutputRead, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import type { Credentials } from '@deepseek-ai/dsh-credentials'
@@ -59,6 +60,20 @@ class ProbeSubprocessService extends SubprocessService {
   }
 }
 
+class MemorySettings extends Settings {
+  readonly writable = true
+  private document: Record<string, unknown> = {}
+
+  protected override load(): Promise<Record<string, unknown>> {
+    return Promise.resolve(this.document)
+  }
+
+  protected override persist(ns: SettingsNamespace, section: Record<string, unknown>): Promise<void> {
+    this.document = { ...this.document, [ns]: section }
+    return Promise.resolve()
+  }
+}
+
 const contexts: Context[] = []
 
 afterEach(async () => {
@@ -72,6 +87,7 @@ async function setupContext(toolkitPath: string) {
   await ctx.plugin(ToolRegistry)
   await ctx.plugin(SkillService)
   await ctx.plugin(ProbeSubprocessService)
+  await ctx.plugin(MemorySettings)
   ctx.provide('credentials', fakeCredentials())
   const fiber = await ctx.plugin(VisionToolkit, {
     provider: {
@@ -123,6 +139,7 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
     await ctx.plugin(ToolRegistry)
     await ctx.plugin(SkillService)
     await ctx.plugin(ProbeSubprocessService)
+    await ctx.plugin(MemorySettings)
     ctx.provide('credentials', fakeCredentials())
     await expect(ctx.plugin(VisionToolkit, {
       provider: { baseUrl: 'not-a-url', credential: 'K', model: 'm' },

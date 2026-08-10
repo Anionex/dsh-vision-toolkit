@@ -28,7 +28,7 @@ const renderJson = (_args: unknown, value: unknown): ContentBlock[] => [{
   text: JSON.stringify(value, null, 2),
 }]
 
-const presentationIdentity = (_args: unknown, value: JsonValue): JsonValue => value
+const presentationIdentity = (value: JsonValue): JsonValue => value
 const WORKSPACE_NOTE = 'All paths are resolved against the session workspace and must stay inside it (or an allowedDirs entry).'
 const REGION_NOTE = 'Pixel box as four integers X1,Y1,X2,Y2, e.g. "100,50,400,300".'
 const TIMEOUT_NOTE = 'Override the plugin timeoutMs for this call (integer 1000-600000).'
@@ -163,8 +163,22 @@ const upstreamInfoSchema = {
 } as const satisfies ValueSchemaSpec
 const requiredUpstreamInfoSchema = { ...upstreamInfoSchema, required: true } as const
 
-/** Build the complete P0/P1 tool set from one prepared runtime. */
-export function createVisionTools(runtime: VisionToolkitRuntime): ReturnType<typeof defineTool>[] {
+/** Runtime lookup accepted by tools so Settings can atomically swap generations. */
+export type VisionToolkitRuntimeSource = VisionToolkitRuntime | (() => VisionToolkitRuntime)
+
+/** Browser-only metadata projector; the model-visible value remains unchanged. */
+export type VisionToolkitPresentationProjector = (value: JsonValue) => JsonValue
+
+function runtimeFrom(source: VisionToolkitRuntimeSource): VisionToolkitRuntime {
+  return typeof source === 'function' ? source() : source
+}
+
+/** Build the complete P0/P1 tool set from one live runtime source. */
+export function createVisionTools(
+  source: VisionToolkitRuntimeSource,
+  projectPresentation: VisionToolkitPresentationProjector = presentationIdentity,
+): ReturnType<typeof defineTool>[] {
+  const presentationMeta = (_args: unknown, value: JsonValue): JsonValue => projectPresentation(value)
   return [
     defineTool({
       name: 'vision_glance',
@@ -196,7 +210,7 @@ export function createVisionTools(runtime: VisionToolkitRuntime): ReturnType<typ
           ...(args.ocr === true ? { ocr: true } : {}),
           ...(args.region === undefined ? {} : { region: args.region }),
         }
-        return runtime.glance(request, callOptions(exec, args.timeoutMs))
+        return runtimeFrom(source).glance(request, callOptions(exec, args.timeoutMs))
       },
       isConcurrencySafe: () => true,
       presentCall: args => ({
@@ -228,7 +242,7 @@ export function createVisionTools(runtime: VisionToolkitRuntime): ReturnType<typ
           },
         },
         render: renderJson,
-        presentationMeta: presentationIdentity,
+        presentationMeta,
       },
       async execute(args: GroundArgs, exec) {
         const request: LocatePreviewRequest = {
@@ -238,7 +252,7 @@ export function createVisionTools(runtime: VisionToolkitRuntime): ReturnType<typ
           ...(args.preview === true ? { preview: true } : {}),
           ...(args.previewOutput === undefined ? {} : { previewOutput: args.previewOutput }),
         }
-        return runtime.ground(request, callOptions(exec, args.timeoutMs))
+        return runtimeFrom(source).ground(request, callOptions(exec, args.timeoutMs))
       },
       isConcurrencySafe: args => args.preview !== true,
       presentCall: args => ({ card: 'generic', title: `Locate ${args.target}`, kind: 'search', locations: [{ path: args.image }] }),
@@ -275,7 +289,7 @@ export function createVisionTools(runtime: VisionToolkitRuntime): ReturnType<typ
           },
         },
         render: renderJson,
-        presentationMeta: presentationIdentity,
+        presentationMeta,
       },
       async execute(args: DetectArgs, exec) {
         const request: LocatePreviewRequest = {
@@ -285,7 +299,7 @@ export function createVisionTools(runtime: VisionToolkitRuntime): ReturnType<typ
           ...(args.preview === true ? { preview: true } : {}),
           ...(args.previewOutput === undefined ? {} : { previewOutput: args.previewOutput }),
         }
-        return runtime.detect(request, callOptions(exec, args.timeoutMs))
+        return runtimeFrom(source).detect(request, callOptions(exec, args.timeoutMs))
       },
       isConcurrencySafe: args => args.preview !== true,
       presentCall: args => ({ card: 'generic', title: `Detect ${args.category ?? 'UI elements'}`, kind: 'search', locations: [{ path: args.image }] }),
@@ -319,7 +333,7 @@ export function createVisionTools(runtime: VisionToolkitRuntime): ReturnType<typ
           },
         },
         render: renderJson,
-        presentationMeta: presentationIdentity,
+        presentationMeta,
       },
       async execute(args: TraceArgs, exec) {
         const request: TraceRequest = {
@@ -330,7 +344,7 @@ export function createVisionTools(runtime: VisionToolkitRuntime): ReturnType<typ
           ...(args.polygon === true ? { polygon: true } : {}),
           ...(args.output === undefined ? {} : { output: args.output }),
         }
-        return runtime.trace(request, callOptions(exec, args.timeoutMs))
+        return runtimeFrom(source).trace(request, callOptions(exec, args.timeoutMs))
       },
       presentCall: args => ({ card: 'generic', title: `Trace ${args.image}`, kind: 'execute', locations: [{ path: args.image }] }),
     }),
@@ -355,7 +369,7 @@ export function createVisionTools(runtime: VisionToolkitRuntime): ReturnType<typ
           },
         },
         render: renderJson,
-        presentationMeta: presentationIdentity,
+        presentationMeta,
       },
       async execute(args: CropArgs, exec) {
         const request: CropRequest = {
@@ -363,7 +377,7 @@ export function createVisionTools(runtime: VisionToolkitRuntime): ReturnType<typ
           ...(args.scale === undefined ? {} : { scale: args.scale }),
           ...(args.output === undefined ? {} : { output: args.output }),
         }
-        return runtime.crop(request, callOptions(exec, args.timeoutMs))
+        return runtimeFrom(source).crop(request, callOptions(exec, args.timeoutMs))
       },
       presentCall: args => ({ card: 'generic', title: `Crop ${args.image}`, kind: 'edit', locations: [{ path: args.image }] }),
     }),
@@ -396,7 +410,7 @@ export function createVisionTools(runtime: VisionToolkitRuntime): ReturnType<typ
           },
         },
         render: renderJson,
-        presentationMeta: presentationIdentity,
+        presentationMeta,
       },
       async execute(args: PixelDiffArgs, exec) {
         const request: PixelDiffRequest = {
@@ -405,7 +419,7 @@ export function createVisionTools(runtime: VisionToolkitRuntime): ReturnType<typ
           ...(args.top === undefined ? {} : { top: args.top }),
           ...(args.runName === undefined ? {} : { runName: args.runName }),
         }
-        return runtime.pixelDiff(request, callOptions(exec, args.timeoutMs))
+        return runtimeFrom(source).pixelDiff(request, callOptions(exec, args.timeoutMs))
       },
       presentCall: args => ({ card: 'generic', title: `Compare ${args.original} with ${args.rebuilt}`, kind: 'search', locations: [{ path: args.original }, { path: args.rebuilt }] }),
     }),
@@ -444,7 +458,7 @@ export function createVisionTools(runtime: VisionToolkitRuntime): ReturnType<typ
           },
         },
         render: renderJson,
-        presentationMeta: presentationIdentity,
+        presentationMeta,
       },
       async execute(args: LongOcrArgs, exec) {
         const request: LongScreenshotOcrRequest = {
@@ -462,7 +476,7 @@ export function createVisionTools(runtime: VisionToolkitRuntime): ReturnType<typ
           ...(args.splitOnly === true ? { splitOnly: true } : {}),
           ...(args.resume === true ? { resume: true } : {}),
         }
-        return runtime.longScreenshotOcr(request, callOptions(exec, args.timeoutMs))
+        return runtimeFrom(source).longScreenshotOcr(request, callOptions(exec, args.timeoutMs))
       },
       presentCall: args => ({ card: 'generic', title: args.splitOnly === true ? `Split ${args.image}` : `OCR ${args.image}`, kind: 'execute', locations: [{ path: args.image }] }),
     }),
@@ -486,7 +500,7 @@ export function createVisionTools(runtime: VisionToolkitRuntime): ReturnType<typ
           },
         },
         render: renderJson,
-        presentationMeta: presentationIdentity,
+        presentationMeta,
       },
       async execute(args: ForegroundArgs, exec) {
         const request: ExtractForegroundRequest = {
@@ -498,7 +512,7 @@ export function createVisionTools(runtime: VisionToolkitRuntime): ReturnType<typ
           ...(args.padding === undefined ? {} : { padding: args.padding }), ...(args.keepWhites === undefined ? {} : { keepWhites: args.keepWhites }),
           ...(args.output === undefined ? {} : { output: args.output }),
         }
-        return runtime.extractForeground(request, callOptions(exec, args.timeoutMs))
+        return runtimeFrom(source).extractForeground(request, callOptions(exec, args.timeoutMs))
       },
       presentCall: args => ({ card: 'generic', title: `Extract foreground from ${args.image}`, kind: 'edit', locations: [{ path: args.image }] }),
     }),
@@ -524,7 +538,7 @@ export function createVisionTools(runtime: VisionToolkitRuntime): ReturnType<typ
           ...(args.maxPixels === undefined ? {} : { maxPixels: args.maxPixels }), ...(args.mergeTolerance === undefined ? {} : { mergeTolerance: args.mergeTolerance }),
           ...(args.candidateTolerance === undefined ? {} : { candidateTolerance: args.candidateTolerance }),
         }
-        return runtime.dominantColors(request, callOptions(exec, args.timeoutMs))
+        return runtimeFrom(source).dominantColors(request, callOptions(exec, args.timeoutMs))
       },
       isConcurrencySafe: () => true,
       presentCall: args => ({ card: 'generic', title: `Measure colors in ${args.image}`, kind: 'read', locations: [{ path: args.image }] }),
@@ -547,7 +561,7 @@ export function createVisionTools(runtime: VisionToolkitRuntime): ReturnType<typ
           },
         },
         render: renderJson,
-        presentationMeta: presentationIdentity,
+        presentationMeta,
       },
       async execute(args: HtmlArgs, exec) {
         const request: HtmlScreenshotRequest = {
@@ -556,7 +570,7 @@ export function createVisionTools(runtime: VisionToolkitRuntime): ReturnType<typ
           ...(args.scale === undefined ? {} : { scale: args.scale }), ...(args.waitMs === undefined ? {} : { waitMs: args.waitMs }),
           ...(args.output === undefined ? {} : { output: args.output }),
         }
-        return runtime.htmlScreenshot(request, callOptions(exec, args.timeoutMs))
+        return runtimeFrom(source).htmlScreenshot(request, callOptions(exec, args.timeoutMs))
       },
       presentCall: args => ({ card: 'generic', title: `Screenshot ${args.source}`, kind: 'execute', locations: [{ path: args.source }] }),
     }),
@@ -582,9 +596,9 @@ export function createVisionTools(runtime: VisionToolkitRuntime): ReturnType<typ
           },
         },
         render: renderJson,
-        presentationMeta: presentationIdentity,
+        presentationMeta,
       },
-      execute: (args: HealthArgs, exec) => runtime.health(args.testConnection === true, callOptions(exec, args.timeoutMs)),
+      execute: (args: HealthArgs, exec) => runtimeFrom(source).health(args.testConnection === true, callOptions(exec, args.timeoutMs)),
     }),
     defineTool({
       name: 'vision_toolkit_version',
@@ -607,6 +621,7 @@ export function createVisionTools(runtime: VisionToolkitRuntime): ReturnType<typ
         render: renderJson,
       },
       async execute(_args: Record<string, never>, _exec: ToolRunContext) {
+        const runtime = runtimeFrom(source)
         const info = runtime.upstreamVersion
         return {
           pluginVersion: PLUGIN_VERSION,

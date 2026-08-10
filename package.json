@@ -10,6 +10,10 @@
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
     },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
@@ -24,7 +28,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "node scripts/upstream-manifest.mjs && tsc -p tsconfig.json",
+    "build": "node scripts/upstream-manifest.mjs && tsc -p tsconfig.json && tsc -p tsconfig.client.json && node scripts/build-client.mjs",
     "prepack": "npm run build",
     "test": "vitest run tests",
     "upstream:manifest": "node scripts/upstream-manifest.mjs --write",
@@ -40,16 +44,41 @@
       "upstreamCommit": "c27d1a300962b553c0884993c575cd3e819465ce"
     }
   },
+  "dshClient": {
+    "inject": [
+      "@deepseek-ai/dsh-client-runtime",
+      "@deepseek-ai/dsh-client-ui-tool",
+      "@deepseek-ai/dsh-client-ui-settings",
+      "@deepseek-ai/dsh-client-locale"
+    ],
+    "platform": "web"
+  },
   "peerDependencies": {
+    "@deepseek-ai/dsh-client-locale": "^0.0.1",
+    "@deepseek-ai/dsh-client-runtime": "^0.0.1",
+    "@deepseek-ai/dsh-client-ui-primitives": "^0.0.1",
+    "@deepseek-ai/dsh-client-ui-settings": "^0.0.1",
+    "@deepseek-ai/dsh-client-ui-slots": "^0.0.1",
+    "@deepseek-ai/dsh-client-ui-tool": "^0.0.1",
     "@deepseek-ai/dsh-credentials": "^0.0.1",
+    "@deepseek-ai/dsh-host-webserver": "^0.0.1",
+    "@deepseek-ai/dsh-settings": "^0.0.1",
     "@deepseek-ai/dsh-skill": "^0.0.1",
     "@deepseek-ai/dsh-subprocess": "^0.0.1",
     "@deepseek-ai/dsh-tools": "^0.0.1",
     "cordis": "^4.0.0-rc.7",
+    "react": "^18.2.0",
     "schemastery": "^3.18.0"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-host-webserver": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/node": "^22.20.0",
+    "@types/react": "~18.3.1",
+    "@types/react-dom": "~18.3.0",
     "typescript": "^6.0.3",
     "vite-tsconfig-paths": "^6.1.1",
     "vitest": "^4.1.8"

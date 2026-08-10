@@ -40,6 +40,8 @@ export declare function bundledUpstreamRoot(): string;
 export declare function displayCommand(command: RuntimeCommand): string;
 /** Verify every packaged upstream file against the committed content manifest. */
 export declare function verifyBundledUpstream(): Promise<UpstreamManifest>;
+/** Persistent per-DSH-home cache root shared by runtime and Web support files. */
+export declare function visionToolkitStateRoot(): string;
 /** Prepare the configured pinned runtime without making any vision API call. */
 export declare function prepareUpstreamRuntime(ctx: Context, config: ResolvedVisionToolkitConfig): Promise<PreparedUpstreamRuntime>;
 export {};

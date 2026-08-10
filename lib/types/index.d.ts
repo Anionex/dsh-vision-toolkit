@@ -8,8 +8,9 @@
  * @module @dsh-external/dsh-vision-toolkit
  */
 import type { Context } from 'cordis';
-import { type VisionToolkitConfig } from './config.ts';
+import { Config, type VisionToolkitConfig } from './config.ts';
 export declare const name = "@dsh-external/dsh-vision-toolkit";
+export { Config };
 export declare const inject: string[];
 /** Plugin entry: validate configuration synchronously, then mount asynchronously. */
 export declare function apply(ctx: Context, config?: VisionToolkitConfig): Promise<() => void>;

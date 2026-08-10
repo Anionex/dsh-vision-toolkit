@@ -5,8 +5,12 @@
  * model-visible semantics.
  * @module dsh-vision-toolkit/tools
  */
-import { defineTool } from '@deepseek-ai/dsh-tools';
+import { defineTool, type JsonValue } from '@deepseek-ai/dsh-tools';
 import { VisionToolkitRuntime } from './runtime.ts';
-/** Build the complete P0/P1 tool set from one prepared runtime. */
-export declare function createVisionTools(runtime: VisionToolkitRuntime): ReturnType<typeof defineTool>[];
+/** Runtime lookup accepted by tools so Settings can atomically swap generations. */
+export type VisionToolkitRuntimeSource = VisionToolkitRuntime | (() => VisionToolkitRuntime);
+/** Browser-only metadata projector; the model-visible value remains unchanged. */
+export type VisionToolkitPresentationProjector = (value: JsonValue) => JsonValue;
+/** Build the complete P0/P1 tool set from one live runtime source. */
+export declare function createVisionTools(source: VisionToolkitRuntimeSource, projectPresentation?: VisionToolkitPresentationProjector): ReturnType<typeof defineTool>[];
 //# sourceMappingURL=tools.d.ts.map

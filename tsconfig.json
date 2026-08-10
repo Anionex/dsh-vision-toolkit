@@ -33,10 +33,12 @@
       "@deepseek-ai/dsh-credentials": ["../packages/credentials/credentials/lib/types/index.d.ts"],
       "@deepseek-ai/dsh-skill": ["../packages/skill/skill/lib/types/index.d.ts"],
       "@deepseek-ai/dsh-subprocess": ["../packages/subprocess/subprocess/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-settings": ["../packages/settings/settings/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-host-webserver": ["../packages/host/webserver/lib/types/index.d.ts"],
       "@deepseek-ai/dsh-llm": ["../packages/llm/llm/lib/types/index.d.ts"],
       "@deepseek-ai/dsh-session": ["../packages/core/session/lib/types/index.d.ts"]
     }
   },
   "include": ["src"],
-  "exclude": ["tests", "lib", "node_modules"]
+  "exclude": ["tests", "src/client", "lib", ".client-build", "node_modules"]
 }

@@ -281,7 +281,8 @@ async function resolveBootstrapPython(
   )
 }
 
-function managedStateRoot(): string {
+/** Persistent per-DSH-home cache root shared by runtime and Web support files. */
+export function visionToolkitStateRoot(): string {
   const dshHome = process.env.DSH_HOME?.trim()
   const base = dshHome === undefined || dshHome.length === 0 ? join(homedir(), '.dsh') : resolve(dshHome)
   return join(base, 'cache', 'dsh-vision-toolkit')
@@ -420,7 +421,7 @@ async function prepareManaged(
   config: ResolvedVisionToolkitConfig,
   manifest: UpstreamManifest,
 ): Promise<PreparedUpstreamRuntime> {
-  const stateRoot = managedStateRoot()
+  const stateRoot = visionToolkitStateRoot()
   await mkdir(stateRoot, { recursive: true })
   const cleanHome = join(stateRoot, 'home')
   await mkdir(cleanHome, { recursive: true })
@@ -687,7 +688,7 @@ async function prepareExternal(
     throw new VisionToolkitError('runtime', `external agent-vision-toolkit checkout is not accessible: ${configured}`, { cause: error })
   }
   await verifyExternalCheckout(ctx, root, manifest)
-  const stateRoot = managedStateRoot()
+  const stateRoot = visionToolkitStateRoot()
   await mkdir(stateRoot, { recursive: true })
   const cleanHome = join(stateRoot, 'home')
   await mkdir(cleanHome, { recursive: true })

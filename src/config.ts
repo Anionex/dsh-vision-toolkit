@@ -9,7 +9,11 @@
 import z from 'schemastery'
 import type Schema from 'schemastery'
 import { credentialRef, type CredentialRef } from '@deepseek-ai/dsh-credentials'
+import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import { VisionToolkitError } from './errors.ts'
+
+/** Settings document namespace owned by this plugin. */
+export const VISION_TOOLKIT_SETTINGS_NAMESPACE = settingsNamespace('vision-toolkit')
 
 /** Full user-facing configuration; every field defaults at the schema boundary. */
 export interface VisionToolkitConfig {

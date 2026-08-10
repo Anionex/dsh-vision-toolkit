@@ -1,0 +1,43 @@
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "ignoreDeprecations": "6.0",
+    "jsx": "react-jsx",
+    "rootDir": "src/client",
+    "outDir": ".client-build",
+    "declaration": true,
+    "declarationDir": "lib/types/client",
+    "sourceMap": true,
+    "declarationMap": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "verbatimModuleSyntax": false,
+    "types": ["react", "react-dom"],
+    "typeRoots": [
+      "./node_modules/@types",
+      "../packages/client/ui-primitives/node_modules/@types",
+      "../node_modules/@types"
+    ],
+    "noEmitOnError": true,
+    "paths": {
+      "cordis": ["../vendor/cordis/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-client-runtime/client": ["../packages/client/runtime/lib/types/client/index.d.ts"],
+      "@deepseek-ai/dsh-client-ui-settings/client": ["../packages/client/ui-settings/lib/types/client/index.d.ts"],
+      "@deepseek-ai/dsh-client-ui-conversation/client": ["../packages/client/ui-conversation/lib/types/client/index.d.ts"],
+      "@deepseek-ai/dsh-client-locale/client": ["../packages/client/locale/lib/types/client/index.d.ts"],
+      "@deepseek-ai/dsh-client-ui-slots": ["../packages/client/ui-slots/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-client-ui-primitives": ["../packages/client/ui-primitives/lib/types/index.d.ts"]
+    }
+  },
+  "include": ["src/client/**/*.ts", "src/client/**/*.tsx"],
+  "exclude": ["lib", ".client-build", "node_modules"]
+}
