@@ -10,7 +10,7 @@ DSH Vision Toolkit（`@dsh-external/dsh-vision-toolkit`）为纯文本 DeepSeek 
 
 ## 交付内容
 
-- 面向 Web 和 Headless Profile 的可移植 Bundle patch、已提交的 `lib/` 产物、可复现构建输入，以及原子一致的工具/skill 启用流程。
+- 面向 Web 和 Headless Profile 的可移植 Bundle patch、已提交的 `lib/` 产物、可复现构建输入，以及由运行时就绪门控的 skill/引导工具发布与 Agent 级执行工具。
 - 固定的 MIT 许可 `agent-vision-toolkit` 快照、managed 与精确 external 运行时模式，以及只读版本探针。
 - 10 个原生视觉工具，覆盖远程图片理解、原图像素定位、本地几何与像素分析、长截图 OCR 和 HTML 渲染。
 - 稳定的模型可见 JSON 和会话工作区内的正式文件描述；图片字节和仅供浏览器使用的访问 URL 不进入模型上下文。
@@ -34,6 +34,12 @@ DSH Vision Toolkit（`@dsh-external/dsh-vision-toolkit`）为纯文本 DeepSeek 
 
 插件不重新实现视觉算法。DSH 侧只负责验证路径与限制、解析 Credential、用 argv 向量调用固定上游脚本、解析精确输出契约、分类失败、描述文件，并把结果投影给模型和 Web 客户端。
 
+## 渐进式模型暴露
+
+运行时就绪状态属于整个 Profile，但 10 个视觉执行工具的 schema 属于具体 Agent。Agent 加载 `vision-tools` 前，插件只贡献很小的 `vision_toolkit_activate` 引导工具；该 Agent 的请求 schema 中没有视觉执行工具。标准 `skill` 工具以 `name="vision-tools"` 成功加载后，会为下一模型步骤自动挂载全部 10 个工具并隐藏引导工具。直接调用 `/vision-tools` 会注入 skill 指令；如果此时视觉工具仍不可见，这些指令要求调用一次 `vision_toolkit_activate`。激活只影响当前 Agent；Session 中存在与打包 skill 版本匹配的持久证据时可以恢复，并持续到 Agent 或插件被释放。
+
+健康检查、连接测试以及插件/上游版本检查属于 Web Settings 管理操作。`vision_toolkit_health` 和 `vision_toolkit_version` 不是模型工具，即使视觉执行工具已经激活，也永远不会进入 Agent schema。
+
 ## 运行要求
 
 - 启用 Web 或 Headless Profile 的 DeepSeek Harness，并确保 `dsh plugin` 可以使用 `pnpm`。
@@ -56,7 +62,7 @@ dsh --profile web --dump-config | grep vision-toolkit
 dsh --profile headless --dump-config | grep vision-toolkit
 ```
 
-首次 managed 启动会验证打包的上游 manifest（元数据清单），并在 `DSH_HOME/cache/dsh-vision-toolkit` 下原子准备隔离环境。插件只在准备成功后注册全部工具，再挂载同版本的 `vision-tools` skill。初次准备失败时，Web Settings 修复入口仍然可用，但插件不会暴露工具或误导模型的 skill。
+首次 managed 启动会验证打包的上游 manifest（元数据清单），并在 `DSH_HOME/cache/dsh-vision-toolkit` 下原子准备隔离环境。插件只在准备成功后发布同版本的 `vision-tools` skill 与激活引导工具；每个 Agent 只有在加载该 skill 后才获得执行工具。初次准备失败时，Web Settings 修复入口仍然可用，但插件不会暴露任何模型能力或误导模型的 skill。
 
 ### 禁用与重新启用
 
@@ -67,7 +73,7 @@ dsh --profile headless --dump-config | grep vision-toolkit
   disabled: true
 ```
 
-删除该字段或设为 `false` 即可重新启用。资源释放会先取消插件拥有的视觉操作，再一起移除工具和 skill；重新启用时，配置的运行时准备完成后二者才会出现。用户配置和已完成的产物会保留。
+删除该字段或设为 `false` 即可重新启用。资源释放会先取消插件拥有的视觉操作，再移除全部 Agent 级工具、引导工具和 skill；重新启用时，配置的运行时准备完成后才会暴露任何模型能力。用户配置和已完成的产物会保留。
 
 ### 升级
 
@@ -87,7 +93,7 @@ dsh plugin --profile web remove @dsh-external/dsh-vision-toolkit
 dsh plugin --profile headless remove @dsh-external/dsh-vision-toolkit
 ```
 
-`dsh plugin remove` 会同时移除依赖及其 Bundle 层。Profile 随即不再暴露 Vision Toolkit 工具或 skill 条目。没有 Profile 使用本包时可以另行删除 managed 缓存；缓存不是活动配置，无法自行注册任何能力。
+`dsh plugin remove` 会同时移除依赖及其 Bundle 层。Profile 随即不再暴露激活引导工具、Agent 级 Vision Toolkit 工具或 skill 条目。没有 Profile 使用本包时可以另行删除 managed 缓存；缓存不是活动配置，无法自行注册任何能力。
 
 ## 配置
 

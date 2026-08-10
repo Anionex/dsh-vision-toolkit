@@ -10,7 +10,7 @@ The package delivers the complete P0 and P1 product scope. P2's stable `ctx.visi
 
 ## What ships
 
-- A portable bundle patch for Web and Headless profiles, committed `lib/` output, reproducible build inputs, and atomic tool/skill enablement.
+- A portable bundle patch for Web and Headless profiles, committed `lib/` output, reproducible build inputs, and runtime-gated Skill/bootstrap publication with Agent-scoped execution tools.
 - A pinned MIT-licensed `agent-vision-toolkit` snapshot, managed and exact external runtime modes, and a read-only version probe.
 - Ten native visual tools covering remote image understanding, original-pixel grounding, local geometry and pixel analysis, long-screenshot OCR, and HTML rendering.
 - Stable model-visible JSON plus formally described files under the session workspace; no image bytes or browser-only access URLs enter model context.
@@ -34,6 +34,12 @@ The package delivers the complete P0 and P1 product scope. P2's stable `ctx.visi
 
 The plugin does not reimplement visual algorithms. Its DSH-owned layer validates paths and limits, resolves credentials, calls the pinned upstream scripts with argv vectors, parses their exact output contracts, classifies failures, describes files, and projects results to the model and Web client.
 
+## Progressive model exposure
+
+Runtime readiness is profile-wide, but the ten visual execution schemas are Agent-scoped. Before an Agent loads `vision-tools`, the plugin contributes only the small `vision_toolkit_activate` bootstrap; the visual tools are absent from that Agent's request schema. A successful call to the standard `skill` tool with `name="vision-tools"` mounts all ten tools automatically for the next model step and hides the bootstrap. A direct `/vision-tools` invocation injects the Skill instructions; if the visual tools are still absent, those instructions require one `vision_toolkit_activate` call. Activation affects only that Agent, restores when the Session contains durable evidence matching the bundled Skill version, and lasts until the Agent or plugin is disposed.
+
+Health checks, connection testing, and plugin/upstream version inspection are administrative Web Settings operations. `vision_toolkit_health` and `vision_toolkit_version` are not model tools and never enter an Agent's schema, including after visual-tool activation.
+
 ## Requirements
 
 - DeepSeek Harness with a Web or Headless profile and `pnpm` available to `dsh plugin`.
@@ -56,7 +62,7 @@ dsh --profile web --dump-config | grep vision-toolkit
 dsh --profile headless --dump-config | grep vision-toolkit
 ```
 
-The first managed start verifies the packaged upstream manifest and atomically prepares an isolated environment under `DSH_HOME/cache/dsh-vision-toolkit`. The plugin registers all tools only after preparation succeeds, then mounts the same-version `vision-tools` skill. An initial preparation failure leaves the Web Settings repair surface available but exposes neither tools nor a misleading skill.
+The first managed start verifies the packaged upstream manifest and atomically prepares an isolated environment under `DSH_HOME/cache/dsh-vision-toolkit`. Only after preparation succeeds does the plugin publish the same-version `vision-tools` Skill and activation bootstrap; each Agent receives the execution tools only after loading that Skill. An initial preparation failure leaves the Web Settings repair surface available but exposes neither model capability nor a misleading Skill.
 
 ### Disable and re-enable
 
@@ -67,7 +73,7 @@ Set the bundle row to `disabled: true` in a profile patch or overlay:
   disabled: true
 ```
 
-Remove the flag or set it to `false` to re-enable the plugin. Disposal first cancels plugin-owned visual operations, then removes the tools and skill together; reactivation prepares the configured runtime before either becomes visible. User configuration and completed Artifacts remain intact.
+Remove the flag or set it to `false` to re-enable the plugin. Disposal first cancels plugin-owned visual operations, then removes every Agent-scoped tool, the bootstrap, and the Skill; reactivation prepares the configured runtime before any model capability becomes visible. User configuration and completed Artifacts remain intact.
 
 ### Upgrade
 
@@ -87,7 +93,7 @@ dsh plugin --profile web remove @dsh-external/dsh-vision-toolkit
 dsh plugin --profile headless remove @dsh-external/dsh-vision-toolkit
 ```
 
-`dsh plugin remove` removes both the dependency and its bundle layer. The profile no longer exposes Vision Toolkit tools or skill entries. Managed cache data may be deleted separately when no profile uses the package; it is not active configuration and cannot register anything by itself.
+`dsh plugin remove` removes both the dependency and its bundle layer. The profile no longer exposes the activation bootstrap, Agent-scoped Vision Toolkit tools, or Skill entries. Managed cache data may be deleted separately when no profile uses the package; it is not active configuration and cannot register anything by itself.
 
 ## Configure
 
