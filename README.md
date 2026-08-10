@@ -1,21 +1,86 @@
+![DSH Vision Toolkit — native visual engineering for text-only DeepSeek Harness agents](assets/hero.png)
+
 # DSH Vision Toolkit
+
+[![CI](https://img.shields.io/github/actions/workflow/status/dsh-external/dsh-vision-toolkit/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/dsh-external/dsh-vision-toolkit/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/dsh-external/dsh-vision-toolkit?display_name=tag&sort=semver&style=flat-square)](https://github.com/dsh-external/dsh-vision-toolkit/releases)
+[![License](https://img.shields.io/github/license/dsh-external/dsh-vision-toolkit?style=flat-square)](LICENSE)
+[![Node.js](https://img.shields.io/badge/Node.js-%5E22.19%20%7C%20%3E%3D24-339933?style=flat-square&logo=nodedotjs&logoColor=white)](package.json)
+[![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)](runtime/requirements.lock)
+[![DSH profiles](https://img.shields.io/badge/DSH-Web%20%2B%20Headless-5B4CF0?style=flat-square)](cordis.patch.yml)
+
+**DSH Vision Toolkit is a native visual-engineering Profile Bundle for text-only DeepSeek Harness agents that turns images and local HTML into structured evidence and previewable files.**
+
+Ten independent tools provide OCR, original-pixel coordinates, SVG, pixel-diff evidence, and managed Artifacts—without patching DSH Core or making the model construct shell commands.
 
 English | [中文](README.zh.md)
 
-DSH Vision Toolkit (`@dsh-external/dsh-vision-toolkit`) gives text-only DeepSeek Harness agents a native visual-engineering workbench. One out-of-tree Profile Bundle installs structured tools, the matching `vision-tools` skill, a reproducible Python runtime, DSH Credentials integration, managed Artifacts, dedicated Web views, and live Settings without modifying DSH Core or asking the model to construct shell commands.
+## Why this exists
 
-The package delivers the complete P0 and P1 product scope. P2's stable `ctx.visionToolkit` service remains deliberately unpublished until an independent plugin becomes a real consumer; the tools and internal runtime do not pretend that an unvalidated ecosystem API is stable.
+Text-only agents can reason about code but cannot inspect the pixels that define a screenshot, icon, or visual regression. Passing image bytes through the model channel either fails for a text-only model or hides where the image was sent. Vision Toolkit keeps the flow explicit: the Agent loads one versioned Skill, receives only the visual schemas it needs, calls a pinned local or configured remote capability, and gets text, coordinates, JSON, and files that remain reconstructable from the Session log.
 
-![Vision Toolkit Settings](docs/assets/vision-settings.png)
+The package delivers the committed P0 and P1 product scope. P2's stable `ctx.visionToolkit` service remains deliberately unpublished until an independent plugin becomes a real consumer; the internal runtime does not pretend that an unvalidated ecosystem API is stable.
 
-## What ships
+## Proof: reference-to-pixel verification
 
-- A portable bundle patch for Web and Headless profiles, committed `lib/` output, reproducible build inputs, and runtime-gated Skill/bootstrap publication with Agent-scoped execution tools.
-- A pinned MIT-licensed `agent-vision-toolkit` snapshot, managed and exact external runtime modes, and a read-only version probe.
-- Ten native visual tools covering remote image understanding, original-pixel grounding, local geometry and pixel analysis, long-screenshot OCR, and HTML rendering.
-- Stable model-visible JSON plus formally described files under the session workspace; no image bytes or browser-only access URLs enter model context.
-- Dedicated Web cards for every tool, signed image/SVG preview and download, and an `openFile` fallback when no HTTP host is available.
-- A live Vision Toolkit Settings section that validates and prepares a candidate runtime before persisting or activating it, preserves the serving generation after failure, and never returns a credential value.
+The checked-in UI-restoration workflow renders an intentionally inaccurate HTML implementation, measures a `6.04%` pixel difference across six non-zero regions, iterates, and reaches an exact `0%` difference against the reference at `1200 × 720`.
+
+<p>
+  <img src="examples/ui-restoration/assets/initial.png" width="49%" alt="Initial UI restoration candidate before Vision Toolkit iteration, with measurable layout and styling differences from the reference." />
+  <img src="examples/ui-restoration/assets/implementation.png" width="49%" alt="Final UI restoration output reproduced by the checked-in workflow with zero pixel difference from the reference." />
+</p>
+
+| Verified surface | Evidence |
+|---|---|
+| Product scope | 10 independent visual tools, matching `vision-tools` Skill, Artifacts, dedicated Web cards, and live Settings |
+| Automated coverage | 17 Vitest files / 134 passing tests, plus a dependency-free portable package check |
+| Real profiles | Clean temporary Web and Headless installation, activation, disable, re-enable, and uninstall |
+| Visual acceptance | Reproducible HTML screenshot → pixel diff example with a final `0%` difference |
+
+## Highlights
+
+- **See images without bloating every prompt:** only `vision_toolkit_activate` is initially visible; loading `vision-tools` mounts ten independent schemas for that Agent and keeps version/health administration out of model context.
+- **Act on coordinates instead of parsing prose:** grounding and detection return original-image pixel boxes, while every model-visible result remains structured text or JSON.
+- **Deliver files, not temporary output:** crop, trace, OCR, pixel diff, foreground extraction, and HTML rendering produce described Artifacts that the Web client can preview, download, or open locally.
+- **Keep runtime and credentials controlled:** DSH Credentials hold API keys, managed mode prepares an exact isolated Python environment, and a failed Settings candidate cannot replace the serving generation.
+- **Close the visual verification loop:** local HTML rendering and pixel-diff ranking support reference → implementation → screenshot → measured iteration without a model-native image channel.
+- **Use the same bundle in Web and Headless profiles:** Web adds cards, previews, Settings, and health actions; Headless receives the same tool semantics and complete structured results.
+
+## Quick start
+
+Prerequisites: DeepSeek Harness, Python 3.11+, and `pnpm` available to `dsh plugin`. Clone the release checkout, add it to the profiles you use, and confirm the bundle row:
+
+```sh
+git clone https://github.com/dsh-external/dsh-vision-toolkit.git
+PLUGIN="$PWD/dsh-vision-toolkit"
+dsh plugin --profile web add "$PLUGIN"
+dsh plugin --profile headless add "$PLUGIN"
+dsh --profile web --dump-config | grep vision-toolkit
+dsh --profile headless --dump-config | grep vision-toolkit
+```
+
+Restart a running Web profile, open **Settings → Vision Toolkit**, select a DSH Credential for remote tools, and explicitly run **Test connection**. In a conversation, make an image available as a workspace path, invoke `/vision-tools`, and ask the Agent to call a specific `vision_*` tool. Local crop, trace, pixel, color, foreground, and HTML operations do not require a visual API credential.
+
+## How it works
+
+```mermaid
+flowchart LR
+    User["Workspace image or local HTML"] --> Skill["vision-tools Skill"]
+    Skill --> Activate["Agent-scoped activation"]
+    Activate --> Tools["10 independent vision_* tools"]
+    Tools --> Runtime["Shared VisionToolkitRuntime"]
+    Credentials["DSH Credentials"] --> Runtime
+    Settings["Web Settings and health"] --> Runtime
+    Runtime --> Upstream["Pinned agent-vision-toolkit"]
+    Runtime --> Remote["Configured vision API"]
+    Upstream --> Result["Text, coordinates, JSON"]
+    Remote --> Result
+    Runtime --> Artifacts["Workspace Artifacts"]
+    Result --> Session["Reconstructable Session log"]
+    Artifacts --> Web["Preview, download, or open file"]
+```
+
+Tool definitions call one runtime; the runtime validates paths, limits, credentials, cancellation, and deadlines before dispatching to the pinned upstream snapshot or configured OpenAI-compatible vision endpoint. Web presentation consumes the same structured results and Artifact descriptors, so it does not change Headless behavior. Health, connection testing, and version inspection stay in Settings rather than model tool schemas.
 
 ## Tools
 
@@ -241,19 +306,32 @@ The committed evidence records an initial `6.04%` difference across six non-zero
 ## Development and verification
 
 ```sh
+npm run verify:portable
 pnpm run build
 pnpm test
 pnpm run example:ui-restoration
 pnpm pack --dry-run
 ```
 
+`npm run verify:portable` is the dependency-free public CI gate: it validates the vendored snapshot, package metadata and exports, committed JavaScript syntax, README links and images, required facade files, social-preview dimensions, and the dry-run tarball. The full TypeScript build and 134-test suite intentionally run with this checkout at `dsh-vision-toolkit/` inside a DeepSeek Harness source tree, where the peer API types and real profile fixtures live.
+
 `pnpm run build` verifies the vendored manifest before emitting JavaScript, declarations, and the loader-compatible Web client. The package commits `lib/`, so installation from a checkout does not require a consumer-side build. The keyless real-profile test installs into a clean `DSH_HOME`, boots Headless, executes all five P0 tools plus representative P1 local/remote tools through real tool calls, verifies disable and re-enable behavior, and uninstalls the bundle. See the [requirements traceability reference](docs/requirements-traceability/README.md) for the implementation and verification home of every P0/P1 requirement.
 
 Update the upstream snapshot only through `pnpm run upstream:sync -- <checkout>`, inspect the source and license, regenerate the manifest, and update the adapter compatibility tests and committed `lib/` in the same change. The runtime never fetches upstream `main`.
 
-## Scope
+## Project status and scope
 
-P0 and P1 are product commitments in this package. P2 is a design threshold: no stable `ctx.visionToolkit` service, capability-discovery API, or provider ecosystem is published until at least one independent plugin consumes the internal capability shape. Web upload, drag-and-drop, camera/video/audio/document ingestion, interactive box editing, automatic GUI clicking, service clusters, model routing, model voting, and cross-session vision caches remain outside the current product.
+Version `0.1.0` is the first public release. P0 and P1 are product commitments in this package. P2 is a design threshold: no stable `ctx.visionToolkit` service, capability-discovery API, or provider ecosystem is published until at least one independent plugin consumes the internal capability shape. Web upload, drag-and-drop, camera/video/audio/document ingestion, interactive box editing, automatic GUI clicking, service clusters, model routing, model voting, and cross-session vision caches remain outside the current product.
+
+## Community and About
+
+- Read [CONTRIBUTING.md](CONTRIBUTING.md) before proposing code, protocol, or upstream-snapshot changes.
+- Use [GitHub Issues](https://github.com/dsh-external/dsh-vision-toolkit/issues) for reproducible bugs, focused feature requests, and usage questions; use [SUPPORT.md](SUPPORT.md) to choose the right channel.
+- Report vulnerabilities privately through the process in [SECURITY.md](SECURITY.md), never in a public issue.
+- Follow releases and compatibility notes in [CHANGELOG.md](CHANGELOG.md).
+- Optional sponsorship is described transparently in [FUNDING.md](FUNDING.md); support does not purchase roadmap priority or private support.
+
+DSH Vision Toolkit is maintained by [Anionex](https://github.com/Anionex) as the native DeepSeek Harness integration for the upstream [`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit). The DSH adapter owns lifecycle, security, structured results, Artifacts, and Web presentation; the upstream project remains the sole home of the visual algorithms.
 
 ## License
 
