@@ -1,0 +1,45 @@
+name: Setup or usage question
+description: Ask about installation, configuration, tool selection, runtime modes, or troubleshooting.
+title: "[Question] "
+labels: [question]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Read the README troubleshooting table and SUPPORT.md first. Remove credentials, authorization headers, complete prompts or conversations, private images, and unrelated workspace paths.
+  - type: input
+    id: versions
+    attributes:
+      label: DSH snapshot, plugin version, and profile
+      placeholder: snapshot0810, dsh-vision-toolkit v0.1.0, headless
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Operating system and runtime mode
+      placeholder: Ubuntu 24.04, Python 3.12, managed runtime
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: What are you trying to accomplish?
+    validations:
+      required: true
+  - type: textarea
+    id: tried
+    attributes:
+      label: What have you tried?
+      description: Include sanitized commands, configuration field names, and stable error codes when relevant.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-submission checks
+      options:
+        - label: I checked the README, troubleshooting table, and existing issues.
+          required: true
+        - label: I removed credentials and private data from this report.
+          required: true

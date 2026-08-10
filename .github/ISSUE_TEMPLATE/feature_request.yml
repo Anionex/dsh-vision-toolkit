@@ -1,0 +1,59 @@
+name: Feature request
+description: Propose a focused improvement grounded in a real visual-engineering workflow.
+title: "[Feature] "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the user outcome before the implementation. P2 service stabilization requires a real independent plugin consumer, and P3 exploratory inputs or automation are not current release commitments.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or workflow
+      description: What visual task is blocked or unnecessarily difficult today?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: Describe the observable result without assuming a specific implementation.
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Likely product surface
+      options:
+        - Existing vision_* tool
+        - New independent tool
+        - Runtime or upstream adapter
+        - Artifact delivery or Web presentation
+        - Settings, health, or lifecycle
+        - Skill or documentation workflow
+        - P2 ecosystem service with a named consumer
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence and examples
+      description: Include a sanitized fixture, current result, consumer repository, or measured limitation when possible.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Explain existing tools or workflows you tried and why they were insufficient.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Scope checks
+      options:
+        - label: I searched existing issues and the documented project scope.
+          required: true
+        - label: This request does not require exposing credentials or private image content.
+          required: true
+        - label: If this proposes a stable P2 service, I named an independent plugin that will consume it.
+          required: false

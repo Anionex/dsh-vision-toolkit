@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security report
+    url: mailto:davidyang042@gmail.com?subject=dsh-vision-toolkit%20security%20report
+    about: Report suspected vulnerabilities privately; do not include credentials or private image data in a public issue.
+  - name: Support guide
+    url: https://github.com/dsh-external/dsh-vision-toolkit/blob/main/SUPPORT.md
+    about: Choose the right channel and collect the required environment details before opening an issue.

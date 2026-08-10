@@ -1,8 +1,31 @@
 {
   "name": "@dsh-external/dsh-vision-toolkit",
   "version": "0.1.0",
-  "description": "DSH native visual engineering toolkit with structured understanding, grounding, pixel verification, OCR, local rendering, managed Artifacts, health checks, unified credentials, and a bundled skill",
+  "description": "Native visual-engineering tools for text-only DeepSeek Harness agents: OCR, grounding, SVG tracing, pixel diff, Artifacts, and Web UI.",
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "vision-tools",
+    "computer-vision",
+    "ocr",
+    "ui-restoration",
+    "screenshot-testing",
+    "gui-automation"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dsh-external/dsh-vision-toolkit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dsh-external/dsh-vision-toolkit/issues"
+  },
+  "homepage": "https://dsh-external.github.io/dsh-vision-toolkit/",
+  "funding": "https://ifdian.net/a/anionex",
   "type": "module",
+  "packageManager": "pnpm@11.7.0",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
   "exports": {
@@ -22,6 +45,7 @@
     "src",
     "examples",
     "docs",
+    "assets",
     "runtime",
     "vendor",
     "cordis.patch.yml",
@@ -33,6 +57,7 @@
     "build": "node scripts/upstream-manifest.mjs && tsc -p tsconfig.json && tsc -p tsconfig.client.json && node scripts/build-client.mjs",
     "prepack": "npm run build",
     "test": "vitest run tests",
+    "verify:portable": "node scripts/upstream-manifest.mjs && node scripts/verify-portable.mjs",
     "example:ui-restoration": "node scripts/run-ui-restoration-example.mjs --check",
     "example:ui-restoration:write": "node scripts/run-ui-restoration-example.mjs --write",
     "upstream:manifest": "node scripts/upstream-manifest.mjs --write",

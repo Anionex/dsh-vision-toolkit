@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  portable-package:
+    name: Portable package (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22.19.0, 24.x]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Verify portable package surface
+        run: npm run verify:portable
+
+      - name: Parse vendored Python sources without writing bytecode
+        run: |
+          python - <<'PY'
+          import ast
+          from pathlib import Path
+
+          root = Path("vendor/agent-vision-toolkit")
+          files = sorted(root.rglob("*.py"))
+          if not files:
+              raise SystemExit("no vendored Python sources found")
+          for path in files:
+              ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+          print(f"parsed {len(files)} vendored Python files")
+          PY

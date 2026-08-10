@@ -1,0 +1,88 @@
+name: Bug report
+description: Report a reproducible problem in a tool, runtime, Artifact, Web view, Settings, Skill, or profile lifecycle.
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve DSH Vision Toolkit. Remove API keys, authorization headers, complete prompts or conversations, private image content, and unrelated workspace paths before submitting.
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected component
+      options:
+        - Installation or profile lifecycle
+        - Skill activation or tool exposure
+        - Remote understanding, OCR, grounding, or detection
+        - Crop, trace, pixel diff, foreground, or color analysis
+        - HTML screenshot or browser isolation
+        - Managed or external runtime
+        - Artifact preview, download, or local open
+        - Web tool card or Settings
+        - Documentation or example
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: DSH snapshot, plugin version, and profile
+      placeholder: snapshot0810, dsh-vision-toolkit v0.1.0, web
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Operating system and runtime versions
+      placeholder: macOS 15.6, Node.js 24.4.0, Python 3.11.9, managed runtime
+    validations:
+      required: true
+  - type: input
+    id: operation
+    attributes:
+      label: Tool or Settings action
+      placeholder: vision_pixel_diff or Test connection
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Include the smallest sequence and sanitized input facts that reproduce the problem.
+      placeholder: |
+        1. Install ...
+        2. Configure ...
+        3. Invoke ...
+        4. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitized logs, result, or Artifact metadata
+      description: Do not include credentials, image base64, authorization headers, private images, complete prompts, or unbounded upstream output.
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-submission checks
+      options:
+        - label: I searched existing issues and pull requests for the same problem.
+          required: true
+        - label: I reproduced this with the current release or main branch.
+          required: true
+        - label: I removed credentials and private data from everything included above.
+          required: true

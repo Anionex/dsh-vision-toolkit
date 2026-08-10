@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DSH Vision Toolkit</title>
+    <meta name="description" content="Native visual-engineering tools for text-only DeepSeek Harness agents: OCR, grounding, SVG tracing, pixel diff, Artifacts, and Web UI." />
+    <meta property="og:title" content="DSH Vision Toolkit" />
+    <meta property="og:description" content="Give text-only DeepSeek Harness agents structured visual evidence and previewable files." />
+    <meta property="og:image" content="https://dsh-external.github.io/dsh-vision-toolkit/assets/social-preview.png" />
+    <meta name="theme-color" content="#5b4cf0" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%235b4cf0'/%3E%3Cpath d='M13 46 25 34l11-16M25 34h20M45 34l7 12' fill='none' stroke='white' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E" />
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #11172b;
+        --muted: #59647d;
+        --line: #dfe3f1;
+        --panel: rgba(255, 255, 255, 0.86);
+        --violet: #5b4cf0;
+        --violet-dark: #4636dc;
+        --mint: #2cb888;
+        --amber: #ffb340;
+        --shadow: 0 28px 70px rgba(31, 36, 68, 0.14);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at 78% 5%, rgba(91, 76, 240, 0.19), transparent 31rem),
+          linear-gradient(180deg, #f7f8ff 0%, #eef1fb 56%, #f8f9fd 100%);
+        font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.6;
+      }
+
+      a {
+        color: inherit;
+      }
+
+      .shell {
+        width: min(1160px, calc(100% - 40px));
+        margin: 0 auto;
+      }
+
+      nav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        padding: 28px 0;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+      }
+
+      .brand-mark {
+        display: grid;
+        width: 34px;
+        height: 34px;
+        place-items: center;
+        border-radius: 10px;
+        color: white;
+        background: linear-gradient(145deg, #7568ff, var(--violet-dark));
+        box-shadow: 0 10px 24px rgba(91, 76, 240, 0.28);
+      }
+
+      .brand-mark svg {
+        width: 21px;
+        height: 21px;
+      }
+
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        color: var(--muted);
+        font-size: 14px;
+        font-weight: 650;
+      }
+
+      .nav-links a {
+        text-decoration: none;
+      }
+
+      .nav-links a:hover {
+        color: var(--violet);
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: 0.92fr 1.08fr;
+        align-items: center;
+        gap: 54px;
+        padding: 68px 0 88px;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 18px;
+        padding: 7px 11px;
+        border: 1px solid rgba(91, 76, 240, 0.3);
+        border-radius: 999px;
+        color: var(--violet-dark);
+        background: rgba(255, 255, 255, 0.74);
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--mint);
+        box-shadow: 0 0 0 4px rgba(44, 184, 136, 0.12);
+      }
+
+      h1,
+      h2,
+      p {
+        margin-top: 0;
+      }
+
+      h1 {
+        max-width: 680px;
+        margin-bottom: 20px;
+        font-size: clamp(48px, 6vw, 78px);
+        line-height: 0.98;
+        letter-spacing: -0.065em;
+      }
+
+      .lede {
+        max-width: 630px;
+        margin-bottom: 30px;
+        color: var(--muted);
+        font-size: clamp(18px, 2vw, 23px);
+        line-height: 1.48;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 46px;
+        padding: 0 20px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        text-decoration: none;
+        font-size: 14px;
+        font-weight: 750;
+        background: rgba(255, 255, 255, 0.84);
+      }
+
+      .button.primary {
+        border-color: var(--violet);
+        color: white;
+        background: var(--violet);
+        box-shadow: 0 12px 28px rgba(91, 76, 240, 0.24);
+      }
+
+      .button.primary:hover {
+        background: var(--violet-dark);
+      }
+
+      .hero-card {
+        position: relative;
+      }
+
+      .hero-card::before {
+        position: absolute;
+        inset: 12% -5% -5% 10%;
+        z-index: -1;
+        border-radius: 50%;
+        background: rgba(91, 76, 240, 0.22);
+        filter: blur(52px);
+        content: "";
+      }
+
+      .hero-card img {
+        display: block;
+        width: 100%;
+        border: 1px solid rgba(194, 199, 218, 0.86);
+        border-radius: 24px;
+        box-shadow: var(--shadow);
+      }
+
+      section {
+        padding: 78px 0;
+      }
+
+      .section-label {
+        color: var(--violet-dark);
+        font-size: 12px;
+        font-weight: 850;
+        letter-spacing: 0.13em;
+        text-transform: uppercase;
+      }
+
+      h2 {
+        max-width: 760px;
+        margin-bottom: 16px;
+        font-size: clamp(34px, 4vw, 50px);
+        line-height: 1.08;
+        letter-spacing: -0.045em;
+      }
+
+      .section-copy {
+        max-width: 760px;
+        margin-bottom: 34px;
+        color: var(--muted);
+        font-size: 18px;
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 14px;
+      }
+
+      .metric,
+      .feature,
+      .install-card {
+        border: 1px solid rgba(207, 211, 229, 0.9);
+        border-radius: 18px;
+        background: var(--panel);
+        box-shadow: 0 18px 42px rgba(31, 36, 68, 0.07);
+        backdrop-filter: blur(14px);
+      }
+
+      .metric {
+        padding: 24px;
+      }
+
+      .metric strong {
+        display: block;
+        margin-bottom: 2px;
+        font-size: 30px;
+        line-height: 1.1;
+        letter-spacing: -0.04em;
+      }
+
+      .metric span {
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .proof-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+        margin-top: 30px;
+      }
+
+      .proof-card {
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        background: white;
+        box-shadow: 0 18px 44px rgba(31, 36, 68, 0.09);
+      }
+
+      .proof-card img {
+        display: block;
+        width: 100%;
+      }
+
+      .proof-caption {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 16px 18px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .proof-caption strong {
+        color: var(--ink);
+      }
+
+      .pill {
+        padding: 4px 9px;
+        border-radius: 999px;
+        color: #107154;
+        background: #e3f7ef;
+        font-size: 11px;
+        font-weight: 850;
+      }
+
+      .pill.warn {
+        color: #8a5700;
+        background: #fff2d8;
+      }
+
+      .features {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+      }
+
+      .feature {
+        padding: 25px;
+      }
+
+      .feature-icon {
+        display: grid;
+        width: 42px;
+        height: 42px;
+        margin-bottom: 18px;
+        place-items: center;
+        border-radius: 12px;
+        color: var(--violet-dark);
+        background: #eeecff;
+        font-weight: 900;
+      }
+
+      .feature h3 {
+        margin: 0 0 8px;
+        font-size: 18px;
+        letter-spacing: -0.02em;
+      }
+
+      .feature p {
+        margin-bottom: 0;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .install-card {
+        display: grid;
+        grid-template-columns: 0.8fr 1.2fr;
+        gap: 34px;
+        padding: 34px;
+      }
+
+      .install-card p {
+        color: var(--muted);
+      }
+
+      pre {
+        overflow-x: auto;
+        margin: 0;
+        padding: 24px;
+        border-radius: 14px;
+        color: #eef0ff;
+        background: #12172b;
+        font: 13px/1.75 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      }
+
+      footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        padding: 34px 0 48px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      footer a {
+        font-weight: 700;
+        text-decoration: none;
+      }
+
+      @media (max-width: 900px) {
+        .hero,
+        .install-card {
+          grid-template-columns: 1fr;
+        }
+
+        .hero {
+          padding-top: 44px;
+        }
+
+        .metrics {
+          grid-template-columns: repeat(2, 1fr);
+        }
+
+        .features {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+
+      @media (max-width: 620px) {
+        .shell {
+          width: min(100% - 26px, 1160px);
+        }
+
+        nav,
+        footer {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .nav-links {
+          flex-wrap: wrap;
+        }
+
+        .hero {
+          gap: 34px;
+          padding-bottom: 54px;
+        }
+
+        h1 {
+          font-size: 50px;
+        }
+
+        section {
+          padding: 54px 0;
+        }
+
+        .metrics,
+        .proof-grid,
+        .features {
+          grid-template-columns: 1fr;
+        }
+
+        .install-card {
+          padding: 22px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="shell">
+      <nav aria-label="Primary navigation">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M5 17.5 9.5 13M9.5 13l4-6M9.5 13h7M16.5 13l2.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="5" cy="17.5" r="2" fill="currentColor"/><circle cx="9.5" cy="13" r="2" fill="currentColor"/><circle cx="13.5" cy="7" r="2" fill="currentColor"/><circle cx="16.5" cy="13" r="2" fill="currentColor"/><circle cx="19" cy="17.5" r="2" fill="currentColor"/></svg>
+          </span>
+          DSH Vision Toolkit
+        </div>
+        <div class="nav-links">
+          <a href="#proof">Proof</a>
+          <a href="#capabilities">Capabilities</a>
+          <a href="#install">Install</a>
+          <a href="https://github.com/dsh-external/dsh-vision-toolkit/blob/main/README.zh.md">中文</a>
+          <a href="https://github.com/dsh-external/dsh-vision-toolkit">GitHub</a>
+        </div>
+      </nav>
+
+      <div class="hero">
+        <div>
+          <div class="eyebrow"><span class="dot"></span> Native DSH Profile Bundle</div>
+          <h1>Give text-only agents eyes.</h1>
+          <p class="lede">Turn screenshots and local HTML into structured OCR, pixel coordinates, SVG, visual-diff evidence, and previewable Artifacts—without patching DeepSeek Harness Core.</p>
+          <div class="actions">
+            <a class="button primary" href="#install">Install the bundle</a>
+            <a class="button" href="https://github.com/dsh-external/dsh-vision-toolkit">Read the documentation</a>
+          </div>
+        </div>
+        <div class="hero-card">
+          <img src="assets/vision-settings.png" alt="DeepSeek Harness Vision Toolkit Settings showing version, runtime generation, visual service, Credential reference, output language, and limits." />
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section id="proof">
+        <div class="shell">
+          <div class="section-label">Reproducible proof</div>
+          <h2>From a rough rebuild to exact pixels.</h2>
+          <p class="section-copy">The repository renders local HTML through the real runtime, compares it against a reference, ranks the changed regions, and records the final evidence. The checked-in example starts at a 6.04% pixel difference and ends at 0%.</p>
+
+          <div class="metrics" aria-label="Verified project metrics">
+            <div class="metric"><strong>10</strong><span>independent visual tools</span></div>
+            <div class="metric"><strong>134</strong><span>passing package tests</span></div>
+            <div class="metric"><strong>0%</strong><span>final example pixel difference</span></div>
+            <div class="metric"><strong>2</strong><span>verified profiles: Web + Headless</span></div>
+          </div>
+
+          <div class="proof-grid">
+            <article class="proof-card">
+              <img src="examples/ui-restoration/assets/initial.png" alt="Initial UI restoration candidate with measurable layout and styling differences." />
+              <div class="proof-caption"><strong>Initial candidate</strong><span class="pill warn">6.04% difference</span></div>
+            </article>
+            <article class="proof-card">
+              <img src="examples/ui-restoration/assets/implementation.png" alt="Final UI restoration output matching the checked-in reference exactly." />
+              <div class="proof-caption"><strong>Verified implementation</strong><span class="pill">0% difference</span></div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="capabilities">
+        <div class="shell">
+          <div class="section-label">One runtime, explicit tools</div>
+          <h2>Visual engineering without a universal action switch.</h2>
+          <p class="section-copy">Each capability has its own schema and structured result. The versioned Skill activates them for one Agent, while health and version administration stay in Web Settings instead of model context.</p>
+
+          <div class="features">
+            <article class="feature"><div class="feature-icon">01</div><h3>Understand and locate</h3><p>Glance, OCR, grounding, and detection return text plus original-image pixel boxes.</p></article>
+            <article class="feature"><div class="feature-icon">02</div><h3>Recover and extract</h3><p>Crop, SVG trace, foreground extraction, and dominant-color analysis produce reusable geometry and assets.</p></article>
+            <article class="feature"><div class="feature-icon">03</div><h3>Verify the pixels</h3><p>Local HTML rendering and ranked pixel diff close the reference-to-implementation loop.</p></article>
+            <article class="feature"><div class="feature-icon">04</div><h3>Ship real Artifacts</h3><p>Images, SVG, Markdown, and reports carry stable descriptors for preview, download, or local open.</p></article>
+            <article class="feature"><div class="feature-icon">05</div><h3>Protect credentials</h3><p>DSH Credentials, path fencing, hard deadlines, redacted errors, and explicit endpoints keep data handling visible.</p></article>
+            <article class="feature"><div class="feature-icon">06</div><h3>Run Web or Headless</h3><p>Web adds cards and Settings; Headless receives the same complete tool semantics and structured results.</p></article>
+          </div>
+        </div>
+      </section>
+
+      <section id="install">
+        <div class="shell install-card">
+          <div>
+            <div class="section-label">Quick start</div>
+            <h2>Install one checkout into the profiles you use.</h2>
+            <p>Requires DeepSeek Harness, Python 3.11+, and <code>pnpm</code> available to <code>dsh plugin</code>. Restart a running Web profile, then configure the visual endpoint and DSH Credential in Settings.</p>
+            <a class="button" href="https://github.com/dsh-external/dsh-vision-toolkit#quick-start">Full installation and security guide</a>
+          </div>
+          <pre><code>git clone https://github.com/dsh-external/dsh-vision-toolkit.git
+PLUGIN="$PWD/dsh-vision-toolkit"
+
+dsh plugin --profile web add "$PLUGIN"
+dsh plugin --profile headless add "$PLUGIN"
+
+dsh --profile web --dump-config | grep vision-toolkit</code></pre>
+        </div>
+      </section>
+    </main>
+
+    <footer class="shell">
+      <span>DSH Vision Toolkit · MIT License · Maintained by Anionex</span>
+      <span><a href="https://github.com/dsh-external/dsh-vision-toolkit/blob/main/SECURITY.md">Security</a> · <a href="https://github.com/dsh-external/dsh-vision-toolkit/blob/main/CONTRIBUTING.md">Contributing</a> · <a href="https://github.com/dsh-external/dsh-vision-toolkit/releases">Releases</a></span>
+    </footer>
+  </body>
+</html>

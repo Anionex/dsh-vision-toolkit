@@ -1,3 +1,5 @@
 node_modules/
 *.tsbuildinfo
+*.tgz
+.DS_Store
 .dsh-vision-toolkit/
