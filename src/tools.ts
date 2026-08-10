@@ -21,7 +21,6 @@ import {
   type ToolCallOptions,
   type TraceRequest,
 } from './runtime.ts'
-import { PLUGIN_VERSION, UPSTREAM_COMMIT, UPSTREAM_REPOSITORY, UPSTREAM_VERSION } from './version.ts'
 
 const renderJson = (_args: unknown, value: unknown): ContentBlock[] => [{
   type: 'text',
@@ -113,16 +112,6 @@ const locatedMatchSchema = {
   },
 } as const satisfies ValueSchemaSpec
 
-const healthCheckSchema = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    status: { type: 'string', enum: ['ok', 'warning', 'error', 'not_tested'], required: true },
-    detail: { type: 'string', required: true },
-  },
-} as const satisfies ValueSchemaSpec
-const requiredHealthCheckSchema = { ...healthCheckSchema, required: true } as const
-
 const dominantAnalysisSchema = {
   type: 'object',
   additionalProperties: false,
@@ -157,18 +146,6 @@ const dominantAnalysisSchema = {
   },
 } as const satisfies ValueSchemaSpec
 const requiredDominantAnalysisSchema = { ...dominantAnalysisSchema, required: true } as const
-
-const upstreamInfoSchema = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    repository: { type: 'string', required: true }, version: { type: 'string', required: true }, commit: { type: 'string', required: true },
-    path: { type: 'string', required: true }, source: { type: 'string', enum: ['managed', 'external'], required: true },
-    python: { type: 'string', required: true }, pythonVersion: { type: 'string', required: true }, runtimeHome: { type: 'string', required: true },
-    dependencies: { type: 'json', required: true },
-  },
-} as const satisfies ValueSchemaSpec
-const requiredUpstreamInfoSchema = { ...upstreamInfoSchema, required: true } as const
 
 /** Runtime lookup accepted by tools so Settings can atomically swap generations. */
 export type VisionToolkitRuntimeSource = VisionToolkitRuntime | (() => VisionToolkitRuntime)
@@ -588,66 +565,6 @@ export function createVisionTools(
       },
       presentCall: args => ({ card: 'generic', title: `Screenshot ${args.source}`, kind: 'execute', locations: [{ path: args.source }] }),
     }),
-    defineTool({
-      name: 'vision_toolkit_health',
-      description: 'Report plugin/upstream/Python/dependency/Chrome/credential/storage health. Read-only by default. '
-        + 'Set testConnection=true only when an explicit service test is wanted; it sends the configured credential to GET /models but uploads no image and creates no completion.',
-      parameters: {
-        testConnection: { type: 'boolean', description: 'Explicitly query the configured OpenAI-compatible /models endpoint.' },
-        timeoutMs: { type: 'integer', description: TIMEOUT_NOTE },
-      },
-      output: {
-        schema: {
-          type: 'object', additionalProperties: false, properties: {
-            pluginVersion: { type: 'string', required: true }, upstream: requiredUpstreamInfoSchema,
-            checks: {
-              type: 'object', additionalProperties: false, required: true, properties: {
-                python: requiredHealthCheckSchema, dependencies: requiredHealthCheckSchema, chrome: requiredHealthCheckSchema, credential: requiredHealthCheckSchema,
-                artifactDirectory: requiredHealthCheckSchema, tempDirectory: requiredHealthCheckSchema, service: requiredHealthCheckSchema,
-              },
-            },
-            healthy: { type: 'boolean', required: true }, connectionTested: { type: 'boolean', required: true },
-          },
-        },
-        render: renderJson,
-        presentationMeta,
-      },
-      execute: (args: HealthArgs, exec) => runtimeFrom(source).health(
-        args.testConnection === true,
-        callOptions(exec, args.timeoutMs, lifecycleSignal),
-      ),
-    }),
-    defineTool({
-      name: 'vision_toolkit_version',
-      description: 'Report the plugin and pinned upstream identity plus prepared Python runtime. Makes no vision API call.',
-      parameters: {},
-      output: {
-        schema: {
-          type: 'object', additionalProperties: false, properties: {
-            pluginVersion: { type: 'string', required: true },
-            upstream: {
-              type: 'object', additionalProperties: false, required: true, properties: {
-                repository: { type: 'string', required: true }, version: { type: 'string', required: true }, commit: { type: 'string', required: true },
-                path: { type: 'string', required: true }, source: { type: 'string', enum: ['managed', 'external'], required: true },
-              },
-            },
-            checkoutVersion: { type: 'string', required: true }, python: { type: 'string', required: true }, pythonVersion: { type: 'string', required: true },
-            runtimeHome: { type: 'string', required: true }, dependencies: { type: 'json', required: true },
-          },
-        },
-        render: renderJson,
-      },
-      async execute(_args: Record<string, never>, _exec: ToolRunContext) {
-        const runtime = runtimeFrom(source)
-        const info = runtime.upstreamVersion
-        return {
-          pluginVersion: PLUGIN_VERSION,
-          upstream: { repository: UPSTREAM_REPOSITORY, version: UPSTREAM_VERSION, commit: UPSTREAM_COMMIT, path: info.path, source: info.source },
-          checkoutVersion: await runtime.checkoutVersion(), python: runtime.python(), pythonVersion: info.pythonVersion,
-          runtimeHome: info.runtimeHome, dependencies: info.dependencies,
-        }
-      },
-    }),
   ]
 }
 
@@ -747,9 +664,5 @@ interface HtmlArgs {
   scale?: number
   waitMs?: number
   output?: string
-  timeoutMs?: number
-}
-interface HealthArgs {
-  testConnection?: boolean
   timeoutMs?: number
 }

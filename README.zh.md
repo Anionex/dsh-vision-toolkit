@@ -12,7 +12,7 @@ DSH Vision Toolkit（`@dsh-external/dsh-vision-toolkit`）为纯文本 DeepSeek 
 
 - 面向 Web 和 Headless Profile 的可移植 Bundle patch、已提交的 `lib/` 产物、可复现构建输入，以及原子一致的工具/skill 启用流程。
 - 固定的 MIT 许可 `agent-vision-toolkit` 快照、managed 与精确 external 运行时模式，以及只读版本探针。
-- 12 个原生工具，覆盖远程图片理解、原图像素定位、本地几何与像素分析、长截图 OCR、HTML 渲染、健康检查和版本身份。
+- 10 个原生视觉工具，覆盖远程图片理解、原图像素定位、本地几何与像素分析、长截图 OCR 和 HTML 渲染。
 - 稳定的模型可见 JSON 和会话工作区内的正式文件描述；图片字节和仅供浏览器使用的访问 URL 不进入模型上下文。
 - 每个工具的专用 Web 卡片、带签名的图片/SVG 预览与下载，以及没有 HTTP 宿主时的 `openFile` 降级路径。
 - 实时 Vision Toolkit Settings：候选运行时准备成功后才持久化并启用，失败时保留当前服务 generation，且永不返回 Credential 值。
@@ -31,8 +31,6 @@ DSH Vision Toolkit（`@dsh-external/dsh-vision-toolkit`）为纯文本 DeepSeek 
 | `vision_extract_foreground` | 本地固定提取流水线 | 选区、连通分量数、前景覆盖率和尺寸 | 透明 PNG |
 | `vision_dominant_colors` | 本地固定颜色分析 | 提取的调色板或有像素证据的候选色排序 | 无 |
 | `vision_html_screenshot` | 本地 Chrome/Chromium/Edge 适配器 | 已授权源文件信息、视口和渲染尺寸 | PNG |
-| `vision_toolkit_health` | 本地检查；可选显式 `GET /models` | 运行时、依赖、浏览器、Credential、存储和服务状态 | 无 |
-| `vision_toolkit_version` | 本地 | 插件、上游快照、Python 和依赖版本 | 无 |
 
 插件不重新实现视觉算法。DSH 侧只负责验证路径与限制、解析 Credential、用 argv 向量调用固定上游脚本、解析精确输出契约、分类失败、描述文件，并把结果投影给模型和 Web 客户端。
 
@@ -164,6 +162,8 @@ Web Profile 会注册 Vision Toolkit Settings 分区，可配置提供方 URL、
 
 “运行健康检查”只执行本地检查。“测试连接”是显式操作，会把已配置 Credential 发送到 `GET /models`；它不会上传图片，也不会创建 completion。插件加载和普通 Settings 读取不会发送该请求。
 
+健康检查、连接测试以及插件/上游版本检查属于 Web Settings 管理能力，而不是模型工具，因此其 schema 永远不会占用 agent 请求上下文。
+
 ## 产物与展示
 
 会生成产物的工具只能写入 `<workspace>/.dsh-vision-toolkit/artifacts`，写入形式为单个已验证文件或原子提交的运行目录。每个模型可见产物描述都包含路径、文件名、MIME 类型、种类、说明、来源工具、预览意图和字节数，因此 Headless agent 无需浏览器支持，也能在后续调用中复用该路径。提交 trace SVG 前，运行时会把它作为 XML 解析：允许标准声明与注释，但拒绝 doctype、格式错误或多根文档、非 SVG namespace，以及上游报告与实际路径数/字节数不一致的结果。
@@ -185,8 +185,6 @@ vision_long_screenshot_ocr image="page.png" mode="general" jobs=2
 vision_extract_foreground image="logo.png" mode="color"
 vision_dominant_colors image="screen.png" region="0,0,600,300" top=8
 vision_html_screenshot source="implementation.html" width=1200 height=720
-vision_toolkit_health testConnection=false
-vision_toolkit_version
 ```
 
 常见工作流包括 `vision_ground` → `vision_crop` → `vision_glance`、`vision_ground` → `vision_crop` → `vision_trace`，以及参考图 → `vision_html_screenshot` → `vision_pixel_diff`。Grounding 和 detection 坐标始终使用原图像素（`x1/y1/x2/y2`）。

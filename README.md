@@ -12,7 +12,7 @@ The package delivers the complete P0 and P1 product scope. P2's stable `ctx.visi
 
 - A portable bundle patch for Web and Headless profiles, committed `lib/` output, reproducible build inputs, and atomic tool/skill enablement.
 - A pinned MIT-licensed `agent-vision-toolkit` snapshot, managed and exact external runtime modes, and a read-only version probe.
-- Twelve native tools covering remote image understanding, original-pixel grounding, local geometry and pixel analysis, long-screenshot OCR, HTML rendering, health checks, and release identity.
+- Ten native visual tools covering remote image understanding, original-pixel grounding, local geometry and pixel analysis, long-screenshot OCR, and HTML rendering.
 - Stable model-visible JSON plus formally described files under the session workspace; no image bytes or browser-only access URLs enter model context.
 - Dedicated Web cards for every tool, signed image/SVG preview and download, and an `openFile` fallback when no HTTP host is available.
 - A live Vision Toolkit Settings section that validates and prepares a candidate runtime before persisting or activating it, preserves the serving generation after failure, and never returns a credential value.
@@ -31,8 +31,6 @@ The package delivers the complete P0 and P1 product scope. P2's stable `ctx.visi
 | `vision_extract_foreground` | Local pinned extraction pipeline | Selected box, component counts, foreground coverage, and dimensions | Transparent PNG |
 | `vision_dominant_colors` | Local pinned color analysis | Extracted palette or pixel-backed candidate ranking | None |
 | `vision_html_screenshot` | Local Chrome/Chromium/Edge adapter | Authorized source facts, viewport, and rendered dimensions | PNG |
-| `vision_toolkit_health` | Local checks; optional explicit `GET /models` | Runtime, dependency, browser, credential, storage, and service status | None |
-| `vision_toolkit_version` | Local | Plugin, upstream snapshot, Python, and dependency versions | None |
 
 The plugin does not reimplement visual algorithms. Its DSH-owned layer validates paths and limits, resolves credentials, calls the pinned upstream scripts with argv vectors, parses their exact output contracts, classifies failures, describes files, and projects results to the model and Web client.
 
@@ -164,6 +162,8 @@ The Web profile registers a Vision Toolkit Settings section for the provider URL
 
 `Run health check` performs local checks only. `Test connection` is an explicit action that sends the configured Credential to `GET /models`; it uploads no image and creates no completion. Plugin load and ordinary Settings reads never make that request.
 
+Health, connection testing, and plugin/upstream version inspection are administrative Web Settings capabilities rather than model-facing tools, so their schemas never occupy an agent request.
+
 ## Artifacts and presentation
 
 Artifact-producing tools write only under `<workspace>/.dsh-vision-toolkit/artifacts`, either as one validated file or an atomically committed run directory. Each model-visible descriptor contains the path, filename, MIME type, kind, description, source tool, preview intent, and byte size, so Headless agents can reuse the path in later calls without browser support. Before a traced SVG is committed, the runtime parses it as XML: standard declarations and comments are accepted, while doctypes, malformed or multi-root documents, a non-SVG namespace, and reported path/byte mismatches are rejected.
@@ -185,8 +185,6 @@ vision_long_screenshot_ocr image="page.png" mode="general" jobs=2
 vision_extract_foreground image="logo.png" mode="color"
 vision_dominant_colors image="screen.png" region="0,0,600,300" top=8
 vision_html_screenshot source="implementation.html" width=1200 height=720
-vision_toolkit_health testConnection=false
-vision_toolkit_version
 ```
 
 Common workflows are `vision_ground` → `vision_crop` → `vision_glance`, `vision_ground` → `vision_crop` → `vision_trace`, and reference image → `vision_html_screenshot` → `vision_pixel_diff`. Grounding and detection boxes always use original-image pixels (`x1/y1/x2/y2`).

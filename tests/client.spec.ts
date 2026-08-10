@@ -147,7 +147,6 @@ describe('Vision Toolkit client plugin', () => {
       'vision_extract_foreground',
       'vision_html_screenshot',
       'vision_dominant_colors',
-      'vision_toolkit_health',
     ])
     expect(registrations.find(entry => entry.options.name === 'settings.section')?.options).toMatchObject({
       id: 'vision-toolkit', order: 30,

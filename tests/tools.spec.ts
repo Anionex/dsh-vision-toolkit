@@ -26,8 +26,6 @@ const TOOL_NAMES = [
   'vision_extract_foreground',
   'vision_dominant_colors',
   'vision_html_screenshot',
-  'vision_toolkit_health',
-  'vision_toolkit_version',
 ]
 
 function fakeCredentials(): Credentials {
@@ -225,15 +223,6 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
     })).rejects.toMatchObject({ code: 'config' })
   })
 
-  it('exposes the pinned upstream version through vision_toolkit_version', async () => {
-    const { ctx } = await setupContext(BUNDLED_UPSTREAM)
-    const definition = ctx.tools.get('vision_toolkit_version')
-    expect(definition).toBeDefined()
-    expect(definition?.parameters).toBeDefined()
-    expect(typeof definition?.output.render).toBe('function')
-    expect(typeof definition?.execute).toBe('function')
-  })
-
   it('declares model-friendly parameters and JSON object outputs for every tool', async () => {
     const { ctx } = await setupContext(BUNDLED_UPSTREAM)
     for (const name of TOOL_NAMES) {
@@ -248,6 +237,8 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
       const blocks = definition?.output.render({}, { kind: 'ok' })
       expect(blocks?.[0]).toMatchObject({ type: 'text' })
     }
+    expect(ctx.tools.get('vision_toolkit_health')).toBeUndefined()
+    expect(ctx.tools.get('vision_toolkit_version')).toBeUndefined()
   })
 
   it('declares replay-safe file locations and presentation metadata for artifact tools', async () => {

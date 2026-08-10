@@ -536,17 +536,6 @@ function PaletteView({ block, t = key => en[key] }: ViewProps) {
   )
 }
 
-function HealthToolView({ block, t = key => en[key] }: ViewProps) {
-  const value = decodeVisionResult(block)
-  const checks = isRecord(value?.checks) ? Object.entries(value.checks).filter((entry): entry is [string, Record<string, unknown>] => isRecord(entry[1])) : []
-  const healthy = value?.healthy === true
-  return (
-    <ToolShell block={block} title="Vision Health" summary={healthy ? t('healthy') : t('degraded')} icon={<VisionIcon />} t={t}>
-      {checks.length === 0 ? <p className="dvt-muted">{t('noResult')}</p> : <div className="dvt-health-grid">{checks.map(([name, check]) => <div key={name} data-status={stringOf(check.status)}><span>{name}</span><strong>{stringOf(check.status) ?? '—'}</strong><p>{stringOf(check.detail) ?? ''}</p></div>)}</div>}
-    </ToolShell>
-  )
-}
-
 async function apiRequest<T>(init?: RequestInit): Promise<T> {
   const response = await fetch(SETTINGS_ROUTE, { credentials: 'same-origin', ...init })
   const body = await response.json() as ApiSuccess<T> | ApiFailure
@@ -820,7 +809,6 @@ export function apply(ctx: ClientContext): void {
     ['vision_extract_foreground', ArtifactView],
     ['vision_html_screenshot', ArtifactView],
     ['vision_dominant_colors', PaletteView],
-    ['vision_toolkit_health', HealthToolView],
   ]
   ctx.slots.inject('tool.call.toolview', function* () {
     for (const [key, component] of entries) {

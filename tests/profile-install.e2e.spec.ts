@@ -432,8 +432,12 @@ describe.skipIf(!hasDsh() || !hasPnpm())('dsh-vision-toolkit profile install (ke
 
       const reenabledServer = await startMockLlmServer({
         sequence: ['tool_call_success', 'success'],
-        toolName: 'vision_toolkit_health',
-        toolArguments: '{}',
+        toolName: 'vision_crop',
+        toolArguments: JSON.stringify({
+          image: 'reference.png',
+          region: '0,0,16,16',
+          output: 'e2e-reenabled.png',
+        }),
         successText: 're-enabled ok',
       })
       try {
@@ -446,12 +450,13 @@ describe.skipIf(!hasDsh() || !hasPnpm())('dsh-vision-toolkit profile install (ke
           DEEPSEEK_API_KEY: 'mock-vision-e2e-key',
           DEEPSEEK_BASE_URL: reenabledServer.baseURL,
           VISION_API_KEY: 'fixture-vision-key',
-        })
+        }, workspace)
         expect(reenabled.code, reenabled.stderr).toBe(0)
         expect(reenabled.stdout).toBe('re-enabled ok')
         const reenabledBodies = JSON.stringify(reenabledServer.requests.map(request => request.body))
-        expect(reenabledBodies).toContain('vision_toolkit_health')
-        expect(reenabledBodies).toContain('pluginVersion')
+        expect(reenabledBodies).toContain('vision_crop')
+        expect(reenabledBodies).toContain('e2e-reenabled.png')
+        expect(existsSync(join(workspace, '.dsh-vision-toolkit', 'artifacts', 'e2e-reenabled.png'))).toBe(true)
       } finally {
         await reenabledServer.close()
       }
