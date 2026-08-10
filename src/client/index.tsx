@@ -57,6 +57,7 @@ const en = {
   upstreamVersion: 'Upstream',
   activeGeneration: 'Runtime generation',
   runtimeUnavailable: 'Runtime unavailable',
+  runtimeCandidateRejected: 'Last runtime candidate was rejected; the active generation remains available.',
   retry: 'Retry',
   open: 'Open file',
   download: 'Download',
@@ -118,6 +119,7 @@ const zh: Record<LocaleKey, string> = {
   upstreamVersion: '上游',
   activeGeneration: '运行时世代',
   runtimeUnavailable: '运行时不可用',
+  runtimeCandidateRejected: '最近的运行时候选已被拒绝；当前世代仍可用。',
   retry: '重试',
   open: '打开文件',
   download: '下载',
@@ -709,7 +711,7 @@ function LoadedSettings({ controller, t }: SettingsInjected) {
   useEffect(() => { if (state.status === 'idle') void controller.load() }, [controller, state.status])
   useEffect(() => {
     if (snapshot !== undefined) setDraft(draftOf(snapshot.settings.value))
-  }, [snapshot?.settings.revision])
+  }, [snapshot])
 
   if (state.status === 'idle' || (state.status === 'loading' && snapshot === undefined)) {
     return <div className="dvt-settings"><div className="dvt-loading">{t('testing')}</div></div>
@@ -728,6 +730,7 @@ function LoadedSettings({ controller, t }: SettingsInjected) {
     }
   }
   const busy = state.action !== undefined
+  const runtimeErrorTitle = snapshot.runtime.ready ? t('runtimeCandidateRejected') : t('runtimeUnavailable')
 
   return (
     <div className="dvt-settings">
@@ -740,7 +743,7 @@ function LoadedSettings({ controller, t }: SettingsInjected) {
       {draftError === undefined ? null : <div className="dvt-alert error">{draftError}</div>}
       {state.error === undefined ? null : <div className="dvt-alert error">{state.error}</div>}
       {state.message === 'saved' ? <div className="dvt-alert success">{t('saved')}</div> : null}
-      {snapshot.runtime.lastError === undefined ? null : <div className="dvt-alert error"><strong>{t('runtimeUnavailable')}</strong><span>{snapshot.runtime.lastError}</span></div>}
+      {snapshot.runtime.lastError === undefined ? null : <div className="dvt-alert error"><strong>{runtimeErrorTitle}</strong><span>{snapshot.runtime.lastError}</span></div>}
 
       <section className="dvt-panel"><div className="dvt-panel-title"><h3>{t('provider')}</h3><span className={`dvt-badge ${snapshot.credential.configured ? 'ok' : 'error'}`}>{snapshot.credential.configured ? t('configured') : t('missing')}</span></div>
         <div className="dvt-form-grid">

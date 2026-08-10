@@ -1,12 +1,16 @@
 // @vitest-environment jsdom
 
 import { createElement, type ComponentType } from 'react'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ToolCallBlock } from '@deepseek-ai/dsh-client-runtime/client'
-import { apply, decodeVisionResult, inject } from '../src/client/index.tsx'
+import { apply, decodeVisionResult, inject, VisionSettingsController } from '../src/client/index.tsx'
 
-afterEach(() => { cleanup() })
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+  vi.restoreAllMocks()
+})
 
 function settled(meta: unknown, isError = false): ToolCallBlock {
   return {
@@ -55,6 +59,53 @@ function fakeClientContext() {
     on: vi.fn(() => () => {}),
   }
   return { ctx, slots, registrations, effects }
+}
+
+function settingsSnapshot(runtime: { ready: boolean; lastError?: string } = { ready: true }) {
+  return {
+    schemaVersion: 1,
+    writable: true,
+    settings: {
+      value: {
+        provider: { baseUrl: 'https://api.inferera.com/v1', credential: 'VISION_API_KEY', model: 'gemini-3.6-flash' },
+        language: 'zh',
+        timeoutMs: 61000,
+        maxImageBytes: 10485760,
+        maxImagePixels: 40000000,
+        concurrency: 4,
+        runtime: { mode: 'managed' },
+        allowedDirs: [],
+      },
+      revision: 1,
+      applies: 'live',
+    },
+    credential: { ref: 'VISION_API_KEY', configured: false, writable: true },
+    runtime: {
+      ...runtime,
+      generation: 1,
+      upstream: {
+        source: 'managed',
+        path: '/runtime/agent-vision-toolkit',
+        runtimeHome: '/runtime/home',
+        python: '/runtime/python',
+        pythonVersion: '3.12.0',
+      },
+    },
+    release: {
+      pluginVersion: '0.1.0',
+      upstreamRepository: 'https://github.com/Anionex/agent-vision-toolkit',
+      upstreamVersion: 'v0.1.0+snapshot.c27d1a3',
+      upstreamCommit: 'c27d1a300962b553c0884993c575cd3e819465ce',
+    },
+    artifactRouteAvailable: true,
+  }
+}
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  })
 }
 
 describe('Vision Toolkit client plugin', () => {
@@ -124,5 +175,46 @@ describe('Vision Toolkit client plugin', () => {
     expect(screen.getByText('924, 645, 952, 670')).toBeTruthy()
     expect(screen.getByRole('img', { name: 'Ground preview' }).getAttribute('src')).toBe('/preview-token')
     expect(screen.getByRole('link', { name: 'download' }).getAttribute('href')).toBe('/download-token')
+  })
+
+  it('reloads the authoritative same-revision settings after a runtime candidate is rejected', async () => {
+    const initial = settingsSnapshot()
+    const rejected = settingsSnapshot({
+      ready: true,
+      lastError: 'agent-vision-toolkit path does not exist: /nonexistent/dsh-vision-toolkit',
+    })
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ ok: true, value: initial }))
+      .mockResolvedValueOnce(jsonResponse({
+        ok: false,
+        error: { code: 'INVALID_CONFIG', message: 'agent-vision-toolkit path does not exist' },
+      }, 400))
+      .mockResolvedValueOnce(jsonResponse({ ok: true, value: rejected }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { ctx, registrations } = fakeClientContext()
+    apply(ctx as never)
+    const settings = registrations.find(entry => entry.options.name === 'settings.section')
+    if (settings === undefined) throw new Error('Settings component was not registered')
+    render(createElement(settings.component, {
+      controller: new VisionSettingsController(),
+      t: (key: string) => key,
+    }))
+
+    const runtimeMode = await screen.findByLabelText('runtimeMode')
+    fireEvent.change(runtimeMode, { target: { value: 'external' } })
+    const toolkitPath = await screen.findByLabelText('toolkitPath')
+    fireEvent.change(toolkitPath, { target: { value: '/nonexistent/dsh-vision-toolkit' } })
+    fireEvent.click(screen.getByRole('button', { name: 'save' }))
+    await screen.findByText('agent-vision-toolkit path does not exist')
+
+    fireEvent.click(screen.getByRole('button', { name: 'reload' }))
+    await waitFor(() => {
+      expect((screen.getByLabelText('runtimeMode') as HTMLSelectElement).value).toBe('managed')
+    })
+    expect(screen.queryByLabelText('toolkitPath')).toBeNull()
+    expect(screen.getByText('runtimeCandidateRejected')).toBeTruthy()
+    expect(screen.queryByText('runtimeUnavailable')).toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 })
