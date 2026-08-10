@@ -12,6 +12,7 @@ import {
   type CropRequest,
   type GlanceRequest,
   type LocateRequest,
+  type ToolCallOptions,
   type TraceRequest,
 } from './runtime.ts'
 import { PLUGIN_VERSION, UPSTREAM_COMMIT, UPSTREAM_REPOSITORY, UPSTREAM_VERSION } from './version.ts'
@@ -28,6 +29,23 @@ const TIMEOUT_NOTE = 'Override the plugin timeoutMs for this call (positive inte
 /** Resolve the caller workspace exactly like first-party fs/bash tools. */
 function sessionWorkspace(exec: ToolRunContext): string {
   return exec.agent?.session.header.cwd ?? process.cwd()
+}
+
+/** Stable session key used by the runtime's per-session concurrency gate. */
+function sessionId(exec: ToolRunContext): string | undefined {
+  const id = exec.agent?.session.header.id
+  return id === undefined ? undefined : String(id)
+}
+
+/** Runtime call options derived once so exact optional properties stay absent. */
+function callOptions(exec: ToolRunContext, timeoutMs: number | undefined): ToolCallOptions {
+  const id = sessionId(exec)
+  return {
+    signal: exec.signal,
+    workspace: sessionWorkspace(exec),
+    ...(timeoutMs === undefined ? {} : { timeoutMs }),
+    ...(id === undefined ? {} : { sessionId: id }),
+  }
 }
 
 const boxSchema = {
@@ -47,6 +65,9 @@ const imageInfoSchema = {
   properties: {
     path: { type: 'string', required: true },
     bytes: { type: 'integer', required: true },
+    width: { type: 'integer', required: true },
+    height: { type: 'integer', required: true },
+    format: { type: 'string', required: true },
   },
 } as const satisfies ValueSchemaSpec
 
@@ -103,12 +124,9 @@ export function createVisionTools(runtime: VisionToolkitRuntime): ReturnType<typ
           ...(args.ocr === true ? { ocr: true } : {}),
           ...(args.region !== undefined ? { region: args.region } : {}),
         }
-        return runtime.glance(request, {
-          signal: exec.signal,
-          ...(args.timeoutMs !== undefined ? { timeoutMs: args.timeoutMs } : {}),
-          workspace: sessionWorkspace(exec),
-        })
+        return runtime.glance(request, callOptions(exec, args.timeoutMs))
       },
+      isConcurrencySafe: () => true,
     }),
     defineTool({
       name: 'vision_ground',
@@ -141,12 +159,9 @@ export function createVisionTools(runtime: VisionToolkitRuntime): ReturnType<typ
           target: args.target,
           ...(args.region !== undefined ? { region: args.region } : {}),
         }
-        return runtime.ground(request, {
-          signal: exec.signal,
-          ...(args.timeoutMs !== undefined ? { timeoutMs: args.timeoutMs } : {}),
-          workspace: sessionWorkspace(exec),
-        })
+        return runtime.ground(request, callOptions(exec, args.timeoutMs))
       },
+      isConcurrencySafe: () => true,
     }),
     defineTool({
       name: 'vision_detect',
@@ -190,34 +205,22 @@ export function createVisionTools(runtime: VisionToolkitRuntime): ReturnType<typ
           target: args.category ?? 'every distinct UI element — include the exact visible text in each label',
           ...(args.region !== undefined ? { region: args.region } : {}),
         }
-        return runtime.detect(request, {
-          signal: exec.signal,
-          ...(args.timeoutMs !== undefined ? { timeoutMs: args.timeoutMs } : {}),
-          workspace: sessionWorkspace(exec),
-        })
+        return runtime.detect(request, callOptions(exec, args.timeoutMs))
       },
+      isConcurrencySafe: () => true,
     }),
     defineTool({
       name: 'vision_trace',
-      description: 'Recover clean, editable SVG geometry from a flat, high-contrast raster graphic (icon, logo, diagram) using the upstream pixel pipeline. '
-        + 'Returns the SVG file path plus geometry status, confidence, primitive count, stroke width, and pixel fit. '
-        + 'For semantic labels or model-assisted repair use mode "perceive", "synthesize", or "review" (needs the vision model and a renderer). '
+      description: 'Trace a flat, high-contrast raster graphic (icon, logo, diagram) into an editable SVG with the pinned upstream vtracer pipeline. '
+        + 'Returns the SVG file path, path count, traced scale, and byte size. '
         + 'Text is geometry to this tool; use vision_glance with ocr when the text matters. '
         + WORKSPACE_NOTE,
       parameters: {
         image: { type: 'string', required: true, description: 'Image path (relative to the workspace).' },
         region: { type: 'string', description: `${REGION_NOTE} Trace only this box.` },
-        scale: { type: 'integer', description: 'Analyze at N times source resolution (1-8); output coordinates stay in the original image grid.' },
-        strokeWidth: { type: 'number', description: 'Force the output stroke width in original-image pixels.' },
+        scale: { type: 'integer', description: 'Analyze at N times source resolution (1-16); output coordinates stay in the original image grid.' },
         color: { type: 'boolean', description: 'Sample and preserve the foreground color instead of a default.' },
-        filled: { type: 'boolean', description: 'Emit recognized outlined parts as filled boolean compounds with inner cutouts.' },
-        outline: { type: 'boolean', description: 'Trace the filled silhouette (needs vtracer); mutually exclusive with filled and the llm modes.' },
-        mode: {
-          type: 'string',
-          enum: ['deterministic', 'perceive', 'synthesize', 'review'],
-          description: 'deterministic (default) = local pixel geometry; perceive = concept label only; synthesize = full model-assisted repair; review = conservative critic-first mode.',
-        },
-        requireProduction: { type: 'boolean', description: 'Fail instead of writing when the final geometry status is not "production".' },
+        polygon: { type: 'boolean', description: 'Use polygon mode for boxy diagrams; omit for spline mode on curved graphics.' },
         output: { type: 'string', description: 'Output filename inside the plugin output directory; must end in .svg.' },
         timeoutMs: { type: 'integer', description: TIMEOUT_NOTE },
       },
@@ -235,20 +238,10 @@ export function createVisionTools(runtime: VisionToolkitRuntime): ReturnType<typ
               additionalProperties: false,
               required: true,
               properties: {
-                status: { type: 'string', required: true },
-                confidence: { type: 'json', required: true },
-                primitiveCount: { type: 'integer' },
-                representation: { type: 'string' },
-                strokeWidth: { type: 'number' },
-                pixelFit: { type: 'number' },
-              },
-            },
-            perception: {
-              type: 'object',
-              additionalProperties: false,
-              properties: {
-                label: { type: 'string' },
-                confidence: { type: 'json' },
+                status: { type: 'string', enum: ['generated', 'empty'], required: true },
+                pathCount: { type: 'integer', required: true },
+                tracedScale: { type: 'integer', required: true },
+                bytes: { type: 'integer', required: true },
               },
             },
             warning: { type: 'string' },
@@ -261,19 +254,11 @@ export function createVisionTools(runtime: VisionToolkitRuntime): ReturnType<typ
           image: args.image,
           ...(args.region !== undefined ? { region: args.region } : {}),
           ...(args.scale !== undefined ? { scale: args.scale } : {}),
-          ...(args.strokeWidth !== undefined ? { strokeWidth: args.strokeWidth } : {}),
           ...(args.color === true ? { color: true } : {}),
-          ...(args.filled === true ? { filled: true } : {}),
-          ...(args.outline === true ? { outline: true } : {}),
-          ...(args.mode !== undefined ? { mode: args.mode } : {}),
-          ...(args.requireProduction === true ? { requireProduction: true } : {}),
+          ...(args.polygon === true ? { polygon: true } : {}),
           ...(args.output !== undefined ? { output: args.output } : {}),
         }
-        return runtime.trace(request, {
-          signal: exec.signal,
-          ...(args.timeoutMs !== undefined ? { timeoutMs: args.timeoutMs } : {}),
-          workspace: sessionWorkspace(exec),
-        })
+        return runtime.trace(request, callOptions(exec, args.timeoutMs))
       },
     }),
     defineTool({
@@ -313,11 +298,7 @@ export function createVisionTools(runtime: VisionToolkitRuntime): ReturnType<typ
           ...(args.scale !== undefined ? { scale: args.scale } : {}),
           ...(args.output !== undefined ? { output: args.output } : {}),
         }
-        return runtime.crop(request, {
-          signal: exec.signal,
-          ...(args.timeoutMs !== undefined ? { timeoutMs: args.timeoutMs } : {}),
-          workspace: sessionWorkspace(exec),
-        })
+        return runtime.crop(request, callOptions(exec, args.timeoutMs))
       },
     }),
     defineTool({
@@ -339,20 +320,20 @@ export function createVisionTools(runtime: VisionToolkitRuntime): ReturnType<typ
                 version: { type: 'string', required: true },
                 commit: { type: 'string', required: true },
                 path: { type: 'string', required: true },
+                source: { type: 'string', enum: ['managed', 'external'], required: true },
               },
             },
             checkoutVersion: { type: 'string', required: true },
             python: { type: 'string', required: true },
+            pythonVersion: { type: 'string', required: true },
+            dependencies: { type: 'json', required: true },
           },
         },
         render: renderJson,
       },
       async execute(_args: Record<string, never>, _exec: ToolRunContext) {
         const info = runtime.upstreamVersion
-        const [checkoutVersion, python] = await Promise.all([
-          runtime.checkoutVersion(),
-          runtime.python(),
-        ])
+        const checkoutVersion = await runtime.checkoutVersion()
         return {
           pluginVersion: PLUGIN_VERSION,
           upstream: {
@@ -360,9 +341,12 @@ export function createVisionTools(runtime: VisionToolkitRuntime): ReturnType<typ
             version: UPSTREAM_VERSION,
             commit: UPSTREAM_COMMIT,
             path: info.path,
+            source: info.source,
           },
           checkoutVersion,
-          python,
+          python: runtime.python(),
+          pythonVersion: info.pythonVersion,
+          dependencies: info.dependencies,
         }
       },
     }),
@@ -396,12 +380,8 @@ interface TraceArgs {
   image: string
   region?: string
   scale?: number
-  strokeWidth?: number
   color?: boolean
-  filled?: boolean
-  outline?: boolean
-  mode?: 'deterministic' | 'perceive' | 'synthesize' | 'review'
-  requireProduction?: boolean
+  polygon?: boolean
   output?: string
   timeoutMs?: number
 }

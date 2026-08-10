@@ -6,8 +6,9 @@
  * @module dsh-vision-toolkit/paths
  */
 
-import { mkdir, realpath, stat } from 'node:fs/promises'
-import { isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { randomUUID } from 'node:crypto'
+import { link, mkdir, realpath, rename, rm, stat } from 'node:fs/promises'
+import { extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { homedir } from 'node:os'
 import { VisionToolkitError } from './errors.ts'
 
@@ -42,7 +43,7 @@ function expandUserHome(raw: string): string {
  * fence.
  * @param workspaceRaw - session workspace (or process cwd fallback).
  * @param allowedDirs - configured extra allowed roots.
- * @param outputDirRaw - configured output directory (default `.dsh-vision-toolkit`).
+   * @param outputDirRaw - configured output directory (default `.dsh-vision-toolkit/artifacts`).
  * @returns the resolved policy.
  */
 export async function createPathPolicy(
@@ -67,7 +68,7 @@ export async function createPathPolicy(
     }
   }
   const outputRaw = outputDirRaw === undefined || outputDirRaw.trim().length === 0
-    ? join(workspace, '.dsh-vision-toolkit')
+    ? join(workspace, '.dsh-vision-toolkit', 'artifacts')
     : resolve(workspace, expandUserHome(outputDirRaw))
   if (!roots.some(root => isWithin(root, outputRaw))) {
     throw new VisionToolkitError('path', 'output directory must stay inside the workspace or an allowedDirs entry')
@@ -137,8 +138,8 @@ export function resolveOutputFile(
   const expanded = expandUserHome(name)
   if (isAbsolute(expanded)) throw new VisionToolkitError('path', 'output must be a filename, not an absolute path')
   const segments = expanded.split(/[\\/]/)
-  if (segments.some(segment => segment === '..' || segment === '')) {
-    throw new VisionToolkitError('path', 'output must stay inside the output directory')
+  if (segments.length !== 1 || segments[0] === '' || segments[0] === '.' || segments[0] === '..') {
+    throw new VisionToolkitError('path', 'output must be one filename inside the output directory')
   }
   const extension = expanded.slice(expanded.lastIndexOf('.')).toLowerCase()
   if (!extensions.includes(extension)) {
@@ -149,6 +150,56 @@ export function resolveOutputFile(
     throw new VisionToolkitError('path', 'output must stay inside the output directory')
   }
   return target
+}
+
+/**
+ * Reserve a random, non-user-controlled staging path inside the real output
+ * directory. Upstream writes here so an existing destination symlink can
+ * never redirect the write outside the fence.
+ * @param policy - active path fence.
+ * @param extension - output extension including the leading dot.
+ * @returns absent staging path inside {@link PathPolicy.outputDir}.
+ */
+export function createStagedOutput(policy: PathPolicy, extension: string): string {
+  if (extension !== extname(`file${extension}`) || !/^\.[a-z0-9]+$/i.test(extension)) {
+    throw new VisionToolkitError('output', `invalid staging extension: ${extension}`)
+  }
+  return join(policy.outputDir, `.vision-toolkit-${randomUUID()}${extension}`)
+}
+
+/**
+ * Validate a staged regular file and atomically place it at the resolved final
+ * filename. Replacing an existing symlink replaces the link itself; upstream
+ * never opens the user-selected destination.
+ * @param staged - random staging path returned by {@link createStagedOutput}.
+ * @param finalPath - final path returned by {@link resolveOutputFile}.
+ * @param policy - active path fence.
+ */
+export async function commitStagedOutput(staged: string, finalPath: string, policy: PathPolicy): Promise<void> {
+  const real = await realpath(staged).catch((error: unknown) => {
+    throw new VisionToolkitError('output', 'upstream did not create the expected output file', { cause: error })
+  })
+  if (!isWithin(policy.outputDir, real)) {
+    throw new VisionToolkitError('path', 'staged output escaped the managed output directory')
+  }
+  const info = await stat(real)
+  if (!info.isFile()) throw new VisionToolkitError('output', 'upstream output is not a regular file')
+  try {
+    await rename(real, finalPath)
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code !== 'EEXIST' && code !== 'EPERM') throw error
+    await rm(finalPath, { force: true })
+    try {
+      await link(real, finalPath)
+    } catch (linkError) {
+      if ((linkError as NodeJS.ErrnoException).code === 'EEXIST') {
+        throw new VisionToolkitError('path', 'output destination changed while the staged file was being committed', { cause: linkError })
+      }
+      throw linkError
+    }
+    await rm(real, { force: true })
+  }
 }
 
 /** Reject an output that would overwrite its own input file. */

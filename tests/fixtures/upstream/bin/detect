@@ -1,4 +1,4 @@
 #!/usr/bin/env python3
 """Fixture detect: two elements in the upstream line format."""
 print('1. top-left button x1: 10, y1: 20, x2: 60, y2: 40')
-print('2. right input x1: 300, y1: 100, x2: 420, y2: 140')
+print('2. right input x1: 130, y1: 100, x2: 220, y2: 140')

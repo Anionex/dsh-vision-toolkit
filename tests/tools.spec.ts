@@ -1,14 +1,15 @@
-import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from 'cordis'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRegistry from '@deepseek-ai/dsh-tools'
 import SkillService from '@deepseek-ai/dsh-skill'
-import LocalSubprocessService from '@deepseek-ai/dsh-subprocess-local'
+import { SubprocessService } from '@deepseek-ai/dsh-subprocess'
+import type { SubprocessHandle, SubprocessOutputRead, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import type { Credentials } from '@deepseek-ai/dsh-credentials'
 import * as VisionToolkit from '../src/index.ts'
+import { bundledUpstreamRoot } from '../src/runtime-install.ts'
 
-const FIXTURE_UPSTREAM = fileURLToPath(new URL('./fixtures/upstream', import.meta.url))
+const BUNDLED_UPSTREAM = bundledUpstreamRoot()
 
 const TOOL_NAMES = [
   'vision_glance',
@@ -27,12 +28,44 @@ function fakeCredentials(): Credentials {
   } as unknown as Credentials
 }
 
+class ProbeSubprocessService extends SubprocessService {
+  override spawn(spec: SubprocessSpawnSpec): SubprocessHandle {
+    const command = spec.argv.join('\n')
+    const stdout = command.includes('sys.version_info')
+      ? '{"version":"3.12.0","major":3,"minor":12}\n'
+      : command.includes('import PIL')
+        ? '{"pillow":"12.3.0","numpy":"2.5.1","vtracer":"0.6.15"}\n'
+        : ''
+    const read = (text: string): SubprocessOutputRead => ({ text, nextOffset: Buffer.byteLength(text), lossy: false })
+    return {
+      pid: 1,
+      stdin: undefined,
+      stdout: undefined,
+      stderr: undefined,
+      collected: {
+        stdout: { readFrom: () => read(stdout) },
+        stderr: { readFrom: () => read('') },
+      },
+      done: Promise.resolve({ exitCode: 0, signal: null }),
+      terminate: () => {},
+      waitForExit: () => Promise.resolve(true),
+    }
+  }
+}
+
+const contexts: Context[] = []
+
+afterEach(async () => {
+  await Promise.all(contexts.splice(0).map(ctx => ctx.fiber.dispose()))
+})
+
 async function setupContext(toolkitPath: string) {
   const ctx = new Context()
+  contexts.push(ctx)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRegistry)
   await ctx.plugin(SkillService)
-  await ctx.plugin(LocalSubprocessService)
+  await ctx.plugin(ProbeSubprocessService)
   ctx.provide('credentials', fakeCredentials())
   const fiber = await ctx.plugin(VisionToolkit, {
     provider: {
@@ -40,14 +73,14 @@ async function setupContext(toolkitPath: string) {
       credential: 'VISION_API_KEY',
       model: 'fixture-model',
     },
-    runtime: { agentVisionToolkitPath: toolkitPath, python: 'python3' },
+    runtime: { mode: 'external', agentVisionToolkitPath: toolkitPath, python: 'python3' },
   })
   return { ctx, fiber }
 }
 
 describe('dsh-vision-toolkit plugin lifecycle', () => {
   it('registers the six native tools and the vision-tools skill after runtime preparation', async () => {
-    const { ctx } = await setupContext(FIXTURE_UPSTREAM)
+    const { ctx } = await setupContext(BUNDLED_UPSTREAM)
     // `ctx.plugin` settles only after the async apply finishes, so readiness
     // work (upstream probe + registration) must be visible immediately.
     const names = ctx.tools.schemas().map(tool => tool.name)
@@ -62,7 +95,7 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
   })
 
   it('unregisters every tool and skill on dispose', async () => {
-    const { ctx, fiber } = await setupContext(FIXTURE_UPSTREAM)
+    const { ctx, fiber } = await setupContext(BUNDLED_UPSTREAM)
     expect(ctx.tools.schemas().some(tool => TOOL_NAMES.includes(tool.name))).toBe(true)
     await fiber.dispose()
     expect(ctx.tools.schemas().some(tool => TOOL_NAMES.includes(tool.name))).toBe(false)
@@ -79,10 +112,11 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
 
   it('fails loud on invalid configuration at plugin load', async () => {
     const ctx = new Context()
+    contexts.push(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRegistry)
     await ctx.plugin(SkillService)
-    await ctx.plugin(LocalSubprocessService)
+    await ctx.plugin(ProbeSubprocessService)
     ctx.provide('credentials', fakeCredentials())
     await expect(ctx.plugin(VisionToolkit, {
       provider: { baseUrl: 'not-a-url', credential: 'K', model: 'm' },
@@ -90,7 +124,7 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
   })
 
   it('exposes the pinned upstream version through vision_toolkit_version', async () => {
-    const { ctx } = await setupContext(FIXTURE_UPSTREAM)
+    const { ctx } = await setupContext(BUNDLED_UPSTREAM)
     const definition = ctx.tools.get('vision_toolkit_version')
     expect(definition).toBeDefined()
     expect(definition?.parameters).toBeDefined()
@@ -99,7 +133,7 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
   })
 
   it('declares model-friendly parameters and JSON object outputs for every tool', async () => {
-    const { ctx } = await setupContext(FIXTURE_UPSTREAM)
+    const { ctx } = await setupContext(BUNDLED_UPSTREAM)
     for (const name of TOOL_NAMES) {
       const definition = ctx.tools.get(name)
       expect(definition, name).toBeDefined()

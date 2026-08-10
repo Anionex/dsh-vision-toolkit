@@ -27,14 +27,16 @@ export interface VisionToolkitConfig {
   timeoutMs?: number
   /** Maximum accepted input image size in bytes. */
   maxImageBytes?: number
+  /** Maximum decoded pixel count per input image. */
+  maxImagePixels?: number
   /** In-flight tool execution cap per session. */
   concurrency?: number
   runtime?: {
-    /** `external` uses an installed agent-vision-toolkit checkout; managed runtime preparation is planned for P1. */
-    mode?: 'external'
-    /** Path to the upstream checkout. Defaults to `AGENT_VISION_TOOLKIT_PATH`, then conventional locations. */
+    /** `managed` uses the packaged snapshot and isolated venv; `external` uses a clean pinned checkout. */
+    mode?: 'managed' | 'external'
+    /** Required path to the clean pinned checkout when `mode` is `external`. */
     agentVisionToolkitPath?: string
-    /** Python executable used to launch upstream CLIs. */
+    /** Optional Python 3.11+ bootstrap/interpreter override. */
     python?: string
   }
   /** Extra directories (besides the workspace) inputs may come from. */
@@ -51,11 +53,12 @@ export const Config: Schema<VisionToolkitConfig> = z.object({
   language: z.union(['zh', 'en'] as const).default('zh'),
   timeoutMs: z.number().default(60000),
   maxImageBytes: z.number().default(10485760),
+  maxImagePixels: z.number().default(40000000),
   concurrency: z.number().default(4),
   runtime: z.object({
-    mode: z.union(['external'] as const).default('external'),
+    mode: z.union(['managed', 'external'] as const).default('managed'),
     agentVisionToolkitPath: z.string(),
-    python: z.string().default('python3'),
+    python: z.string(),
   }),
   allowedDirs: z.array(z.string()).default([]),
 })
@@ -70,17 +73,19 @@ export interface ResolvedVisionToolkitConfig {
   language: 'zh' | 'en'
   timeoutMs: number
   maxImageBytes: number
+  maxImagePixels: number
   concurrency: number
   runtime: {
-    mode: 'external'
+    mode: 'managed' | 'external'
     agentVisionToolkitPath?: string
-    python: string
+    python?: string
   }
   allowedDirs: string[]
 }
 
 const MAX_TIMEOUT_MS = 600000
 const MAX_IMAGE_BYTES = 268435456
+const MAX_IMAGE_PIXELS = 268435456
 const MAX_CONCURRENCY = 16
 
 /**
@@ -124,23 +129,30 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
   if (!Number.isInteger(maxImageBytes) || maxImageBytes < 1024 || maxImageBytes > MAX_IMAGE_BYTES) {
     throw new VisionToolkitError('config', `maxImageBytes must be an integer between 1024 and ${MAX_IMAGE_BYTES}`)
   }
+  const maxImagePixels = config.maxImagePixels ?? 40000000
+  if (!Number.isInteger(maxImagePixels) || maxImagePixels < 1 || maxImagePixels > MAX_IMAGE_PIXELS) {
+    throw new VisionToolkitError('config', `maxImagePixels must be an integer between 1 and ${MAX_IMAGE_PIXELS}`)
+  }
   const concurrency = config.concurrency ?? 4
   if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > MAX_CONCURRENCY) {
     throw new VisionToolkitError('config', `concurrency must be an integer between 1 and ${MAX_CONCURRENCY}`)
   }
-  const mode = runtime.mode ?? 'external'
-  if (mode !== 'external') {
-    throw new VisionToolkitError(
-      'config',
-      'runtime.mode "managed" is planned for P1; configure runtime.mode: external and point agentVisionToolkitPath at an installed agent-vision-toolkit checkout',
-    )
+  const mode = runtime.mode ?? 'managed'
+  if (mode !== 'managed' && mode !== 'external') {
+    throw new VisionToolkitError('config', 'runtime.mode must be "managed" or "external"')
   }
   const toolkitPath = runtime.agentVisionToolkitPath?.trim()
   if (toolkitPath !== undefined && toolkitPath.length === 0) {
     throw new VisionToolkitError('config', 'runtime.agentVisionToolkitPath must not be empty when provided')
   }
-  const python = (runtime.python ?? 'python3').trim()
-  if (python.length === 0) {
+  if (mode === 'external' && toolkitPath === undefined) {
+    throw new VisionToolkitError('config', 'runtime.agentVisionToolkitPath is required when runtime.mode is external')
+  }
+  if (mode === 'managed' && toolkitPath !== undefined) {
+    throw new VisionToolkitError('config', 'runtime.agentVisionToolkitPath is only valid when runtime.mode is external')
+  }
+  const python = runtime.python?.trim()
+  if (python !== undefined && python.length === 0) {
     throw new VisionToolkitError('config', 'runtime.python must not be empty')
   }
   const allowedDirs = (config.allowedDirs ?? []).map(dir => dir.trim()).filter(dir => dir.length > 0)
@@ -149,8 +161,13 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
     language,
     timeoutMs,
     maxImageBytes,
+    maxImagePixels,
     concurrency,
-    runtime: { mode: 'external', ...(toolkitPath !== undefined ? { agentVisionToolkitPath: toolkitPath } : {}), python },
+    runtime: {
+      mode,
+      ...(toolkitPath !== undefined ? { agentVisionToolkitPath: toolkitPath } : {}),
+      ...(python !== undefined ? { python } : {}),
+    },
     allowedDirs,
   }
 }

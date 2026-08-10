@@ -1,37 +1,21 @@
 #!/usr/bin/env python3
-"""Fixture trace: write a stub SVG plus a machine-readable report."""
-import json
+"""Fixture trace: write a stub SVG and report the pinned vtracer summary."""
 import os
 import sys
 
 args = sys.argv[1:]
 out = None
-report = None
+scale = 1
 for index, arg in enumerate(args):
     if arg == '-o' and index + 1 < len(args):
         out = args[index + 1]
-    if arg == '--report' and index + 1 < len(args):
-        report = args[index + 1]
-if out is None or report is None:
-    print('trace: missing output/report', file=sys.stderr)
+    if arg == '--scale' and index + 1 < len(args):
+        scale = int(args[index + 1])
+if out is None:
+    print('trace: missing output', file=sys.stderr)
     sys.exit(2)
 os.makedirs(os.path.dirname(os.path.abspath(out)) or '.', exist_ok=True)
+svg = '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><path d="M 118 128 A 10 10 0 1 0 138 128 A 10 10 0 1 0 118 128 Z"/></svg>\n'
 with open(out, 'w', encoding='utf-8') as handle:
-    handle.write('<svg xmlns="http://www.w3.org/2000/svg" data-trace-status="production" width="256" height="256"><circle cx="128" cy="128" r="10"/></svg>\n')
-payload = {
-    'version': 1,
-    'mode': 'deterministic',
-    'logical_size': [256, 256],
-    'perception': {'label': 'circle', 'confidence': 'high'},
-    'geometry': {
-        'status': 'production',
-        'confidence': 0.9,
-        'primitive_count': 1,
-        'representation': '1 circle',
-        'stroke_width': 1.0,
-        'pixel_fit': 0.95,
-    },
-}
-with open(report, 'w', encoding='utf-8') as handle:
-    json.dump(payload, handle)
-print('wrote %s (456 bytes, 1 circle)' % out)
+    handle.write(svg)
+print(f'wrote {out} ({len(svg)} bytes, 1 paths, traced at {scale}x)')

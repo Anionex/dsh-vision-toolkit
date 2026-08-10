@@ -23,14 +23,16 @@ export interface VisionToolkitConfig {
     timeoutMs?: number;
     /** Maximum accepted input image size in bytes. */
     maxImageBytes?: number;
+    /** Maximum decoded pixel count per input image. */
+    maxImagePixels?: number;
     /** In-flight tool execution cap per session. */
     concurrency?: number;
     runtime?: {
-        /** `external` uses an installed agent-vision-toolkit checkout; managed runtime preparation is planned for P1. */
-        mode?: 'external';
-        /** Path to the upstream checkout. Defaults to `AGENT_VISION_TOOLKIT_PATH`, then conventional locations. */
+        /** `managed` uses the packaged snapshot and isolated venv; `external` uses a clean pinned checkout. */
+        mode?: 'managed' | 'external';
+        /** Required path to the clean pinned checkout when `mode` is `external`. */
         agentVisionToolkitPath?: string;
-        /** Python executable used to launch upstream CLIs. */
+        /** Optional Python 3.11+ bootstrap/interpreter override. */
         python?: string;
     };
     /** Extra directories (besides the workspace) inputs may come from. */
@@ -48,11 +50,12 @@ export interface ResolvedVisionToolkitConfig {
     language: 'zh' | 'en';
     timeoutMs: number;
     maxImageBytes: number;
+    maxImagePixels: number;
     concurrency: number;
     runtime: {
-        mode: 'external';
+        mode: 'managed' | 'external';
         agentVisionToolkitPath?: string;
-        python: string;
+        python?: string;
     };
     allowedDirs: string[];
 }

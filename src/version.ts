@@ -31,7 +31,7 @@ export const PLUGIN_VERSION = metadata.version
 export const UPSTREAM_REPOSITORY = visionToolkit?.upstreamRepository ?? 'https://github.com/Anionex/agent-vision-toolkit'
 
 /** Pinned upstream release tag. */
-export const UPSTREAM_VERSION = visionToolkit?.upstreamVersion ?? 'v0.1.0'
+export const UPSTREAM_VERSION = visionToolkit?.upstreamVersion ?? 'v0.1.0+snapshot.c27d1a3'
 
 /** Pinned upstream source commit. */
-export const UPSTREAM_COMMIT = visionToolkit?.upstreamCommit ?? 'd194943f27bdb74dbee50760bc2c95f7d0f64fe7'
+export const UPSTREAM_COMMIT = visionToolkit?.upstreamCommit ?? 'c27d1a300962b553c0884993c575cd3e819465ce'

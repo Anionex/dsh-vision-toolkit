@@ -16,15 +16,19 @@
   "files": [
     "lib",
     "src",
+    "runtime",
+    "vendor",
     "cordis.patch.yml",
     "README.md",
     "README.zh.md",
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "node scripts/upstream-manifest.mjs && tsc -p tsconfig.json",
     "prepack": "npm run build",
-    "test": "vitest run tests"
+    "test": "vitest run tests",
+    "upstream:manifest": "node scripts/upstream-manifest.mjs --write",
+    "upstream:sync": "node scripts/sync-upstream.mjs"
   },
   "dsh": {
     "bundle": {
@@ -32,8 +36,8 @@
     },
     "visionToolkit": {
       "upstreamRepository": "https://github.com/Anionex/agent-vision-toolkit",
-      "upstreamVersion": "v0.1.0",
-      "upstreamCommit": "d194943f27bdb74dbee50760bc2c95f7d0f64fe7"
+      "upstreamVersion": "v0.1.0+snapshot.c27d1a3",
+      "upstreamCommit": "c27d1a300962b553c0884993c575cd3e819465ce"
     }
   },
   "peerDependencies": {

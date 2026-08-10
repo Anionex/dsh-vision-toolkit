@@ -1,6 +1,24 @@
 {
-  "extends": "../tsconfig.base.json",
   "compilerOptions": {
+    "target": "es2024",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "declaration": true,
+    "sourceMap": true,
+    "declarationMap": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
+    "verbatimModuleSyntax": false,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "types": ["node"],
     "rootDir": "src",
     "outDir": "lib",
     "declarationDir": "lib/types",
@@ -8,9 +26,6 @@
     "incremental": false,
     "noEmitOnError": true,
     "tsBuildInfoFile": "lib/.tsbuildinfo",
-    // The plugin is out-of-tree: type-check against the harness's built
-    // declarations (the profile fallback resolves the same packages at
-    // runtime), not its sources.
     "paths": {
       "cordis": ["../vendor/cordis/lib/types/index.d.ts"],
       "schemastery": ["../vendor/schemastery/lib/types/index.d.ts"],

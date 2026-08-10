@@ -1,12 +1,11 @@
 /**
  * Vision Toolkit runtime: structured requests in, structured results out.
- * It validates paths and limits, resolves the credential per operation, holds
- * a bounded concurrency slot, synthesizes cancellation + timeout into the
- * upstream process signal, and classifies failures for the model.
+ * One operation-wide deadline reaches every subprocess; image decoding,
+ * byte/pixel limits, session-scoped concurrency, credential resolution, safe
+ * output staging, and diagnostic logging stay below the model-facing tools.
  * @module dsh-vision-toolkit/runtime
  */
 import type { Context } from 'cordis';
-import type { JsonValue } from '@deepseek-ai/dsh-session';
 import type { ResolvedVisionToolkitConfig } from './config.ts';
 import { UpstreamAdapter, type UpstreamEnvironment, type UpstreamVersionInfo } from './upstream.ts';
 /** Per-invocation cancellation and timeout facts. */
@@ -19,24 +18,28 @@ export interface Deadline {
     /** Clear the timer and caller listener. */
     cleanup(): void;
 }
-/**
- * Combine a caller abort signal with a hard timeout so the upstream process
- * tree receives one signal and the failure can be classified precisely.
- * @param signal - caller-owned cancellation.
- * @param timeoutMs - execution budget in milliseconds.
- * @returns fused deadline handles.
- */
+/** Combine a caller abort signal with one hard operation timeout. */
 export declare function createDeadline(signal: AbortSignal, timeoutMs: number): Deadline;
-/** Bounded concurrency gate; waiting respects the caller signal. */
+/** FIFO bounded concurrency gate whose queued callers remain cancellable. */
 export declare class Semaphore {
     private readonly limit;
     private active;
     private readonly waiters;
     constructor(limit: number);
+    /** Whether no active or queued caller still owns this gate. */
+    get idle(): boolean;
     /** Acquire one slot, aborting while queued when `signal` fires. */
     acquire(signal: AbortSignal): Promise<void>;
-    /** Release one slot and wake the longest-waiting caller. */
+    /** Release one slot and transfer it directly to the longest-waiting caller. */
     release(): void;
+}
+/** Validated image metadata retained in structured results and diagnostics. */
+export interface ImageInfo {
+    path: string;
+    bytes: number;
+    width: number;
+    height: number;
+    format: string;
 }
 /** Structured input for one glance call. */
 export interface GlanceRequest {
@@ -45,12 +48,9 @@ export interface GlanceRequest {
     ocr?: boolean;
     region?: string;
 }
-/** Structured glance result — the description is the model-visible answer. */
+/** Structured glance result. */
 export interface GlanceResult {
-    images: Array<{
-        path: string;
-        bytes: number;
-    }>;
+    images: ImageInfo[];
     mode: 'describe' | 'qa' | 'ocr';
     answer: string;
     truncated: boolean;
@@ -61,7 +61,7 @@ export interface LocateRequest {
     target: string;
     region?: string;
 }
-/** One located element with an optional upstream label. */
+/** One located element with an upstream or caller label. */
 export interface LocateMatch {
     label: string;
     box: {
@@ -118,19 +118,13 @@ export interface CropResult {
     clamped: boolean;
     note?: string;
 }
-/** trace mode flags passed through to the upstream CLI. */
-export type TraceMode = 'deterministic' | 'perceive' | 'synthesize' | 'review';
-/** Structured trace request. */
+/** Structured trace request supported by the pinned upstream snapshot. */
 export interface TraceRequest {
     image: string;
     region?: string;
     scale?: number;
-    strokeWidth?: number;
     color?: boolean;
-    filled?: boolean;
-    outline?: boolean;
-    mode?: TraceMode;
-    requireProduction?: boolean;
+    polygon?: boolean;
     output?: string;
 }
 /** Structured trace result. */
@@ -140,16 +134,10 @@ export interface TraceResult {
     outputPath: string;
     mimeType: 'image/svg+xml';
     geometry: {
-        status: string;
-        confidence: JsonValue;
-        primitiveCount?: number;
-        representation?: string;
-        strokeWidth?: number;
-        pixelFit?: number;
-    };
-    perception?: {
-        label?: string;
-        confidence?: JsonValue;
+        status: 'generated' | 'empty';
+        pathCount: number;
+        tracedScale: number;
+        bytes: number;
     };
     warning?: string;
 }
@@ -158,54 +146,50 @@ export interface ToolCallOptions {
     signal: AbortSignal;
     timeoutMs?: number;
     workspace: string;
+    /** Session identity for the per-session concurrency cap. */
+    sessionId?: string;
 }
-/** Parse a four-integer pixel box; a malformed box is an input error. */
+/** Parse a non-empty four-integer pixel box. */
 export declare function parseRegion(region: string): {
     x1: number;
     y1: number;
     x2: number;
     y2: number;
 };
-/**
- * Runtime facade used by every tool; tools never call the upstream adapter
- * directly, and the future P2 service will consume the same methods.
- */
+/** Runtime facade used by every native tool. */
 export declare class VisionToolkitRuntime {
     private readonly ctx;
     private readonly config;
-    private readonly semaphore;
+    private readonly semaphores;
     private readonly adapter;
     constructor(ctx: Context, config: ResolvedVisionToolkitConfig, adapter?: UpstreamAdapter);
-    /** Pinned upstream identity. */
+    /** Pinned and prepared upstream identity. */
     get upstreamVersion(): UpstreamVersionInfo;
-    /** Resolve the configured credential at the operation boundary. */
+    private timeout;
+    private operationError;
+    private semaphore;
+    private runOperation;
+    /** Resolve the configured credential at the remote-operation boundary. */
     resolveVisionEnv(): Promise<UpstreamEnvironment>;
-    /**
-     * Run one bounded tool request. Concurrency, credential resolution, path
-     * fencing, and the deadline all live here, not in the tool definitions.
-     */
-    private runBounded;
-    /** Resolve the path fence for one invocation's workspace. */
     private pathPolicy;
-    /** Validate one input image against fence and size limits. */
     private validateImage;
-    /** Run the upstream adapter inside the invocation deadline. */
+    private accountImage;
     private runUpstream;
     /** glance: describe, targeted QA, OCR, or multi-image comparison. */
     glance(request: GlanceRequest, options: ToolCallOptions): Promise<GlanceResult>;
-    /** Shared locate path for ground and detect. */
+    private validateLocations;
     private locate;
     /** ground: locate one named target and return pixel boxes. */
     ground(request: LocateRequest, options: ToolCallOptions): Promise<GroundResult>;
     /** detect: inventory every instance of a kind. */
     detect(request: LocateRequest, options: ToolCallOptions): Promise<DetectResult>;
-    /** crop: cut a pixel box into its own image file. */
+    /** crop: cut a pixel box into its own image file without requiring a credential. */
     crop(request: CropRequest, options: ToolCallOptions): Promise<CropResult>;
-    /** trace: recover SVG geometry from a flat graphic. */
+    /** trace: recover an SVG through the pinned upstream vtracer pipeline. */
     trace(request: TraceRequest, options: ToolCallOptions): Promise<TraceResult>;
-    /** Report the upstream checkout's own version marker (or the packaged pin). */
+    /** Report the packaged upstream snapshot version. */
     checkoutVersion(): Promise<string>;
-    /** The Python executable used to launch upstream CLIs. */
+    /** Prepared Python command. */
     python(): string;
 }
 //# sourceMappingURL=runtime.d.ts.map

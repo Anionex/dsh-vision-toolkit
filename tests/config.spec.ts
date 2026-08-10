@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { resolveConfig } from '../src/config.ts'
-import { VisionToolkitError } from '../src/errors.ts'
 
 describe('resolveConfig', () => {
   it('applies documented defaults', () => {
@@ -11,9 +10,10 @@ describe('resolveConfig', () => {
     expect(config.language).toBe('zh')
     expect(config.timeoutMs).toBe(60000)
     expect(config.maxImageBytes).toBe(10485760)
+    expect(config.maxImagePixels).toBe(40000000)
     expect(config.concurrency).toBe(4)
-    expect(config.runtime.mode).toBe('external')
-    expect(config.runtime.python).toBe('python3')
+    expect(config.runtime.mode).toBe('managed')
+    expect(config.runtime.python).toBeUndefined()
     expect(config.allowedDirs).toEqual([])
   })
 
@@ -21,7 +21,7 @@ describe('resolveConfig', () => {
     const config = resolveConfig({
       provider: { baseUrl: 'https://example.com/v1/', credential: 'MY_VISION_KEY', model: 'model-x' },
       language: 'en',
-      runtime: { agentVisionToolkitPath: '/tmp/toolkit', python: 'python3.12' },
+      runtime: { mode: 'external', agentVisionToolkitPath: '/tmp/toolkit', python: 'python3.12' },
       allowedDirs: ['~/Pictures'],
     })
     expect(config.provider.baseUrl).toBe('https://example.com/v1')
@@ -49,25 +49,18 @@ describe('resolveConfig', () => {
     expect(() => resolveConfig({ language: 'fr' as 'zh' })).toThrowError(/language/)
     expect(() => resolveConfig({ timeoutMs: 500 })).toThrowError(/timeoutMs/)
     expect(() => resolveConfig({ maxImageBytes: 1 })).toThrowError(/maxImageBytes/)
+    expect(() => resolveConfig({ maxImagePixels: 0 })).toThrowError(/maxImagePixels/)
     expect(() => resolveConfig({ concurrency: 0 })).toThrowError(/concurrency/)
   })
 
-  it('rejects managed runtime in P0 with a clear next step', () => {
-    const error = (() => {
-      try {
-        resolveConfig({ runtime: { mode: 'managed' as 'external' } })
-        return undefined
-      } catch (caught) {
-        return caught as VisionToolkitError
-      }
-    })()
-    expect(error).toBeInstanceOf(VisionToolkitError)
-    expect(error?.code).toBe('config')
-    expect(error?.message).toContain('P1')
+  it('accepts managed runtime without a local checkout path', () => {
+    expect(resolveConfig({ runtime: { mode: 'managed' } }).runtime).toEqual({ mode: 'managed' })
   })
 
-  it('rejects empty toolkit path and python', () => {
-    expect(() => resolveConfig({ runtime: { agentVisionToolkitPath: '  ' } })).toThrowError(/agentVisionToolkitPath/)
+  it('rejects contradictory or empty runtime settings', () => {
+    expect(() => resolveConfig({ runtime: { mode: 'external', agentVisionToolkitPath: '  ' } })).toThrowError(/agentVisionToolkitPath/)
+    expect(() => resolveConfig({ runtime: { mode: 'external' } })).toThrowError(/agentVisionToolkitPath/)
+    expect(() => resolveConfig({ runtime: { mode: 'managed', agentVisionToolkitPath: '/tmp/toolkit' } })).toThrowError(/only valid/)
     expect(() => resolveConfig({ runtime: { python: '  ' } })).toThrowError(/runtime\.python/)
   })
 })

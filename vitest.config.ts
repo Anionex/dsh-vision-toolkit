@@ -9,5 +9,10 @@ export default defineConfig({
   test: {
     include: ['tests/**/*.spec.ts'],
     environment: 'node',
+    // Runtime-install tests temporarily own process-wide DSH_HOME, while the
+    // real-profile acceptance launches `dsh` children from that environment.
+    // File parallelism would make their isolation depend on Vitest's worker
+    // implementation and can strand a managed-runtime child during teardown.
+    fileParallelism: false,
   },
 })

@@ -1,0 +1,3 @@
+pillow==12.3.0
+numpy==2.5.1
+vtracer==0.6.15

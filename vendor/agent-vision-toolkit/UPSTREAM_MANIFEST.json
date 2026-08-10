@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/Anionex/agent-vision-toolkit",
+  "version": "v0.1.0+snapshot.c27d1a3",
+  "commit": "c27d1a300962b553c0884993c575cd3e819465ce",
+  "contentSha256": "e17395b3d30d00d8bf3c8d79a38ce63d0545bb52db27c8e004f9b89f451c36ed",
+  "files": [
+    {
+      "path": "CHANGELOG.md",
+      "bytes": 913,
+      "sha256": "3eb86d51d5fd89714045e73a29ebd4aa5b146e9bf5f8c8620cc9b452a8d4bbe0"
+    },
+    {
+      "path": "LICENSE",
+      "bytes": 1064,
+      "sha256": "6f9c6c3e17f4022960800cf48ce228c77cf62b4e3ee9dd289efe1cc9a16b1ec2"
+    },
+    {
+      "path": "README.md",
+      "bytes": 19058,
+      "sha256": "8190e93421995302cafb56048e98dfb41510a7fc5fe7208cc21b496c48baab45"
+    },
+    {
+      "path": "bin/crop",
+      "bytes": 3714,
+      "sha256": "e3c23d880164bcf52b95c50c8497ef0b4457c1f0a15e165a85af8b9b61913251"
+    },
+    {
+      "path": "bin/detect",
+      "bytes": 282,
+      "sha256": "89ea7e8d2040b9c9d8fbc75339e85d20326a95a6b5f4635b74677f1b6b755077"
+    },
+    {
+      "path": "bin/glance",
+      "bytes": 3742,
+      "sha256": "fa4ba52e8e180475b948daec817151d893d957f973f7d9df1b8bbf201051cefc"
+    },
+    {
+      "path": "bin/ground",
+      "bytes": 274,
+      "sha256": "93ca432de98ac34d3fef91db2b85fb2d53328fe58d6d7ad41ec454275b1a7e85"
+    },
+    {
+      "path": "bin/trace",
+      "bytes": 5490,
+      "sha256": "969df93cd4e97d64b7c755be467d44480dd5eff54571353c6b642544cc0331be"
+    },
+    {
+      "path": "detect.py",
+      "bytes": 2052,
+      "sha256": "0e79f6cfbeb27d52cea57a6a642bb658d9c9d3f10e175416c320d91affc1d562"
+    },
+    {
+      "path": "ground.py",
+      "bytes": 8361,
+      "sha256": "52c1b69f3c78f37acd33f7f542bdbceeabb3546e8e28be7278d72e04024699b9"
+    },
+    {
+      "path": "skills/vision-tools/scripts/dominant_colors.py",
+      "bytes": 10213,
+      "sha256": "a78474b9df93320a7b8fdf8ed2d345fd60038182059ee92ca6101b9c93cb7041"
+    },
+    {
+      "path": "skills/vision-tools/scripts/extract_fg.py",
+      "bytes": 11784,
+      "sha256": "1831b50237c9e215c7202f4350723bb420a4a85bbc059fb2f5a31f118bdbf62b"
+    },
+    {
+      "path": "skills/vision-tools/scripts/html_shot.py",
+      "bytes": 4317,
+      "sha256": "22f796dc6afaa791bbd9acc9bf87bc4914c4157e726f0132f7465f0e3d4d2894"
+    },
+    {
+      "path": "skills/vision-tools/scripts/long_screenshot_ocr.py",
+      "bytes": 45313,
+      "sha256": "f0edfa2135891a75c030fa21405528344f45549cd077fecd26fb60df5986233c"
+    },
+    {
+      "path": "skills/vision-tools/scripts/pixel_diff.py",
+      "bytes": 3978,
+      "sha256": "70e04fea9bf452f35d12bed0c19c7e2be46934a5423caa778b24da82b78f2251"
+    },
+    {
+      "path": "vision_client.py",
+      "bytes": 6117,
+      "sha256": "5450985379a0c1e6460594a8739966fe1e2489311ce473b1d92021ccf41d0be8"
+    }
+  ]
+}

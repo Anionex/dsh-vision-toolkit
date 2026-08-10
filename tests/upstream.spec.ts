@@ -7,9 +7,11 @@ import {
   parseCropOutput,
   parseLocationLine,
   parseLocationOutput,
-  parseTraceReport,
+  parseTraceOutput,
 } from '../src/upstream.ts'
+import { bundledUpstreamRoot, verifyBundledUpstream } from '../src/runtime-install.ts'
 import { VisionToolkitError } from '../src/errors.ts'
+import { UPSTREAM_COMMIT, UPSTREAM_REPOSITORY, UPSTREAM_VERSION } from '../src/version.ts'
 
 describe('findCheckout', () => {
   it('skips a config-like directory and picks the first real checkout', async () => {
@@ -80,6 +82,10 @@ describe('parseLocationOutput', () => {
     expect(parseLocationOutput('')).toEqual([])
     expect(parseLocationOutput('no elements detected')).toEqual([])
   })
+
+  it('rejects non-empty lines outside the pinned coordinate contract', () => {
+    expect(() => parseLocationOutput('model said the button is near the bottom')).toThrowError(/unrecognized lines/)
+  })
 })
 
 describe('parseCropOutput', () => {
@@ -102,42 +108,42 @@ describe('parseCropOutput', () => {
   })
 })
 
-describe('parseTraceReport', () => {
-  it('parses a valid fixture report', () => {
-    const report = parseTraceReport(JSON.stringify({
-      version: 1,
-      mode: 'deterministic',
-      logical_size: [64, 64],
-      perception: { label: 'circle', confidence: 'high' },
-      geometry: {
-        status: 'production',
-        confidence: 0.9,
-        primitive_count: 1,
-        representation: '1 circle',
-        stroke_width: 1,
-        pixel_fit: 0.95,
-      },
-    }))
-    expect(report.geometry.status).toBe('production')
-    expect(report.geometry.primitiveCount).toBe(1)
-    expect(report.perception?.label).toBe('circle')
-    expect(report.logicalSize).toEqual([64, 64])
+describe('parseTraceOutput', () => {
+  it('parses the pinned vtracer summary', () => {
+    expect(parseTraceOutput('wrote /tmp/icon.svg (456 bytes, 3 paths, traced at 4x)')).toEqual({
+      outputPath: '/tmp/icon.svg',
+      bytes: 456,
+      pathCount: 3,
+      tracedScale: 4,
+    })
   })
 
-  it('rejects invalid JSON and missing geometry', () => {
-    expect(() => parseTraceReport('nope')).toThrowError(/not valid JSON/)
-    expect(() => parseTraceReport('{"mode":"deterministic"}')).toThrowError(/lacks geometry/)
+  it('rejects output outside the pinned summary contract', () => {
+    expect(() => parseTraceOutput('wrote /tmp/icon.svg (456 bytes, 1 circle)')).toThrowError(/did not report/)
   })
 })
 
-describe('parseCropOutput failure classification helpers', () => {
+describe('trace output failure classification', () => {
   it('throws VisionToolkitError with output code', () => {
     try {
-      parseTraceReport('{')
+      parseTraceOutput('not a trace summary')
       throw new Error('should not reach')
     } catch (error) {
       expect(error).toBeInstanceOf(VisionToolkitError)
       expect((error as VisionToolkitError).code).toBe('output')
     }
+  })
+})
+
+describe('packaged upstream snapshot', () => {
+  it('matches every committed file hash and the pinned identity', async () => {
+    const manifest = await verifyBundledUpstream()
+    expect(manifest).toMatchObject({
+      repository: UPSTREAM_REPOSITORY,
+      version: UPSTREAM_VERSION,
+      commit: UPSTREAM_COMMIT,
+    })
+    expect(manifest.files.length).toBeGreaterThan(10)
+    expect(bundledUpstreamRoot()).toMatch(/vendor[/\\]agent-vision-toolkit$/)
   })
 })

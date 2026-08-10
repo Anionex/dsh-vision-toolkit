@@ -13,6 +13,7 @@ export const VISION_TOOLKIT_ERROR_CODES = [
   'service',
   'runtime',
   'output',
+  'timeout',
   'cancelled',
   'path',
 ] as const

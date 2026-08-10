@@ -32,14 +32,17 @@ describe('package layout contract', () => {
     await expect(stat(join(ROOT, 'lib', 'types', 'index.d.ts'))).resolves.toBeDefined()
   })
 
-  it('ships lib, src, patch, and docs in files', () => {
-    for (const required of ['lib', 'src', 'cordis.patch.yml', 'README.md', 'README.zh.md', 'LICENSE']) {
+  it('ships runtime, pinned upstream, lib, src, patch, and docs in files', () => {
+    for (const required of ['lib', 'src', 'runtime', 'vendor', 'cordis.patch.yml', 'README.md', 'README.zh.md', 'LICENSE']) {
       expect(PACKAGE.files).toContain(required)
     }
   })
 
   it('has reproducible build and prepack scripts', () => {
-    expect(PACKAGE.scripts.build).toBe('tsc -p tsconfig.json')
+    expect(PACKAGE.scripts.build).toContain('node scripts/upstream-manifest.mjs')
+    expect(PACKAGE.scripts.build).toContain('tsc -p tsconfig.json')
+    expect(PACKAGE.scripts['upstream:sync']).toBe('node scripts/sync-upstream.mjs')
+    expect(PACKAGE.scripts['upstream:manifest']).toContain('--write')
     expect(PACKAGE.scripts.prepack).toBe('npm run build')
     expect(PACKAGE.scripts.test).toContain('vitest')
   })

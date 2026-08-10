@@ -1,22 +1,22 @@
 /**
  * Vision Toolkit runtime: structured requests in, structured results out.
- * It validates paths and limits, resolves the credential per operation, holds
- * a bounded concurrency slot, synthesizes cancellation + timeout into the
- * upstream process signal, and classifies failures for the model.
+ * One operation-wide deadline reaches every subprocess; image decoding,
+ * byte/pixel limits, session-scoped concurrency, credential resolution, safe
+ * output staging, and diagnostic logging stay below the model-facing tools.
  * @module dsh-vision-toolkit/runtime
  */
 
-import { randomUUID } from 'node:crypto'
 import { readFile, rm } from 'node:fs/promises'
-import { basename, extname, join } from 'node:path'
+import { basename, extname } from 'node:path'
 import type { Context } from 'cordis'
 import type { ResolvedCredential } from '@deepseek-ai/dsh-credentials'
-import type { JsonValue } from '@deepseek-ai/dsh-session'
 import type { ResolvedVisionToolkitConfig } from './config.ts'
 import { VisionToolkitError } from './errors.ts'
 import {
   assertDistinctOutput,
+  commitStagedOutput,
   createPathPolicy,
+  createStagedOutput,
   resolveInputFile,
   resolveOutputFile,
   type PathPolicy,
@@ -24,12 +24,11 @@ import {
 import {
   parseCropOutput,
   parseLocationOutput,
-  parseTraceReport,
+  parseTraceOutput,
   UpstreamAdapter,
-  type CropOutput,
   type LocatedElement,
-  type TraceReport,
   type UpstreamEnvironment,
+  type UpstreamRunResult,
   type UpstreamTool,
   type UpstreamVersionInfo,
 } from './upstream.ts'
@@ -45,17 +44,12 @@ export interface Deadline {
   cleanup(): void
 }
 
-/**
- * Combine a caller abort signal with a hard timeout so the upstream process
- * tree receives one signal and the failure can be classified precisely.
- * @param signal - caller-owned cancellation.
- * @param timeoutMs - execution budget in milliseconds.
- * @returns fused deadline handles.
- */
+/** Combine a caller abort signal with one hard operation timeout. */
 export function createDeadline(signal: AbortSignal, timeoutMs: number): Deadline {
   const controller = new AbortController()
   const state = { timedOut: false, cancelled: false }
   const onCallerAbort = (): void => {
+    if (controller.signal.aborted) return
     state.cancelled = true
     controller.abort()
   }
@@ -66,6 +60,7 @@ export function createDeadline(signal: AbortSignal, timeoutMs: number): Deadline
     signal.addEventListener('abort', onCallerAbort, { once: true })
   }
   const timer = setTimeout(() => {
+    if (controller.signal.aborted) return
     state.timedOut = true
     controller.abort()
   }, timeoutMs)
@@ -80,7 +75,7 @@ export function createDeadline(signal: AbortSignal, timeoutMs: number): Deadline
   }
 }
 
-/** Bounded concurrency gate; waiting respects the caller signal. */
+/** FIFO bounded concurrency gate whose queued callers remain cancellable. */
 export class Semaphore {
   private active = 0
   private readonly waiters: Array<{
@@ -92,15 +87,21 @@ export class Semaphore {
 
   constructor(private readonly limit: number) {}
 
+  /** Whether no active or queued caller still owns this gate. */
+  get idle(): boolean {
+    return this.active === 0 && this.waiters.length === 0
+  }
+
   /** Acquire one slot, aborting while queued when `signal` fires. */
   async acquire(signal: AbortSignal): Promise<void> {
+    if (signal.aborted) throw new VisionToolkitError('cancelled', 'vision-toolkit: cancelled before execution')
     if (this.active < this.limit) {
       this.active += 1
       return
     }
-    return new Promise<void>((resolve, reject) => {
+    return new Promise<void>((resolveAcquire, reject) => {
       const entry = {
-        resolve,
+        resolve: resolveAcquire,
         reject,
         signal,
         onAbort: () => {},
@@ -111,23 +112,29 @@ export class Semaphore {
         reject(new VisionToolkitError('cancelled', 'vision-toolkit: cancelled while waiting for a concurrency slot'))
       }
       this.waiters.push(entry)
-      if (signal.aborted) {
-        entry.onAbort()
-      } else {
-        signal.addEventListener('abort', entry.onAbort, { once: true })
-      }
+      signal.addEventListener('abort', entry.onAbort, { once: true })
     })
   }
 
-  /** Release one slot and wake the longest-waiting caller. */
+  /** Release one slot and transfer it directly to the longest-waiting caller. */
   release(): void {
-    this.active -= 1
     const next = this.waiters.shift()
     if (next !== undefined) {
       next.signal.removeEventListener('abort', next.onAbort)
       next.resolve()
+      return
     }
+    this.active = Math.max(0, this.active - 1)
   }
+}
+
+/** Validated image metadata retained in structured results and diagnostics. */
+export interface ImageInfo {
+  path: string
+  bytes: number
+  width: number
+  height: number
+  format: string
 }
 
 /** Structured input for one glance call. */
@@ -138,9 +145,9 @@ export interface GlanceRequest {
   region?: string
 }
 
-/** Structured glance result — the description is the model-visible answer. */
+/** Structured glance result. */
 export interface GlanceResult {
-  images: Array<{ path: string; bytes: number }>
+  images: ImageInfo[]
   mode: 'describe' | 'qa' | 'ocr'
   answer: string
   truncated: boolean
@@ -153,7 +160,7 @@ export interface LocateRequest {
   region?: string
 }
 
-/** One located element with an optional upstream label. */
+/** One located element with an upstream or caller label. */
 export interface LocateMatch {
   label: string
   box: { x1: number; y1: number; x2: number; y2: number }
@@ -196,20 +203,13 @@ export interface CropResult {
   note?: string
 }
 
-/** trace mode flags passed through to the upstream CLI. */
-export type TraceMode = 'deterministic' | 'perceive' | 'synthesize' | 'review'
-
-/** Structured trace request. */
+/** Structured trace request supported by the pinned upstream snapshot. */
 export interface TraceRequest {
   image: string
   region?: string
   scale?: number
-  strokeWidth?: number
   color?: boolean
-  filled?: boolean
-  outline?: boolean
-  mode?: TraceMode
-  requireProduction?: boolean
+  polygon?: boolean
   output?: string
 }
 
@@ -220,14 +220,11 @@ export interface TraceResult {
   outputPath: string
   mimeType: 'image/svg+xml'
   geometry: {
-    status: string
-    confidence: JsonValue
-    primitiveCount?: number
-    representation?: string
-    strokeWidth?: number
-    pixelFit?: number
+    status: 'generated' | 'empty'
+    pathCount: number
+    tracedScale: number
+    bytes: number
   }
-  perception?: { label?: string; confidence?: JsonValue }
   warning?: string
 }
 
@@ -236,44 +233,55 @@ export interface ToolCallOptions {
   signal: AbortSignal
   timeoutMs?: number
   workspace: string
+  /** Session identity for the per-session concurrency cap. */
+  sessionId?: string
 }
 
-/** Result view returned by the runtime's upstream runner. */
-interface UpstreamRunView {
-  stdout: string
-  stderr: string
-  stdoutTruncated: boolean
-  stderrTruncated: boolean
+interface OperationMetrics {
+  startedAt: number
+  upstreamMs: number
+  imageBytes: number
+  imagePixels: number
+  imageCount: number
+  cacheHits: number
 }
 
-const REGION_PATTERN = /^\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*$/
+interface OperationContext {
+  signal: AbortSignal
+  metrics: OperationMetrics
+}
 
-/** Parse a four-integer pixel box; a malformed box is an input error. */
+const REGION_PATTERN = /^\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)\s*$/
+const MAX_TIMEOUT_MS = 600_000
+const FORMAT_BY_EXTENSION = new Map([
+  ['.png', 'png'],
+  ['.jpg', 'jpeg'],
+  ['.jpeg', 'jpeg'],
+  ['.gif', 'gif'],
+  ['.webp', 'webp'],
+])
+
+/** Parse a non-empty four-integer pixel box. */
 export function parseRegion(region: string): { x1: number; y1: number; x2: number; y2: number } {
   const match = REGION_PATTERN.exec(region)
   if (match === null) {
     throw new VisionToolkitError('input', 'region must be four integers: X1,Y1,X2,Y2 (pixels)')
   }
-  return {
+  const box = {
     x1: Number(match[1]),
     y1: Number(match[2]),
     x2: Number(match[3]),
     y2: Number(match[4]),
   }
+  if (box.x2 <= box.x1 || box.y2 <= box.y1) {
+    throw new VisionToolkitError('input', 'region must have x2 > x1 and y2 > y1')
+  }
+  return box
 }
 
-const SUPPORTED_MIME = new Map([
-  ['.png', 'image/png'],
-  ['.jpg', 'image/jpeg'],
-  ['.jpeg', 'image/jpeg'],
-])
-
-/**
- * Runtime facade used by every tool; tools never call the upstream adapter
- * directly, and the future P2 service will consume the same methods.
- */
+/** Runtime facade used by every native tool. */
 export class VisionToolkitRuntime {
-  private readonly semaphore: Semaphore
+  private readonly semaphores = new Map<string, Semaphore>()
   private readonly adapter: UpstreamAdapter
 
   constructor(
@@ -281,16 +289,93 @@ export class VisionToolkitRuntime {
     private readonly config: ResolvedVisionToolkitConfig,
     adapter?: UpstreamAdapter,
   ) {
-    this.semaphore = new Semaphore(config.concurrency)
     this.adapter = adapter ?? new UpstreamAdapter(ctx, config)
   }
 
-  /** Pinned upstream identity. */
+  /** Pinned and prepared upstream identity. */
   get upstreamVersion(): UpstreamVersionInfo {
     return this.adapter.versionInfo
   }
 
-  /** Resolve the configured credential at the operation boundary. */
+  private timeout(options: ToolCallOptions): number {
+    const value = options.timeoutMs ?? this.config.timeoutMs
+    if (!Number.isInteger(value) || value < 1000 || value > MAX_TIMEOUT_MS) {
+      throw new VisionToolkitError('input', `timeoutMs must be an integer between 1000 and ${MAX_TIMEOUT_MS}`)
+    }
+    return value
+  }
+
+  private operationError(tool: string, error: unknown, deadline: Deadline): VisionToolkitError {
+    if (deadline.cancelled) return new VisionToolkitError('cancelled', `${tool}: cancelled`)
+    if (deadline.timedOut) return new VisionToolkitError('timeout', `${tool}: timed out`)
+    if (error instanceof VisionToolkitError) return error
+    return new VisionToolkitError('runtime', `${tool}: execution failed`, { cause: error })
+  }
+
+  private semaphore(options: ToolCallOptions): { key: string; value: Semaphore } {
+    const key = options.sessionId ?? `workspace:${options.workspace}`
+    const value = this.semaphores.get(key) ?? new Semaphore(this.config.concurrency)
+    this.semaphores.set(key, value)
+    return { key, value }
+  }
+
+  private async runOperation<T>(
+    tool: string,
+    options: ToolCallOptions,
+    action: (operation: OperationContext) => Promise<T>,
+  ): Promise<T> {
+    const deadline = createDeadline(options.signal, this.timeout(options))
+    const semaphore = this.semaphore(options)
+    const metrics: OperationMetrics = {
+      startedAt: Date.now(),
+      upstreamMs: 0,
+      imageBytes: 0,
+      imagePixels: 0,
+      imageCount: 0,
+      cacheHits: 0,
+    }
+    let acquired = false
+    try {
+      await semaphore.value.acquire(deadline.signal)
+      acquired = true
+      const value = await action({ signal: deadline.signal, metrics })
+      if (deadline.signal.aborted) throw this.operationError(tool, undefined, deadline)
+      this.ctx.logger.info(
+        'dsh-vision-toolkit tool=%s outcome=ok totalMs=%d upstreamMs=%d images=%d imageBytes=%d imagePixels=%d cacheHits=%d model=%s',
+        tool,
+        Date.now() - metrics.startedAt,
+        metrics.upstreamMs,
+        metrics.imageCount,
+        metrics.imageBytes,
+        metrics.imagePixels,
+        metrics.cacheHits,
+        tool === 'vision_glance' || tool === 'vision_ground' || tool === 'vision_detect'
+          ? this.config.provider.model
+          : 'local',
+      )
+      return value
+    } catch (error) {
+      const classified = this.operationError(tool, error, deadline)
+      this.ctx.logger.warn(
+        'dsh-vision-toolkit tool=%s outcome=error category=%s totalMs=%d upstreamMs=%d images=%d imageBytes=%d imagePixels=%d cacheHits=%d',
+        tool,
+        classified.code,
+        Date.now() - metrics.startedAt,
+        metrics.upstreamMs,
+        metrics.imageCount,
+        metrics.imageBytes,
+        metrics.imagePixels,
+        metrics.cacheHits,
+      )
+      throw classified
+    } finally {
+      if (acquired) semaphore.value.release()
+      deadline.cleanup()
+      if (semaphore.value.idle) this.semaphores.delete(semaphore.key)
+    }
+  }
+
+  /** Resolve the configured credential at the remote-operation boundary. */
   async resolveVisionEnv(): Promise<UpstreamEnvironment> {
     const resolved: ResolvedCredential | undefined = await this.ctx.credentials.resolve(this.config.provider.credential)
     if (resolved === undefined) {
@@ -307,77 +392,66 @@ export class VisionToolkitRuntime {
     }
   }
 
-  /**
-   * Run one bounded tool request. Concurrency, credential resolution, path
-   * fencing, and the deadline all live here, not in the tool definitions.
-   */
-  private async runBounded<T>(request: () => Promise<T>, options: ToolCallOptions): Promise<T> {
-    await this.semaphore.acquire(options.signal)
-    try {
-      return await request()
-    } finally {
-      this.semaphore.release()
-    }
-  }
-
-  /** Resolve the path fence for one invocation's workspace. */
-  private async pathPolicy(workspace: string): Promise<PathPolicy> {
+  private pathPolicy(workspace: string): Promise<PathPolicy> {
     return createPathPolicy(workspace, this.config.allowedDirs)
   }
 
-  /** Validate one input image against fence and size limits. */
-  private async validateImage(raw: string, policy: PathPolicy): Promise<{ path: string; bytes: number }> {
+  private async validateImage(raw: string, policy: PathPolicy, operation: OperationContext): Promise<ImageInfo> {
     const image = await resolveInputFile(raw, policy)
     if (image.bytes > this.config.maxImageBytes) {
+      throw new VisionToolkitError('capacity', `image is ${image.bytes} bytes, exceeding maxImageBytes ${this.config.maxImageBytes}`)
+    }
+    const decoded = await this.adapter.probeImageSize(image.path, { signal: operation.signal })
+    const pixels = decoded.width * decoded.height
+    if (!Number.isSafeInteger(pixels) || pixels > this.config.maxImagePixels) {
       throw new VisionToolkitError(
         'capacity',
-        `image is ${image.bytes} bytes, exceeding maxImageBytes ${this.config.maxImageBytes}`,
+        `image is ${decoded.width}x${decoded.height} (${pixels} pixels), exceeding maxImagePixels ${this.config.maxImagePixels}`,
       )
     }
-    return image
+    const extension = extname(image.path).toLowerCase()
+    const expected = FORMAT_BY_EXTENSION.get(extension)
+    if (expected !== decoded.format) {
+      throw new VisionToolkitError('input', `image content is ${decoded.format}, but the filename uses ${extension}`)
+    }
+    return { ...image, ...decoded }
   }
 
-  /** Run the upstream adapter inside the invocation deadline. */
+  private accountImage(image: ImageInfo, operation: OperationContext): void {
+    operation.metrics.imageCount += 1
+    operation.metrics.imageBytes += image.bytes
+    operation.metrics.imagePixels += image.width * image.height
+  }
+
   private async runUpstream(
     tool: UpstreamTool,
     args: readonly string[],
-    options: ToolCallOptions,
-    env: UpstreamEnvironment,
-    workspace: string,
-  ): Promise<UpstreamRunView> {
-    const deadline = createDeadline(options.signal, options.timeoutMs ?? this.config.timeoutMs)
-    try {
-      const result = await this.adapter.run(tool, args, {
-        signal: deadline.signal,
-        workspace,
-        env,
+    operation: OperationContext,
+    env?: UpstreamEnvironment,
+  ): Promise<UpstreamRunResult> {
+    const started = Date.now()
+    const result = await this.adapter.run(tool, args, {
+      signal: operation.signal,
+      ...(env === undefined ? {} : { env }),
+    })
+    operation.metrics.upstreamMs += Date.now() - started
+    if (result.outcome.exitCode !== 0) {
+      throw this.adapter.classifyFailure(tool, result, {
+        timedOut: false,
+        cancelled: operation.signal.aborted,
+        ...(env === undefined ? {} : { secrets: [env.VISION_API_KEY] }),
       })
-      if (result.outcome.exitCode !== 0) {
-        throw this.adapter.classifyFailure(tool, result, {
-          timedOut: deadline.timedOut,
-          cancelled: deadline.cancelled,
-        })
-      }
-      return result
-    } catch (error) {
-      if (error instanceof VisionToolkitError) throw error
-      const deadlineError = deadline.cancelled
-        ? new VisionToolkitError('cancelled', `${tool}: cancelled`)
-        : deadline.timedOut
-          ? new VisionToolkitError('cancelled', `${tool}: timed out`)
-          : new VisionToolkitError('service', `${tool}: upstream execution failed`)
-      throw deadlineError
-    } finally {
-      deadline.cleanup()
     }
+    if (result.stdoutTruncated || result.stderrTruncated) {
+      throw new VisionToolkitError('output', `${tool}: upstream output exceeded the capture limit`)
+    }
+    return result
   }
 
   /** glance: describe, targeted QA, OCR, or multi-image comparison. */
   async glance(request: GlanceRequest, options: ToolCallOptions): Promise<GlanceResult> {
-    return this.runBounded(async () => {
-      if (request.images.length === 0) {
-        throw new VisionToolkitError('input', 'glance requires at least one image')
-      }
+    return this.runOperation('vision_glance', options, async (operation) => {
+      if (request.images.length === 0) throw new VisionToolkitError('input', 'glance requires at least one image')
       if (request.query !== undefined && request.ocr === true) {
         throw new VisionToolkitError('input', 'glance: query and ocr are mutually exclusive')
       }
@@ -386,250 +460,216 @@ export class VisionToolkitRuntime {
       }
       if (request.region !== undefined) parseRegion(request.region)
       const policy = await this.pathPolicy(options.workspace)
-      const images: Array<{ path: string; bytes: number }> = []
+      const images: ImageInfo[] = []
+      const seen = new Set<string>()
       for (const raw of request.images) {
-        images.push(await this.validateImage(raw, policy))
+        const image = await this.validateImage(raw, policy, operation)
+        if (seen.has(image.path)) {
+          operation.metrics.cacheHits += 1
+          continue
+        }
+        seen.add(image.path)
+        this.accountImage(image, operation)
+        images.push(image)
       }
       const env = await this.resolveVisionEnv()
-      const args = [
+      const result = await this.runUpstream('glance', [
         ...images.map(image => image.path),
         ...(request.region !== undefined ? ['--region', request.region] : []),
         ...(request.ocr === true ? ['--ocr'] : []),
         ...(request.query !== undefined ? ['-q', request.query] : []),
-      ]
-      const result = await this.runUpstream('glance', args, options, env, policy.workspace)
+      ], operation, env)
       const answer = result.stdout.trim()
-      if (answer.length === 0) {
-        throw new VisionToolkitError('output', 'glance: vision API returned an empty description')
-      }
-      const mode = request.ocr === true ? 'ocr' : request.query !== undefined ? 'qa' : 'describe'
+      if (answer.length === 0) throw new VisionToolkitError('output', 'glance: vision API returned an empty description')
       return {
-        images: images.map(image => ({ path: image.path, bytes: image.bytes })),
-        mode,
+        images,
+        mode: request.ocr === true ? 'ocr' : request.query !== undefined ? 'qa' : 'describe',
         answer,
-        truncated: result.stdoutTruncated,
+        truncated: false,
       }
-    }, options)
+    })
   }
 
-  /** Shared locate path for ground and detect. */
-  private async locate(request: LocateRequest, options: ToolCallOptions, tool: 'ground' | 'detect'): Promise<{
-    policy: PathPolicy
-    image: { path: string; bytes: number }
-    size: { width: number; height: number }
-    elements: LocatedElement[]
-  }> {
-    if (request.target.trim().length === 0) {
-      throw new VisionToolkitError('input', 'target must not be empty')
+  private validateLocations(elements: LocatedElement[], width: number, height: number): void {
+    for (const element of elements) {
+      const { x1, y1, x2, y2 } = element.box
+      if (
+        ![x1, y1, x2, y2].every(Number.isInteger)
+        || x1 < 0
+        || y1 < 0
+        || x2 <= x1
+        || y2 <= y1
+        || x2 > width
+        || y2 > height
+      ) {
+        throw new VisionToolkitError('output', `upstream returned an out-of-range box for ${width}x${height}`)
+      }
     }
+  }
+
+  private async locate(
+    request: LocateRequest,
+    options: ToolCallOptions,
+    operation: OperationContext,
+    tool: 'ground' | 'detect',
+  ): Promise<{ image: ImageInfo; elements: LocatedElement[] }> {
+    if (request.target.trim().length === 0) throw new VisionToolkitError('input', 'target must not be empty')
     if (request.region !== undefined) parseRegion(request.region)
     const policy = await this.pathPolicy(options.workspace)
-    const image = await this.validateImage(request.image, policy)
-    const deadline = createDeadline(options.signal, options.timeoutMs ?? this.config.timeoutMs)
-    let size: { width: number; height: number }
-    try {
-      size = await this.adapter.probeImageSize(image.path, {
-        signal: deadline.signal,
-        workspace: policy.workspace,
-      })
-    } finally {
-      deadline.cleanup()
-    }
+    const image = await this.validateImage(request.image, policy, operation)
+    this.accountImage(image, operation)
     const env = await this.resolveVisionEnv()
-    const args = [
+    const result = await this.runUpstream(tool, [
       image.path,
       request.target,
       ...(request.region !== undefined ? ['--region', request.region] : []),
-    ]
-    const result = await this.runUpstream(tool, args, options, env, policy.workspace)
-    return { policy, image, size, elements: parseLocationOutput(result.stdout) }
+    ], operation, env)
+    const elements = parseLocationOutput(result.stdout)
+    this.validateLocations(elements, image.width, image.height)
+    return { image, elements }
   }
 
   /** ground: locate one named target and return pixel boxes. */
   async ground(request: LocateRequest, options: ToolCallOptions): Promise<GroundResult> {
-    return this.runBounded(async () => {
-      const { size, elements } = await this.locate(request, options, 'ground')
-      const matches: LocateMatch[] = elements.map(element => ({
-        label: element.label ?? request.target,
-        box: element.box,
-      }))
+    return this.runOperation('vision_ground', options, async (operation) => {
+      const { image, elements } = await this.locate(request, options, operation, 'ground')
       return {
         target: request.target,
-        imageWidth: size.width,
-        imageHeight: size.height,
-        matches,
+        imageWidth: image.width,
+        imageHeight: image.height,
+        matches: elements.map(element => ({ label: element.label ?? request.target, box: element.box })),
       }
-    }, options)
+    })
   }
 
   /** detect: inventory every instance of a kind. */
   async detect(request: LocateRequest, options: ToolCallOptions): Promise<DetectResult> {
-    return this.runBounded(async () => {
-      const { size, elements } = await this.locate(request, options, 'detect')
+    return this.runOperation('vision_detect', options, async (operation) => {
+      const { image, elements } = await this.locate(request, options, operation, 'detect')
       return {
         category: request.target,
-        imageWidth: size.width,
-        imageHeight: size.height,
+        imageWidth: image.width,
+        imageHeight: image.height,
         elements: elements.map((element, index) => ({
           index: index + 1,
           label: element.label ?? request.target,
           box: element.box,
         })),
       }
-    }, options)
+    })
   }
 
-  /** crop: cut a pixel box into its own image file. */
+  /** crop: cut a pixel box into its own image file without requiring a credential. */
   async crop(request: CropRequest, options: ToolCallOptions): Promise<CropResult> {
-    return this.runBounded(async () => {
+    return this.runOperation('vision_crop', options, async (operation) => {
       const region = parseRegion(request.region)
       if (request.scale !== undefined && (!Number.isInteger(request.scale) || request.scale < 1 || request.scale > 8)) {
         throw new VisionToolkitError('input', 'crop: scale must be an integer between 1 and 8')
       }
       const policy = await this.pathPolicy(options.workspace)
-      const image = await this.validateImage(request.image, policy)
-      const extension = extname(image.path).toLowerCase()
-      const stem = basename(image.path, extension)
-      const output = resolveOutputFile(
+      const image = await this.validateImage(request.image, policy, operation)
+      this.accountImage(image, operation)
+      const sourceExtension = extname(image.path).toLowerCase()
+      const stem = basename(image.path, sourceExtension)
+      const finalPath = resolveOutputFile(
         request.output,
         policy,
         request.scale !== undefined && request.scale > 1 ? `${stem}.crop@${request.scale}x.png` : `${stem}.crop.png`,
         ['.png', '.jpg', '.jpeg'],
       )
-      assertDistinctOutput(image.path, output)
-      const deadline = createDeadline(options.signal, options.timeoutMs ?? this.config.timeoutMs)
-      let size: { width: number; height: number }
+      assertDistinctOutput(image.path, finalPath)
+      const outputExtension = extname(finalPath).toLowerCase()
+      const staged = createStagedOutput(policy, outputExtension)
       try {
-        size = await this.adapter.probeImageSize(image.path, {
-          signal: deadline.signal,
-          workspace: policy.workspace,
-        })
+        const result = await this.runUpstream('crop', [
+          image.path,
+          '--region',
+          request.region,
+          '-o',
+          staged,
+          ...(request.scale !== undefined ? ['--scale', String(request.scale)] : []),
+        ], operation)
+        const parsed = parseCropOutput(result.stdout, result.stderr)
+        await commitStagedOutput(staged, finalPath, policy)
+        return {
+          imageWidth: image.width,
+          imageHeight: image.height,
+          region,
+          outputPath: finalPath,
+          mimeType: outputExtension === '.png' ? 'image/png' : 'image/jpeg',
+          width: parsed.width,
+          height: parsed.height,
+          clamped: parsed.clamped,
+          ...(parsed.note === undefined ? {} : { note: parsed.note }),
+        }
       } finally {
-        deadline.cleanup()
+        await rm(staged, { force: true }).catch(() => {})
       }
-      const env = await this.resolveVisionEnv()
-      const args = [
-        image.path,
-        '--region',
-        request.region,
-        '-o',
-        output,
-        ...(request.scale !== undefined ? ['--scale', String(request.scale)] : []),
-      ]
-      const result = await this.runUpstream('crop', args, options, env, policy.workspace)
-      const parsed: CropOutput = parseCropOutput(result.stdout, result.stderr)
-      const actualPath = parsed.outputPath
-      try {
-        await readFile(actualPath)
-      } catch (error) {
-        throw new VisionToolkitError('output', `crop: output file was not created: ${actualPath}`, { cause: error })
-      }
-      const mimeType: CropResult['mimeType'] =
-        (SUPPORTED_MIME.get(extname(actualPath).toLowerCase()) as CropResult['mimeType'] | undefined) ?? 'image/png'
-      return {
-        imageWidth: size.width,
-        imageHeight: size.height,
-        region,
-        outputPath: actualPath,
-        mimeType,
-        width: parsed.width,
-        height: parsed.height,
-        clamped: parsed.clamped,
-        ...(parsed.note !== undefined ? { note: parsed.note } : {}),
-      }
-    }, options)
+    })
   }
 
-  /** trace: recover SVG geometry from a flat graphic. */
+  /** trace: recover an SVG through the pinned upstream vtracer pipeline. */
   async trace(request: TraceRequest, options: ToolCallOptions): Promise<TraceResult> {
-    return this.runBounded(async () => {
+    return this.runOperation('vision_trace', options, async (operation) => {
       if (request.region !== undefined) parseRegion(request.region)
-      if (request.scale !== undefined && (!Number.isInteger(request.scale) || request.scale < 1 || request.scale > 8)) {
-        throw new VisionToolkitError('input', 'trace: scale must be an integer between 1 and 8')
-      }
-      if (request.strokeWidth !== undefined && (!Number.isFinite(request.strokeWidth) || request.strokeWidth <= 0)) {
-        throw new VisionToolkitError('input', 'trace: strokeWidth must be a positive number')
+      if (request.scale !== undefined && (!Number.isInteger(request.scale) || request.scale < 1 || request.scale > 16)) {
+        throw new VisionToolkitError('input', 'trace: scale must be an integer between 1 and 16')
       }
       const policy = await this.pathPolicy(options.workspace)
-      const image = await this.validateImage(request.image, policy)
+      const image = await this.validateImage(request.image, policy, operation)
+      this.accountImage(image, operation)
       const extension = extname(image.path).toLowerCase()
       const stem = basename(image.path, extension)
-      const output = resolveOutputFile(request.output, policy, `${stem}.svg`, ['.svg'])
-      assertDistinctOutput(image.path, output)
-      const reportPath = join(policy.outputDir, `.trace-report-${randomUUID()}.json`)
-      const args = [
-        image.path,
-        ...(request.region !== undefined ? ['--region', request.region] : []),
-        ...(request.scale !== undefined ? ['--scale', String(request.scale)] : []),
-        ...(request.strokeWidth !== undefined ? ['--stroke-width', String(request.strokeWidth)] : []),
-        ...(request.color === true ? ['--color'] : []),
-        ...(request.filled === true ? ['--filled'] : []),
-        ...(request.outline === true ? ['--outline'] : []),
-        ...(request.mode === 'perceive' ? ['--llm-perceive'] : []),
-        ...(request.mode === 'synthesize' ? ['--llm-synthesize'] : []),
-        ...(request.mode === 'review' ? ['--llm-review'] : []),
-        ...(request.requireProduction === true ? ['--require-production'] : []),
-        '-o',
-        output,
-        '--report',
-        reportPath,
-      ]
-      const env = await this.resolveVisionEnv()
-      let result: UpstreamRunView | undefined
-      let report: TraceReport
+      const finalPath = resolveOutputFile(request.output, policy, `${stem}.svg`, ['.svg'])
+      assertDistinctOutput(image.path, finalPath)
+      const staged = createStagedOutput(policy, '.svg')
       try {
-        result = await this.runUpstream('trace', args, options, env, policy.workspace)
-        report = parseTraceReport(await readFile(reportPath, 'utf8'))
-      } catch (error) {
-        if (error instanceof VisionToolkitError && error.code === 'service' && result?.stderr.includes('production gate failed')) {
-          throw new VisionToolkitError('output', error.message)
+        const result = await this.runUpstream('trace', [
+          image.path,
+          ...(request.region !== undefined ? ['--region', request.region] : []),
+          ...(request.scale !== undefined ? ['--scale', String(request.scale)] : []),
+          ...(request.polygon === true ? ['--polygon'] : []),
+          ...(request.color === true ? ['--color'] : []),
+          '-o',
+          staged,
+        ], operation)
+        const parsed = parseTraceOutput(result.stdout)
+        const svg = await readFile(staged, 'utf8').catch(() => '')
+        if (!/^\s*<svg\b[\s\S]*<\/svg>\s*$/i.test(svg)) {
+          throw new VisionToolkitError('output', 'trace: output SVG is not a parseable document')
         }
-        throw error
+        const actualPathCount = (svg.match(/<path\b/gi) ?? []).length
+        if (actualPathCount !== parsed.pathCount) {
+          throw new VisionToolkitError('output', 'trace: reported path count does not match the generated SVG')
+        }
+        await commitStagedOutput(staged, finalPath, policy)
+        const warning = result.stderr.trim()
+        return {
+          imageWidth: image.width,
+          imageHeight: image.height,
+          outputPath: finalPath,
+          mimeType: 'image/svg+xml',
+          geometry: {
+            status: parsed.pathCount === 0 ? 'empty' : 'generated',
+            pathCount: parsed.pathCount,
+            tracedScale: parsed.tracedScale,
+            bytes: parsed.bytes,
+          },
+          ...(warning.length === 0 ? {} : { warning: warning.split(/\r?\n/).slice(-1)[0] ?? warning }),
+        }
       } finally {
-        await rm(reportPath, { force: true }).catch(() => {})
+        await rm(staged, { force: true }).catch(() => {})
       }
-      const svg = await readFile(output, 'utf8').catch(() => '')
-      if (!svg.includes('<svg') || !svg.includes('</svg>')) {
-        throw new VisionToolkitError('output', `trace: output SVG is not a parseable document: ${output}`)
-      }
-      const runResult = result as UpstreamRunView
-      const warningMatch = /trace:\s*warning:\s*(.+)$/m.exec(runResult.stderr)
-      const [width, height] = report.logicalSize
-      return {
-        imageWidth: width,
-        imageHeight: height,
-        outputPath: output,
-        mimeType: 'image/svg+xml',
-        geometry: {
-          status: report.geometry.status,
-          confidence: report.geometry.confidence as JsonValue,
-          ...(report.geometry.primitiveCount !== undefined ? { primitiveCount: report.geometry.primitiveCount } : {}),
-          ...(report.geometry.representation !== undefined ? { representation: report.geometry.representation } : {}),
-          ...(report.geometry.strokeWidth !== undefined ? { strokeWidth: report.geometry.strokeWidth } : {}),
-          ...(report.geometry.pixelFit !== undefined ? { pixelFit: report.geometry.pixelFit } : {}),
-        },
-        ...(report.perception !== undefined
-          ? {
-            perception: {
-              ...(report.perception.label !== undefined ? { label: report.perception.label } : {}),
-              ...(report.perception.confidence !== undefined
-                ? { confidence: report.perception.confidence as JsonValue }
-                : {}),
-            },
-          }
-          : {}),
-        ...(warningMatch !== null ? { warning: warningMatch[1]?.trim() ?? 'upstream reported a warning' } : {}),
-      }
-    }, options)
+    })
   }
 
-  /** Report the upstream checkout's own version marker (or the packaged pin). */
-  async checkoutVersion(): Promise<string> {
+  /** Report the packaged upstream snapshot version. */
+  checkoutVersion(): Promise<string> {
     return this.adapter.readCheckoutVersion()
   }
 
-  /** The Python executable used to launch upstream CLIs. */
+  /** Prepared Python command. */
   python(): string {
-    return this.config.runtime.python
+    return this.adapter.versionInfo.python
   }
 }

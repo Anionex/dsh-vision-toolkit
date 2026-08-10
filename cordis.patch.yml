@@ -1,18 +1,6 @@
 # dsh-vision-toolkit bundle patch: mounts the plugin into a profile layer stack.
-# Users override these defaults in their profile's cordis.patch.yml row with the
-# same id; a patch replaces the whole config, so each row stays self-contained.
+# Runtime defaults live at the plugin's config boundary. Users override them in
+# their profile patch row with the same id.
 - insert:
     - id: vision-toolkit
       name: '@dsh-external/dsh-vision-toolkit'
-      config:
-        provider:
-          baseUrl: https://api.inferera.com/v1
-          credential: VISION_API_KEY
-          model: gemini-3.6-flash
-        language: zh
-        timeoutMs: 60000
-        maxImageBytes: 10485760
-        concurrency: 4
-        runtime:
-          mode: external
-        allowedDirs: []

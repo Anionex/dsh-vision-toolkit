@@ -1,8 +1,14 @@
-import { mkdtemp, mkdir, realpath, symlink, writeFile } from 'node:fs/promises'
+import { lstat, mkdtemp, mkdir, readFile, realpath, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createPathPolicy, resolveInputFile, resolveOutputFile } from '../src/paths.ts'
+import {
+  commitStagedOutput,
+  createPathPolicy,
+  createStagedOutput,
+  resolveInputFile,
+  resolveOutputFile,
+} from '../src/paths.ts'
 import { VisionToolkitError } from '../src/errors.ts'
 
 const tempDirs: string[] = []
@@ -21,7 +27,7 @@ describe('createPathPolicy', () => {
     const workspace = await tempDir('workspace')
     const policy = await createPathPolicy(workspace, [])
     expect(policy.workspace).toBe(await realpath(workspace))
-    expect(policy.outputDir).toBe(await realpath(join(workspace, '.dsh-vision-toolkit')))
+    expect(policy.outputDir).toBe(await realpath(join(workspace, '.dsh-vision-toolkit', 'artifacts')))
   })
 
   it('rejects an output directory outside the fence', async () => {
@@ -106,11 +112,38 @@ describe('resolveOutputFile', () => {
     expect(fallback).toBe(join(policy.outputDir, 'default.svg'))
   })
 
-  it('rejects absolute paths, traversal, and wrong extensions', async () => {
+  it('rejects absolute paths, nested names, traversal, and wrong extensions', async () => {
     const workspace = await tempDir('workspace')
     const policy = await createPathPolicy(workspace, [])
     expect(() => resolveOutputFile('/tmp/x.svg', policy, 'd.svg', ['.svg'])).toThrowError(/absolute/)
-    expect(() => resolveOutputFile('../x.svg', policy, 'd.svg', ['.svg'])).toThrowError(/output directory/)
+    expect(() => resolveOutputFile('../x.svg', policy, 'd.svg', ['.svg'])).toThrowError(/one filename/)
+    expect(() => resolveOutputFile('nested/x.svg', policy, 'd.svg', ['.svg'])).toThrowError(/one filename/)
     expect(() => resolveOutputFile('x.png', policy, 'd.svg', ['.svg'])).toThrowError(/must use one of/)
+  })
+
+  it('commits a random staging file into the final name', async () => {
+    const workspace = await tempDir('workspace')
+    const policy = await createPathPolicy(workspace, [])
+    const staged = createStagedOutput(policy, '.svg')
+    const finalPath = resolveOutputFile('result.svg', policy, 'default.svg', ['.svg'])
+    await writeFile(staged, '<svg/>\n')
+    await commitStagedOutput(staged, finalPath, policy)
+    expect(await readFile(finalPath, 'utf8')).toBe('<svg/>\n')
+  })
+
+  it('replaces a destination symlink itself without writing through it', async () => {
+    const workspace = await tempDir('workspace')
+    const outside = await tempDir('outside')
+    const protectedPath = join(outside, 'protected.svg')
+    await writeFile(protectedPath, 'outside\n')
+    const policy = await createPathPolicy(workspace, [])
+    const finalPath = resolveOutputFile('result.svg', policy, 'default.svg', ['.svg'])
+    await symlink(protectedPath, finalPath)
+    const staged = createStagedOutput(policy, '.svg')
+    await writeFile(staged, '<svg/>\n')
+    await commitStagedOutput(staged, finalPath, policy)
+    expect((await lstat(finalPath)).isSymbolicLink()).toBe(false)
+    expect(await readFile(finalPath, 'utf8')).toBe('<svg/>\n')
+    expect(await readFile(protectedPath, 'utf8')).toBe('outside\n')
   })
 })

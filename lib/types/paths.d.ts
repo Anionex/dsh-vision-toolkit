@@ -24,7 +24,7 @@ export declare function isWithin(parent: string, child: string): boolean;
  * fence.
  * @param workspaceRaw - session workspace (or process cwd fallback).
  * @param allowedDirs - configured extra allowed roots.
- * @param outputDirRaw - configured output directory (default `.dsh-vision-toolkit`).
+   * @param outputDirRaw - configured output directory (default `.dsh-vision-toolkit/artifacts`).
  * @returns the resolved policy.
  */
 export declare function createPathPolicy(workspaceRaw: string, allowedDirs: readonly string[], outputDirRaw?: string): Promise<PathPolicy>;
@@ -49,6 +49,24 @@ export declare function resolveInputFile(raw: string, policy: PathPolicy): Promi
  * @returns absolute output path (not yet created).
  */
 export declare function resolveOutputFile(raw: string | undefined, policy: PathPolicy, defaultName: string, extensions: readonly string[]): string;
+/**
+ * Reserve a random, non-user-controlled staging path inside the real output
+ * directory. Upstream writes here so an existing destination symlink can
+ * never redirect the write outside the fence.
+ * @param policy - active path fence.
+ * @param extension - output extension including the leading dot.
+ * @returns absent staging path inside {@link PathPolicy.outputDir}.
+ */
+export declare function createStagedOutput(policy: PathPolicy, extension: string): string;
+/**
+ * Validate a staged regular file and atomically place it at the resolved final
+ * filename. Replacing an existing symlink replaces the link itself; upstream
+ * never opens the user-selected destination.
+ * @param staged - random staging path returned by {@link createStagedOutput}.
+ * @param finalPath - final path returned by {@link resolveOutputFile}.
+ * @param policy - active path fence.
+ */
+export declare function commitStagedOutput(staged: string, finalPath: string, policy: PathPolicy): Promise<void>;
 /** Reject an output that would overwrite its own input file. */
 export declare function assertDistinctOutput(input: string, output: string): void;
 //# sourceMappingURL=paths.d.ts.map

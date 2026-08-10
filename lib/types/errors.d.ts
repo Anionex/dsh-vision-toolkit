@@ -5,7 +5,7 @@
  * @module dsh-vision-toolkit/errors
  */
 /** Discriminant tag for every Vision Toolkit failure. */
-export declare const VISION_TOOLKIT_ERROR_CODES: readonly ["config", "input", "capacity", "service", "runtime", "output", "cancelled", "path"];
+export declare const VISION_TOOLKIT_ERROR_CODES: readonly ["config", "input", "capacity", "service", "runtime", "output", "timeout", "cancelled", "path"];
 /** Stable machine-readable error category. */
 export type VisionToolkitErrorCode = typeof VISION_TOOLKIT_ERROR_CODES[number];
 /** Error with a stable category; safe to surface to the model. */
