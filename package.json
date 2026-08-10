@@ -1,7 +1,7 @@
 {
   "name": "@dsh-external/dsh-vision-toolkit",
   "version": "0.1.0",
-  "description": "DSH native vision engineering toolkit: structured glance/ground/detect/trace/crop tools, unified vision config and credentials, and a bundled vision-tools skill",
+  "description": "DSH native visual engineering toolkit with structured understanding, grounding, pixel verification, OCR, local rendering, managed Artifacts, health checks, unified credentials, and a bundled skill",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",

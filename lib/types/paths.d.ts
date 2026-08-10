@@ -40,6 +40,25 @@ export declare function resolveInputFile(raw: string, policy: PathPolicy): Promi
     bytes: number;
 }>;
 /**
+ * Validate one authorized regular file against an explicit extension set.
+ * Realpath fencing makes local HTML and future non-image inputs follow the
+ * same symlink-safe policy as images.
+ * @param raw - path resolved against the workspace.
+ * @param policy - active path fence.
+ * @param extensions - accepted lowercase extensions including the leading dot.
+ * @param kind - user-facing noun used in stable errors.
+ * @returns absolute real path and file size.
+ */
+export declare function resolveAuthorizedFile(raw: string, policy: PathPolicy, extensions: readonly string[], kind: string): Promise<{
+    path: string;
+    bytes: number;
+}>;
+/** Validate a local HTML document; URL and data-URI inputs never reach Chrome. */
+export declare function resolveHtmlFile(raw: string, policy: PathPolicy): Promise<{
+    path: string;
+    bytes: number;
+}>;
+/**
  * Resolve an optional user-supplied output filename inside the plugin output
  * directory. Absolute paths, `..` segments, and wrong extensions are rejected.
  * @param raw - output filename (workspace/outputDir-relative).
@@ -58,6 +77,22 @@ export declare function resolveOutputFile(raw: string | undefined, policy: PathP
  * @returns absent staging path inside {@link PathPolicy.outputDir}.
  */
 export declare function createStagedOutput(policy: PathPolicy, extension: string): string;
+/** Resolve one direct child directory of the managed artifact root. */
+export declare function resolveOutputDirectory(raw: string | undefined, policy: PathPolicy, defaultName: string): string;
+/** Create a random staging directory that no upstream command can choose. */
+export declare function createStagedDirectory(policy: PathPolicy): Promise<string>;
+/**
+ * Copy an existing managed run into staging for an explicit resume operation.
+ * A missing destination is a normal first run; non-directory or symlink state
+ * fails closed instead of giving the upstream script an ambiguous workspace.
+ */
+export declare function seedStagedDirectory(finalPath: string, staged: string, policy: PathPolicy): Promise<boolean>;
+/**
+ * Atomically replace one managed artifact directory, restoring the previous
+ * complete run if the final rename fails. The upstream only ever writes the
+ * random staging path.
+ */
+export declare function commitStagedDirectory(staged: string, finalPath: string, policy: PathPolicy): Promise<void>;
 /**
  * Validate a staged regular file and atomically place it at the resolved final
  * filename. Replacing an existing symlink replaces the link itself; upstream

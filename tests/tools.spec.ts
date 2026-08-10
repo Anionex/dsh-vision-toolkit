@@ -17,6 +17,12 @@ const TOOL_NAMES = [
   'vision_detect',
   'vision_trace',
   'vision_crop',
+  'vision_pixel_diff',
+  'vision_long_screenshot_ocr',
+  'vision_extract_foreground',
+  'vision_dominant_colors',
+  'vision_html_screenshot',
+  'vision_toolkit_health',
   'vision_toolkit_version',
 ]
 
@@ -79,7 +85,7 @@ async function setupContext(toolkitPath: string) {
 }
 
 describe('dsh-vision-toolkit plugin lifecycle', () => {
-  it('registers the six native tools and the vision-tools skill after runtime preparation', async () => {
+  it('registers the complete P0/P1 native tool set and skill after runtime preparation', async () => {
     const { ctx } = await setupContext(BUNDLED_UPSTREAM)
     // `ctx.plugin` settles only after the async apply finishes, so readiness
     // work (upstream probe + registration) must be visible immediately.
@@ -143,5 +149,19 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
       const blocks = definition?.output.render({}, { kind: 'ok' })
       expect(blocks?.[0]).toMatchObject({ type: 'text' })
     }
+  })
+
+  it('declares replay-safe file locations and presentation metadata for artifact tools', async () => {
+    const { ctx } = await setupContext(BUNDLED_UPSTREAM)
+    const ground = ctx.tools.get('vision_ground')
+    expect(ground?.presentCall?.({ image: 'shot.png', target: 'send', preview: true })).toMatchObject({
+      card: 'generic',
+      locations: [{ path: 'shot.png' }],
+    })
+    const pixelDiff = ctx.tools.get('vision_pixel_diff')
+    expect(pixelDiff?.presentCall?.({ original: 'reference.png', rebuilt: 'actual.png' })).toMatchObject({
+      locations: [{ path: 'reference.png' }, { path: 'actual.png' }],
+    })
+    expect(typeof pixelDiff?.output.presentationMeta).toBe('function')
   })
 })

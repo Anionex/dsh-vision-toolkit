@@ -10,8 +10,8 @@ import type { SubprocessOutcome } from '@deepseek-ai/dsh-subprocess';
 import type { ResolvedVisionToolkitConfig } from './config.ts';
 import { VisionToolkitError } from './errors.ts';
 import { type PreparedUpstreamRuntime } from './runtime-install.ts';
-/** One upstream CLI exposed by the P0 runtime. */
-export type UpstreamTool = 'glance' | 'ground' | 'detect' | 'crop' | 'trace';
+/** One pinned upstream CLI/script exposed by the runtime. */
+export type UpstreamTool = 'glance' | 'ground' | 'detect' | 'crop' | 'trace' | 'pixel_diff' | 'long_screenshot_ocr' | 'extract_foreground' | 'dominant_colors' | 'html_screenshot';
 /** Vision configuration forwarded only to upstream commands that call the API. */
 export interface UpstreamEnvironment {
     VISION_API_KEY: string;
@@ -29,6 +29,7 @@ export interface UpstreamVersionInfo {
     python: string;
     pythonVersion: string;
     dependencies: Record<string, string>;
+    runtimeHome: string;
 }
 /** Settled upstream process facts plus bounded output. */
 export interface UpstreamRunResult {
@@ -65,6 +66,78 @@ export interface TraceOutput {
     pathCount: number;
     tracedScale: number;
 }
+/** Parsed local pixel-diff report. */
+export interface PixelDiffOutput {
+    scaled: boolean;
+    rebuiltOriginalSize?: {
+        width: number;
+        height: number;
+    };
+    scaledToSize?: {
+        width: number;
+        height: number;
+    };
+    overallDifferencePct: number;
+    heatmapPath: string;
+    worstRegions: Array<{
+        index: number;
+        differencePct: number;
+        box: PixelBox;
+    }>;
+}
+/** Parsed transparent foreground extraction report. */
+export interface ExtractForegroundOutput {
+    box: PixelBox;
+    foregroundPixels: number;
+    keptComponents: number;
+    totalComponents: number;
+    largestComponentPct: number;
+    outputPath: string;
+    width: number;
+    height: number;
+    autoSummary?: string;
+}
+/** One significant palette cluster from `dominant_colors.py`. */
+export interface DominantColorCluster {
+    color: string;
+    sharePct: number;
+}
+/** One candidate-scoring row from `dominant_colors.py`. */
+export interface DominantColorCandidate {
+    color: string;
+    sharePct: number;
+    meanDistance: number;
+    weightedScorePct: number;
+    winner: boolean;
+}
+/** Structured dominant-colour result in palette or candidate mode. */
+export type DominantColorsOutput = {
+    mode: 'palette';
+    region: PixelBox;
+    width: number;
+    height: number;
+    requestedTop: number;
+    clusterCount: number;
+    mergeTolerance: number;
+    colors: DominantColorCluster[];
+} | {
+    mode: 'candidates';
+    region: PixelBox;
+    width: number;
+    height: number;
+    sampledPixels: number;
+    candidates: DominantColorCandidate[];
+    winner: string;
+    matchedWithinTolerance: boolean;
+    closestCandidate?: string;
+    note?: string;
+};
+/** Parsed local HTML screenshot result. */
+export interface HtmlScreenshotOutput {
+    outputPath: string;
+    width: number;
+    height: number;
+}
 /** Parse one numbered upstream location line (`N. position label x1: ..., ...`). */
 export declare function parseLocationLine(line: string): LocatedElement | undefined;
 /** Parse ground/detect stdout; non-empty unknown lines are an output contract failure. */
@@ -73,6 +146,14 @@ export declare function parseLocationOutput(stdout: string): LocatedElement[];
 export declare function parseCropOutput(stdout: string, stderr: string): CropOutput;
 /** Parse the pinned trace CLI's written-file summary. */
 export declare function parseTraceOutput(stdout: string): TraceOutput;
+/** Parse the complete `pixel_diff.py` stdout contract. */
+export declare function parsePixelDiffOutput(stdout: string): PixelDiffOutput;
+/** Parse the complete `extract_fg.py` stdout contract. */
+export declare function parseExtractForegroundOutput(stdout: string): ExtractForegroundOutput;
+/** Parse palette and candidate modes from `dominant_colors.py`. */
+export declare function parseDominantColorsOutput(stdout: string): DominantColorsOutput;
+/** Parse the local Chrome screenshot summary. */
+export declare function parseHtmlScreenshotOutput(stdout: string): HtmlScreenshotOutput;
 /** Find the first candidate with the five pinned core CLI entrypoints. */
 export declare function findCheckout(candidates: readonly string[]): Promise<string>;
 /** Adapter over one prepared pinned upstream runtime. */
@@ -98,7 +179,17 @@ export declare class UpstreamAdapter {
         width: number;
         height: number;
         format: string;
+        mode: string;
     }>;
+    private runPythonCode;
+    /** Draw validated pixel boxes and labels into a PNG preview with Pillow. */
+    renderAnnotatedPreview(imagePath: string, outputPath: string, elements: readonly LocatedElement[], options: {
+        signal: AbortSignal;
+    }): Promise<void>;
+    /** Locate the same optional Chrome-family browser the pinned HTML script uses. */
+    findChrome(options: {
+        signal: AbortSignal;
+    }): Promise<string | undefined>;
     private collect;
     /** Report the pinned snapshot identity. */
     readCheckoutVersion(): Promise<string>;

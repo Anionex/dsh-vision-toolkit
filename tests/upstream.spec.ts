@@ -5,8 +5,12 @@ import { join } from 'node:path'
 import {
   findCheckout,
   parseCropOutput,
+  parseDominantColorsOutput,
+  parseExtractForegroundOutput,
+  parseHtmlScreenshotOutput,
   parseLocationLine,
   parseLocationOutput,
+  parsePixelDiffOutput,
   parseTraceOutput,
 } from '../src/upstream.ts'
 import { bundledUpstreamRoot, verifyBundledUpstream } from '../src/runtime-install.ts'
@@ -120,6 +124,77 @@ describe('parseTraceOutput', () => {
 
   it('rejects output outside the pinned summary contract', () => {
     expect(() => parseTraceOutput('wrote /tmp/icon.svg (456 bytes, 1 circle)')).toThrowError(/did not report/)
+  })
+})
+
+describe('P1 upstream output parsers', () => {
+  it('parses pixel-diff scaling, metrics, heatmap, and ranked boxes', () => {
+    expect(parsePixelDiffOutput([
+      'note: rebuilt was 320x180, scaled to 1280x720',
+      'overall difference: 12.34%',
+      'heatmap: /tmp/diff.png',
+      '1. 23.45% x1: 0, y1: 0, x2: 640, y2: 360',
+    ].join('\n'))).toEqual({
+      scaled: true,
+      rebuiltOriginalSize: { width: 320, height: 180 },
+      scaledToSize: { width: 1280, height: 720 },
+      overallDifferencePct: 12.34,
+      heatmapPath: '/tmp/diff.png',
+      worstRegions: [{ index: 1, differencePct: 23.45, box: { x1: 0, y1: 0, x2: 640, y2: 360 } }],
+    })
+  })
+
+  it('parses foreground component metrics and written dimensions', () => {
+    expect(parseExtractForegroundOutput([
+      'auto: center=(128,128) disc radius≈77 exclude-color=#FFFFFF',
+      'bbox (原图像素): x1: 10, y1: 20, x2: 42, y2: 44',
+      '前景像素: 512  保留分量: 1/2  最大分量占比: 88%',
+      'wrote /tmp/foreground.png (32x24)',
+    ].join('\n'))).toMatchObject({
+      box: { x1: 10, y1: 20, x2: 42, y2: 44 },
+      foregroundPixels: 512,
+      keptComponents: 1,
+      totalComponents: 2,
+      largestComponentPct: 88,
+      outputPath: '/tmp/foreground.png',
+      width: 32,
+      height: 24,
+    })
+  })
+
+  it('parses palette and candidate dominant-color modes', () => {
+    expect(parseDominantColorsOutput([
+      'region 0,0,100,50 - 100x50 px',
+      'top 2 of 4 clusters (merged at distance <= 8):',
+      '#336699   42.1%  ####################',
+      '#FFFFFF   31.0%  ###############',
+    ].join('\n'))).toMatchObject({
+      mode: 'palette',
+      clusterCount: 4,
+      colors: [{ color: '#336699', sharePct: 42.1 }, { color: '#FFFFFF', sharePct: 31 }],
+    })
+    expect(parseDominantColorsOutput([
+      'region 0,0,100,50 - 100x50 px (5000 px sampled)',
+      'candidate   share   mean_d  wt    bar',
+      '*#336699    42.1%   4.0   100%  ####',
+      ' #FFFFFF    31.0%  22.0    40%  ##',
+      'winner: #336699 (* in table) - wt is soft-match closeness, so the winner need not have the highest share; 42.1% of region pixels within distance <= 16',
+    ].join('\n'))).toMatchObject({
+      mode: 'candidates',
+      sampledPixels: 5000,
+      winner: '#336699',
+      matchedWithinTolerance: true,
+    })
+  })
+
+  it('parses HTML screenshot summaries and rejects unknown P1 output', () => {
+    expect(parseHtmlScreenshotOutput('wrote /tmp/page.png (1280x800)')).toEqual({
+      outputPath: '/tmp/page.png',
+      width: 1280,
+      height: 800,
+    })
+    expect(() => parsePixelDiffOutput('overall difference: maybe')).toThrowError(/unexpected output/)
+    expect(() => parseDominantColorsOutput('unknown')).toThrowError(/missing region header/)
   })
 })
 

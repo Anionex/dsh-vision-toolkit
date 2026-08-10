@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -162,6 +162,82 @@ describe.skipIf(!hasDsh() || !hasPnpm())('dsh-vision-toolkit profile install (ke
         expect(JSON.stringify(visionServer.requests[0]?.body)).toContain('data:image/png;base64,')
       } finally {
         await server.close()
+      }
+
+      const workspace = join(home, 'workspace')
+      mkdirSync(workspace)
+      copyFileSync(join(repoRoot, SAMPLE_IMAGE), join(workspace, 'reference.png'))
+      copyFileSync(join(repoRoot, SAMPLE_IMAGE), join(workspace, 'actual.png'))
+
+      const pixelServer = await startMockLlmServer({
+        sequence: ['tool_call_success', 'success'],
+        toolName: 'vision_pixel_diff',
+        toolArguments: JSON.stringify({
+          original: 'reference.png',
+          rebuilt: 'actual.png',
+          runName: 'e2e-pixel-diff',
+        }),
+        successText: 'pixel diff done',
+      })
+      try {
+        const pixel = await runDsh([
+          'run', '--profile', 'headless', '--patch', patch,
+          'pixel-diff the local reference and actual screenshots',
+        ], {
+          DSH_HOME: home,
+          DSH_TELEMETRY_DISABLED: '1',
+          DEEPSEEK_API_KEY: 'mock-vision-e2e-key',
+          DEEPSEEK_BASE_URL: pixelServer.baseURL,
+          VISION_API_KEY: 'fixture-vision-key',
+        }, workspace)
+        expect(pixel.code, pixel.stderr).toBe(0)
+        expect(pixel.stdout).toBe('pixel diff done')
+        const pixelBodies = JSON.stringify(pixelServer.requests.map(request => request.body))
+        expect(pixelBodies).toContain('vision_pixel_diff')
+        expect(pixelBodies).toContain('overallDifferencePct')
+        expect(pixelBodies).toContain('heatmap.png')
+        expect(existsSync(join(workspace, '.dsh-vision-toolkit', 'artifacts', 'e2e-pixel-diff', 'heatmap.png'))).toBe(true)
+        expect(existsSync(join(workspace, '.dsh-vision-toolkit', 'artifacts', 'e2e-pixel-diff', 'report.json'))).toBe(true)
+        expect(visionServer.requests).toHaveLength(1)
+      } finally {
+        await pixelServer.close()
+      }
+
+      const longOcrServer = await startMockLlmServer({
+        sequence: ['tool_call_success', 'success'],
+        toolName: 'vision_long_screenshot_ocr',
+        toolArguments: JSON.stringify({
+          image: 'reference.png',
+          jobs: 1,
+          runName: 'e2e-long-ocr',
+        }),
+        successText: 'long OCR done',
+      })
+      try {
+        const longOcr = await runDsh([
+          'run', '--profile', 'headless', '--patch', patch,
+          'OCR the local screenshot through the long-screenshot pipeline',
+        ], {
+          DSH_HOME: home,
+          DSH_TELEMETRY_DISABLED: '1',
+          DEEPSEEK_API_KEY: 'mock-vision-e2e-key',
+          DEEPSEEK_BASE_URL: longOcrServer.baseURL,
+          VISION_API_KEY: 'fixture-vision-key',
+        }, workspace)
+        expect(longOcr.code, longOcr.stderr).toBe(0)
+        expect(longOcr.stdout).toBe('long OCR done')
+        const longBodies = JSON.stringify(longOcrServer.requests.map(request => request.body))
+        expect(longBodies).toContain('vision_long_screenshot_ocr')
+        const followUp = longOcrServer.requests.at(-1)?.body as { messages?: Array<{ role?: string; content?: unknown }> } | undefined
+        const toolResult = followUp?.messages?.find(message => message.role === 'tool')
+        expect(JSON.stringify(toolResult)).toContain('vision_long_screenshot_ocr')
+        const ocrOutput = join(workspace, '.dsh-vision-toolkit', 'artifacts', 'e2e-long-ocr', 'reference.ocr.md')
+        expect(existsSync(ocrOutput)).toBe(true)
+        expect(readFileSync(ocrOutput, 'utf8')).toContain('Fixture detailed description')
+        expect(existsSync(join(workspace, '.dsh-vision-toolkit', 'artifacts', 'e2e-long-ocr', 'chunks', 'manifest.json'))).toBe(true)
+        expect(visionServer.requests).toHaveLength(2)
+      } finally {
+        await longOcrServer.close()
       }
 
       const disablePatch = join(home, 'disable.yml')

@@ -1,4 +1,5 @@
-import { copyFile, mkdtemp, rm } from 'node:fs/promises'
+import { copyFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -119,6 +120,13 @@ describe('VisionToolkitRuntime', () => {
     const result = await runtime.ground({ image: 'sample.png', target: 'send button' }, { signal, workspace })
     expect(result).toEqual({
       target: 'send button',
+      image: {
+        path: expect.stringMatching(/sample\.png$/),
+        bytes: expect.any(Number),
+        width: 256,
+        height: 256,
+        format: 'png',
+      },
       imageWidth: 256,
       imageHeight: 256,
       matches: [{ label: 'send button', box: { x1: 100, y1: 50, x2: 200, y2: 90 } }],
@@ -210,6 +218,156 @@ describe('VisionToolkitRuntime', () => {
     await expect(runtime.crop({ image: 'sample.png', region: '0,0,10,10' }, { signal, workspace }))
       .resolves.toMatchObject({ width: 40, height: 20 })
   })
+
+  it('delivers labeled ground previews as managed image artifacts', async () => {
+    const { runtime } = await setup()
+    const workspace = await tempWorkspace()
+    const result = await runtime.ground(
+      { image: 'sample.png', target: 'send button', preview: true },
+      { signal, workspace },
+    )
+    expect(result.preview).toMatchObject({
+      mimeType: 'image/png',
+      kind: 'image',
+      sourceTool: 'vision_ground',
+      previewIntent: 'image',
+    })
+    expect(result.preview?.path).toContain(join('.dsh-vision-toolkit', 'artifacts'))
+    expect(result.preview?.bytes).toBeGreaterThan(0)
+  })
+
+  it('pixel-diffs two images and atomically delivers heatmap and report artifacts', async () => {
+    const { runtime } = await setup({}, null)
+    const workspace = await tempWorkspace()
+    await copyFile(SAMPLE_IMAGE, join(workspace, 'rebuilt.png'))
+    const result = await runtime.pixelDiff(
+      { original: 'sample.png', rebuilt: 'rebuilt.png', grid: 4, top: 1 },
+      { signal, workspace },
+    )
+    expect(result).toMatchObject({
+      scaled: false,
+      overallDifferencePct: 12.34,
+      worstRegions: [{ index: 1, differencePct: 23.45 }],
+      heatmap: { kind: 'image', mimeType: 'image/png', sourceTool: 'vision_pixel_diff' },
+      report: { kind: 'json', mimeType: 'application/json', sourceTool: 'vision_pixel_diff' },
+    })
+    const report = JSON.parse(await readFile(result.report.path, 'utf8')) as { schemaVersion: number; grid: number }
+    expect(report).toMatchObject({ schemaVersion: 1, grid: 4 })
+  })
+
+  it('splits long screenshots without credentials and OCRs/resumes with credentials', async () => {
+    const noCredential = await setup({}, null)
+    const workspace = await tempWorkspace()
+    const split = await noCredential.runtime.longScreenshotOcr(
+      { image: 'sample.png', splitOnly: true, runName: 'sample-split' },
+      { signal, workspace },
+    )
+    expect(split).toMatchObject({ splitOnly: true, complete: false, chunkCount: 1 })
+    expect(split.output).toBeUndefined()
+    expect(split.audit).toBeUndefined()
+    expect(split.manifest.kind).toBe('json')
+    expect(split.chunks[0]?.image.kind).toBe('image')
+
+    const withCredential = await setup()
+    const first = await withCredential.runtime.longScreenshotOcr(
+      { image: 'sample.png', runName: 'sample-ocr', jobs: 1 },
+      { signal, workspace },
+    )
+    expect(first).toMatchObject({ splitOnly: false, complete: true, chunkCount: 1 })
+    expect(first.output?.kind).toBe('markdown')
+    expect(first.audit?.kind).toBe('markdown')
+    expect(first.chunks[0]?.ocr?.kind).toBe('markdown')
+    const resumed = await withCredential.runtime.longScreenshotOcr(
+      { image: 'sample.png', runName: 'sample-ocr', jobs: 1, resume: true },
+      { signal, workspace },
+    )
+    expect(resumed.runDirectory).toBe(first.runDirectory)
+    expect(await readFile(resumed.output?.path ?? '', 'utf8')).toContain('Fixture merged OCR')
+  })
+
+  it('extracts transparent foregrounds and returns component metrics', async () => {
+    const { runtime } = await setup({}, null)
+    const workspace = await tempWorkspace()
+    const result = await runtime.extractForeground(
+      { image: 'sample.png', region: '0,0,128,128' },
+      { signal, workspace },
+    )
+    expect(result).toMatchObject({
+      box: { x1: 10, y1: 20, x2: 42, y2: 44 },
+      foregroundPixels: 512,
+      keptComponents: 1,
+      totalComponents: 2,
+      largestComponentPct: 88,
+      artifact: { mimeType: 'image/png', kind: 'image', sourceTool: 'vision_extract_foreground' },
+    })
+  })
+
+  it('parses palette extraction and candidate scoring into structure', async () => {
+    const { runtime } = await setup({}, null)
+    const workspace = await tempWorkspace()
+    const palette = await runtime.dominantColors({ image: 'sample.png' }, { signal, workspace })
+    expect(palette.analysis.mode).toBe('palette')
+    if (palette.analysis.mode !== 'palette') throw new Error('expected palette mode')
+    expect(palette.analysis.colors).toEqual(expect.arrayContaining([{ color: '#336699', sharePct: 42.1 }]))
+    const candidates = await runtime.dominantColors(
+      { image: 'sample.png', candidates: ['#336699', '#FFFFFF'] },
+      { signal, workspace },
+    )
+    expect(candidates.analysis).toMatchObject({
+      mode: 'candidates',
+      winner: '#336699',
+      matchedWithinTolerance: true,
+    })
+  })
+
+  it('renders only authorized local HTML and delivers a PNG artifact', async () => {
+    const { runtime } = await setup({}, null)
+    const workspace = await tempWorkspace()
+    await writeFile(join(workspace, 'page.html'), '<!doctype html><title>fixture</title>\n')
+    const result = await runtime.htmlScreenshot(
+      { source: 'page.html', width: 320, height: 180, scale: 2 },
+      { signal, workspace },
+    )
+    expect(result).toMatchObject({
+      viewport: { width: 320, height: 180, scale: 2 },
+      width: 640,
+      height: 360,
+      artifact: { mimeType: 'image/png', kind: 'image', sourceTool: 'vision_html_screenshot' },
+    })
+    await expect(runtime.htmlScreenshot({ source: 'https://example.com' }, { signal, workspace }))
+      .rejects.toMatchObject({ code: 'input' })
+  })
+
+  it('reports health without network access and tests /models only when explicit', async () => {
+    const server = createServer((request, response) => {
+      expect(request.url).toBe('/v1/models')
+      expect(request.headers.authorization).toBe('Bearer test-vision-key')
+      response.writeHead(200, { 'content-type': 'application/json' })
+      response.end('{"data":[]}')
+    })
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+    try {
+      const address = server.address()
+      if (address === null || typeof address === 'string') throw new Error('missing fixture server address')
+      const { runtime } = await setup({
+        provider: {
+          baseUrl: `http://127.0.0.1:${address.port}/v1`,
+          credential: 'VISION_API_KEY',
+          model: 'fixture-model',
+        },
+      })
+      const workspace = await tempWorkspace()
+      const passive = await runtime.health(false, { signal, workspace })
+      expect(passive).toMatchObject({
+        connectionTested: false,
+        checks: { chrome: { status: 'ok' }, credential: { status: 'ok' }, service: { status: 'not_tested' } },
+      })
+      const active = await runtime.health(true, { signal, workspace })
+      expect(active).toMatchObject({ connectionTested: true, checks: { service: { status: 'ok' } } })
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close(error => error === undefined ? resolve() : reject(error)))
+    }
+  })
 })
 
 describe('createDeadline', () => {
@@ -261,6 +419,21 @@ describe('Semaphore', () => {
     controller.abort()
     await expect(waiting).rejects.toMatchObject({ code: 'cancelled' })
     semaphore.release()
+  })
+
+  it('accounts for weighted callers without exceeding total capacity', async () => {
+    const semaphore = new Semaphore(3)
+    await semaphore.acquire(new AbortController().signal, 2)
+    const second = semaphore.acquire(new AbortController().signal, 2)
+    let settled = false
+    void second.then(() => { settled = true })
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    semaphore.release(2)
+    await second
+    expect(settled).toBe(true)
+    semaphore.release(2)
+    expect(semaphore.idle).toBe(true)
   })
 })
 

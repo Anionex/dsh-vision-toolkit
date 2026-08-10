@@ -4,10 +4,15 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   commitStagedOutput,
+  commitStagedDirectory,
   createPathPolicy,
+  createStagedDirectory,
   createStagedOutput,
+  resolveHtmlFile,
   resolveInputFile,
+  resolveOutputDirectory,
   resolveOutputFile,
+  seedStagedDirectory,
 } from '../src/paths.ts'
 import { VisionToolkitError } from '../src/errors.ts'
 
@@ -145,5 +150,60 @@ describe('resolveOutputFile', () => {
     expect((await lstat(finalPath)).isSymbolicLink()).toBe(false)
     expect(await readFile(finalPath, 'utf8')).toBe('<svg/>\n')
     expect(await readFile(protectedPath, 'utf8')).toBe('outside\n')
+  })
+})
+
+describe('managed artifact directories', () => {
+  it('accepts local HTML but rejects URL-shaped and wrong-extension sources', async () => {
+    const workspace = await tempDir('workspace')
+    await writeFile(join(workspace, 'page.html'), '<!doctype html>\n')
+    await writeFile(join(workspace, 'page.txt'), 'text\n')
+    const policy = await createPathPolicy(workspace, [])
+    expect((await resolveHtmlFile('page.html', policy)).path).toBe(await realpath(join(workspace, 'page.html')))
+    await expect(resolveHtmlFile('https://example.com', policy)).rejects.toMatchObject({ code: 'input' })
+    await expect(resolveHtmlFile('page.txt', policy)).rejects.toMatchObject({ code: 'input' })
+  })
+
+  it('commits complete run directories and seeds an explicit resume staging area', async () => {
+    const workspace = await tempDir('workspace')
+    const policy = await createPathPolicy(workspace, [])
+    const finalPath = resolveOutputDirectory('run-one', policy, 'default-run')
+    const staged = await createStagedDirectory(policy)
+    await writeFile(join(staged, 'result.json'), '{"ok":true}\n')
+    await commitStagedDirectory(staged, finalPath, policy)
+    expect(await readFile(join(finalPath, 'result.json'), 'utf8')).toContain('true')
+
+    const resume = await createStagedDirectory(policy)
+    expect(await seedStagedDirectory(finalPath, resume, policy)).toBe(true)
+    expect(await readFile(join(resume, 'result.json'), 'utf8')).toContain('true')
+  })
+
+  it('restores the previous run only from a real managed directory', async () => {
+    const workspace = await tempDir('workspace')
+    const outside = await tempDir('outside')
+    const policy = await createPathPolicy(workspace, [])
+    const finalPath = resolveOutputDirectory('run-link', policy, 'default-run')
+    await symlink(outside, finalPath)
+    const staged = await createStagedDirectory(policy)
+    await expect(seedStagedDirectory(finalPath, staged, policy)).rejects.toMatchObject({ code: 'path' })
+  })
+
+  it('rejects symbolic links anywhere inside a staged run directory', async () => {
+    const workspace = await tempDir('workspace')
+    const outside = await tempDir('outside')
+    const policy = await createPathPolicy(workspace, [])
+    const staged = await createStagedDirectory(policy)
+    await writeFile(join(outside, 'secret.txt'), 'secret\n')
+    await symlink(join(outside, 'secret.txt'), join(staged, 'result.txt'))
+    const finalPath = resolveOutputDirectory('unsafe-run', policy, 'default-run')
+    await expect(commitStagedDirectory(staged, finalPath, policy)).rejects.toMatchObject({ code: 'path' })
+  })
+
+  it('rejects nested, absolute, and reserved artifact directory names', async () => {
+    const workspace = await tempDir('workspace')
+    const policy = await createPathPolicy(workspace, [])
+    expect(() => resolveOutputDirectory('../run', policy, 'default')).toThrowError(/one visible directory name/)
+    expect(() => resolveOutputDirectory('/tmp/run', policy, 'default')).toThrowError(/absolute/)
+    expect(() => resolveOutputDirectory('.vision-toolkit-owned', policy, 'default')).toThrowError(/one visible directory name/)
   })
 })

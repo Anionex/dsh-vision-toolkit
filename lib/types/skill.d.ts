@@ -1,11 +1,11 @@
 /**
- * The DSH-adapted vision-tools skill. It keeps the upstream methodology but
- * names only the native tools this plugin registers, so the skill can never
- * advertise a CLI or capability that is absent. Mounted after the runtime is
- * ready and disposed with the plugin.
+ * DSH-adapted vision-tools methodology. The skill names only native tools in
+ * this release, explains which calls send images to the configured external
+ * vision API, and treats every returned Artifact descriptor as reusable input
+ * rather than an opaque terminal path.
  * @module dsh-vision-toolkit/skill
  */
 import type { SkillRegistration } from '@deepseek-ai/dsh-skill';
-/** Runtime skill registration for the DSH-adapted vision-tools skill. */
+/** Runtime skill registration mounted only after every native tool is ready. */
 export declare const VISION_TOOLS_SKILL: SkillRegistration;
 //# sourceMappingURL=skill.d.ts.map
