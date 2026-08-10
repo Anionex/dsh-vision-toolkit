@@ -12,13 +12,13 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-function settled(meta: unknown, isError = false): ToolCallBlock {
+function settled(meta: unknown, isError = false, toolName = 'vision_ground'): ToolCallBlock {
   return {
     kind: 'tool-result',
     seq: 2,
     time: Date.now(),
     callId: 'call-1',
-    call: { name: 'vision_ground', argsRaw: '{}' },
+    call: { name: toolName, argsRaw: '{}' },
     callTime: Date.now() - 10,
     content: [{ type: 'text', text: JSON.stringify(meta) }],
     isError,
@@ -108,6 +108,26 @@ function jsonResponse(body: unknown, status = 200): Response {
   })
 }
 
+function artifact(
+  path: string,
+  filename: string,
+  mimeType: string,
+  kind: 'image' | 'svg' | 'json',
+  description: string,
+  previewIntent: 'image' | 'svg' | 'download',
+) {
+  return {
+    path,
+    filename,
+    mimeType,
+    kind,
+    description,
+    sourceTool: 'vision_card_test',
+    previewIntent,
+    bytes: 123,
+  }
+}
+
 describe('Vision Toolkit client plugin', () => {
   it('registers every dedicated Tool view and the Settings section', () => {
     expect(inject).toEqual(['slots', 'locale'])
@@ -175,6 +195,79 @@ describe('Vision Toolkit client plugin', () => {
     expect(screen.getByText('924, 645, 952, 670')).toBeTruthy()
     expect(screen.getByRole('img', { name: 'Ground preview' }).getAttribute('src')).toBe('/preview-token')
     expect(screen.getByRole('link', { name: 'download' }).getAttribute('href')).toBe('/download-token')
+  })
+
+  it('renders Detect, Trace, and Pixel Diff contracts with safe previews and actions', () => {
+    const { ctx, registrations } = fakeClientContext()
+    apply(ctx as never)
+    const component = (key: string) => {
+      const found = registrations.find(entry => entry.options.key === key)
+      if (found === undefined) throw new Error(`${key} component was not registered`)
+      return found.component
+    }
+    const props = (toolName: string, meta: unknown) => ({
+      callId: `call-${toolName}`,
+      toolName,
+      block: settled(meta, false, toolName),
+      openFile: vi.fn(),
+      t: (key: string) => key,
+    })
+
+    const detectPreview = artifact('/workspace/detect.png', 'detect.png', 'image/png', 'image', 'Detection preview', 'image')
+    const detect = render(createElement(component('vision_detect'), props('vision_detect', {
+      imageWidth: 900,
+      imageHeight: 430,
+      elements: [
+        { index: 1, label: 'Header', box: { x1: 68, y1: 72, x2: 758, y2: 148 } },
+        { index: 2, label: 'Primary button', box: { x1: 448, y1: 266, x2: 758, y2: 334 } },
+      ],
+      preview: detectPreview,
+      $dshVisionToolkit: {
+        schemaVersion: 1,
+        artifacts: [{ path: detectPreview.path, previewUrl: '/detect-preview', downloadUrl: '/detect-download' }],
+      },
+    })))
+    expect(screen.getAllByRole('row')).toHaveLength(3)
+    expect(screen.getByText('Primary button')).toBeTruthy()
+    expect(screen.getByRole('img', { name: 'Detection preview' }).getAttribute('src')).toBe('/detect-preview')
+    detect.unmount()
+
+    const traceArtifact = artifact('/workspace/trace.svg', 'trace.svg', 'image/svg+xml', 'svg', 'Recovered vector', 'svg')
+    const trace = render(createElement(component('vision_trace'), props('vision_trace', {
+      artifact: traceArtifact,
+      geometry: { pathCount: 17, bytes: 18642 },
+      $dshVisionToolkit: {
+        schemaVersion: 1,
+        artifacts: [{ path: traceArtifact.path, previewUrl: '/trace-preview', downloadUrl: '/trace-download' }],
+      },
+    })))
+    expect(screen.getByText('17 paths · 18.2 KB')).toBeTruthy()
+    expect(screen.getByTitle('Recovered vector').getAttribute('sandbox')).toBe('')
+    expect(screen.getByRole('link', { name: 'download' }).getAttribute('href')).toBe('/trace-download')
+    trace.unmount()
+
+    const heatmap = artifact('/workspace/heatmap.png', 'heatmap.png', 'image/png', 'image', 'Difference heatmap', 'image')
+    const report = artifact('/workspace/report.json', 'report.json', 'application/json', 'json', 'Difference report', 'download')
+    render(createElement(component('vision_pixel_diff'), props('vision_pixel_diff', {
+      overallDifferencePct: 6.0438,
+      worstRegions: [
+        { differencePct: 12.413, box: { x1: 72, y1: 126, x2: 322, y2: 276 } },
+      ],
+      heatmap,
+      report,
+      $dshVisionToolkit: {
+        schemaVersion: 1,
+        artifacts: [
+          { path: heatmap.path, previewUrl: '/heatmap-preview', downloadUrl: '/heatmap-download' },
+          { path: report.path, previewUrl: '/report-preview', downloadUrl: '/report-download' },
+        ],
+      },
+    })))
+    expect(screen.getByText('6.0438%')).toBeTruthy()
+    expect(screen.getByText('72, 126, 322, 276')).toBeTruthy()
+    expect(screen.getByRole('img', { name: 'Difference heatmap' }).getAttribute('src')).toBe('/heatmap-preview')
+    expect(screen.getByText('report.json')).toBeTruthy()
+    expect(screen.getAllByRole('link', { name: 'download' })).toHaveLength(2)
   })
 
   it('reloads the authoritative same-revision settings after a runtime candidate is rejected', async () => {
