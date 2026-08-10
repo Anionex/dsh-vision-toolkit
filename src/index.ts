@@ -2,13 +2,15 @@
  * @dsh-external/dsh-vision-toolkit — DSH Vision Toolkit profile bundle.
  *
  * Plugin lifecycle follows the documented readiness chain: verify the pinned
- * upstream checkout (runtime dependencies) → register the native tools →
- * mount the vision-tools skill. Any failure leaves no tools and no skill
- * behind, and disposal unregisters everything the plugin mounted.
+ * upstream checkout, publish the vision-tools Skill and its one-shot bootstrap,
+ * then mount the execution tools only in Agents that load that Skill. Any
+ * failure leaves no model capability behind, and disposal unregisters every
+ * global and Agent-scoped contribution the plugin mounted.
  * @module @dsh-external/dsh-vision-toolkit
  */
 
 import type { Context } from 'cordis'
+import type {} from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-settings'
 import { ArtifactAccessController, prepareArtifactAccessKey } from './artifact-access.ts'
 import {
@@ -17,6 +19,7 @@ import {
   resolveConfig,
   type VisionToolkitConfig,
 } from './config.ts'
+import { VisionToolExposure } from './exposure.ts'
 import { VisionToolkitRuntimeManager } from './runtime-manager.ts'
 import { VISION_TOOLS_SKILL } from './skill.ts'
 import { createVisionTools } from './tools.ts'
@@ -27,7 +30,7 @@ export const name = '@dsh-external/dsh-vision-toolkit'
 
 export { Config }
 
-export const inject = ['tools', 'credentials', 'skills', 'subprocess', 'settings']
+export const inject = ['tools', 'credentials', 'skills', 'subprocess', 'settings', 'agents']
 
 /** Plugin entry: validate configuration synchronously, then mount asynchronously. */
 export async function apply(ctx: Context, config: VisionToolkitConfig = {}): Promise<() => void> {
@@ -44,22 +47,23 @@ export async function apply(ctx: Context, config: VisionToolkitConfig = {}): Pro
   const artifacts = new ArtifactAccessController(await prepareArtifactAccessKey())
   const lifecycle = new AbortController()
   const disposers: Array<() => void> = []
-  let operationalDisposers: { tools: Array<() => void>; skill: () => void } | undefined
+  let operationalDisposers: { activationTool: () => void; exposure: () => void; skill: () => void } | undefined
 
   const ensureOperational = (): void => {
     if (!manager.ready || operationalDisposers !== undefined) return
-    const tools: Array<() => void> = []
+    const exposure = new VisionToolExposure(ctx, () => createVisionTools(
+      () => manager.current(),
+      value => artifacts.presentationMeta(value),
+      lifecycle.signal,
+    ))
+    let activationTool: (() => void) | undefined
+    let exposureDisposer: (() => void) | undefined
     let skill: (() => void) | undefined
     try {
-      for (const tool of createVisionTools(
-        () => manager.current(),
-        value => artifacts.presentationMeta(value),
-        lifecycle.signal,
-      )) {
-        tools.push(ctx.tools.register(tool))
-      }
+      activationTool = ctx.tools.register(exposure.activationTool)
       skill = ctx.skills.register(VISION_TOOLS_SKILL)
-      operationalDisposers = { tools, skill }
+      exposureDisposer = exposure.install()
+      operationalDisposers = { activationTool, exposure: exposureDisposer, skill }
       const info = manager.current().upstreamVersion
       ctx.logger.info(
         'dsh-vision-toolkit %s ready (upstream %s @ %s, checkout %s)',
@@ -69,8 +73,9 @@ export async function apply(ctx: Context, config: VisionToolkitConfig = {}): Pro
         info.path,
       )
     } catch (error) {
+      exposureDisposer?.()
       if (skill !== undefined) skill()
-      for (const dispose of tools.reverse()) dispose()
+      activationTool?.()
       throw error
     }
   }
@@ -81,7 +86,7 @@ export async function apply(ctx: Context, config: VisionToolkitConfig = {}): Pro
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     ctx.logger.error(
-      'dsh-vision-toolkit %s: runtime not ready; vision tools and the vision-tools skill are NOT registered. Settings remain available for repair. %s',
+      'dsh-vision-toolkit %s: runtime not ready; the vision-tools skill, activation bootstrap, and Agent-scoped visual tools are NOT registered. Settings remain available for repair. %s',
       PLUGIN_VERSION,
       message,
     )
@@ -102,7 +107,8 @@ export async function apply(ctx: Context, config: VisionToolkitConfig = {}): Pro
   return () => {
     lifecycle.abort()
     if (operationalDisposers !== undefined) {
-      for (const dispose of operationalDisposers.tools.reverse()) dispose()
+      operationalDisposers.exposure()
+      operationalDisposers.activationTool()
       operationalDisposers.skill()
       operationalDisposers = undefined
     }

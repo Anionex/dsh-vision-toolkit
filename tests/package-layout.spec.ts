@@ -32,6 +32,8 @@ describe('package layout contract', () => {
     expect(entry.default).toBe('./lib/index.js')
     await expect(stat(join(ROOT, 'lib', 'index.js'))).resolves.toBeDefined()
     await expect(stat(join(ROOT, 'lib', 'types', 'index.d.ts'))).resolves.toBeDefined()
+    await expect(stat(join(ROOT, 'lib', 'exposure.js'))).resolves.toBeDefined()
+    await expect(stat(join(ROOT, 'lib', 'types', 'exposure.d.ts'))).resolves.toBeDefined()
     const client = PACKAGE.exports['./client'] as { types?: string; default?: string }
     expect(client.types).toBe('./lib/types/client/index.d.ts')
     expect(client.default).toBe('./lib/client.js')
@@ -67,6 +69,7 @@ describe('package layout contract', () => {
   })
 
   it('keeps every dependency specifier portable', () => {
+    expect(PACKAGE.peerDependencies).toHaveProperty('@deepseek-ai/dsh-agent')
     for (const section of [PACKAGE.dependencies ?? {}, PACKAGE.peerDependencies ?? {}, PACKAGE.devDependencies ?? {}]) {
       for (const [name, spec] of Object.entries(section)) {
         expect(spec, `${name}`).not.toMatch(/^\/|^[A-Za-z]:\\|^file:|^link:|^workspace:/)

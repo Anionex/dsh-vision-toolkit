@@ -61,6 +61,7 @@
     "saxes": "6.0.0"
   },
   "peerDependencies": {
+    "@deepseek-ai/dsh-agent": "^0.0.1",
     "@deepseek-ai/dsh-client-locale": "^0.0.1",
     "@deepseek-ai/dsh-client-runtime": "^0.0.1",
     "@deepseek-ai/dsh-client-ui-primitives": "^0.0.1",

@@ -29,6 +29,7 @@
     "paths": {
       "cordis": ["../vendor/cordis/lib/types/index.d.ts"],
       "schemastery": ["../vendor/schemastery/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-agent": ["../packages/core/agent/lib/types/index.d.ts"],
       "@deepseek-ai/dsh-tools": ["../packages/core/tools/lib/types/index.d.ts"],
       "@deepseek-ai/dsh-credentials": ["../packages/credentials/credentials/lib/types/index.d.ts"],
       "@deepseek-ai/dsh-skill": ["../packages/skill/skill/lib/types/index.d.ts"],
