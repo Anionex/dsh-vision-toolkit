@@ -11,6 +11,7 @@ permissions:
 
 jobs:
   portable-package:
+    if: github.event.repository.visibility == 'public'
     name: Portable package (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
     strategy:
