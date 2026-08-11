@@ -63,7 +63,7 @@ const packagePath = join(root, 'package.json')
 const pkg = JSON.parse(await readFile(packagePath, 'utf8'))
 
 check(pkg.name === '@dsh-external/dsh-vision-toolkit', 'package name must stay @dsh-external/dsh-vision-toolkit')
-check(pkg.version === '0.1.1', 'package version and the latest release notes must stay aligned')
+check(pkg.version === '0.1.2', 'package version and the latest release notes must stay aligned')
 check(pkg.repository?.url === 'git+https://github.com/dsh-external/dsh-vision-toolkit.git', 'repository URL is missing or mismatched')
 check(pkg.bugs?.url === 'https://github.com/dsh-external/dsh-vision-toolkit/issues', 'issue tracker URL is missing or mismatched')
 check(pkg.homepage === 'https://agent-vision.anionex.me', 'homepage URL is missing or mismatched')

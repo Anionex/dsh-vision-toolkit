@@ -4,6 +4,15 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-08-11
+
+### Changed
+
+- Repositioned the README, landing page, hero, social preview, package metadata, and About copy around the product's exact role as the native DeepSeek Harness integration for `agent-vision-toolkit`.
+- Added direct, prominent links to the upstream repository and first-party project website.
+- Added optimized official upstream reference images for infographic restoration, sketch-to-UI restoration, image Q&A, and screenshot-guided debugging, with exact commit provenance and explicit separation from DSH-native proof.
+- Set the package homepage to the first-party `agent-vision-toolkit` website and expanded discovery keywords for text-only agents, Agent Skills, and vision-language models.
+
 ## [0.1.1] - 2026-08-11
 
 ### Changed
@@ -39,6 +48,7 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 - Runtime teardown cancels in-flight operations before removing Agent-scoped tools, the activation bootstrap, and the Skill.
 - The Web client is published through the current nested `dsh.client` manifest and loader-compatible built artifact required by DSH snapshot0810.
 
-[Unreleased]: https://github.com/dsh-external/dsh-vision-toolkit/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/dsh-external/dsh-vision-toolkit/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/dsh-external/dsh-vision-toolkit/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/dsh-external/dsh-vision-toolkit/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/dsh-external/dsh-vision-toolkit/releases/tag/v0.1.0
