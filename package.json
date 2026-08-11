@@ -1,6 +1,6 @@
 {
   "name": "@dsh-external/dsh-vision-toolkit",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Native visual-engineering tools for text-only DeepSeek Harness agents: OCR, grounding, SVG tracing, pixel diff, Artifacts, and Web UI.",
   "keywords": [
     "deepseek",
@@ -19,7 +19,7 @@
   "bugs": {
     "url": "https://github.com/dsh-external/dsh-vision-toolkit/issues"
   },
-  "homepage": "https://dsh-external.github.io/dsh-vision-toolkit/",
+  "homepage": "https://github.com/dsh-external/dsh-vision-toolkit#readme",
   "funding": "https://ifdian.net/a/anionex",
   "type": "module",
   "packageManager": "pnpm@11.7.0",

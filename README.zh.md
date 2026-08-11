@@ -2,9 +2,9 @@
 
 # DSH Vision Toolkit
 
-[![CI](https://img.shields.io/github/actions/workflow/status/dsh-external/dsh-vision-toolkit/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/dsh-external/dsh-vision-toolkit/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/dsh-external/dsh-vision-toolkit?display_name=tag&sort=semver&style=flat-square)](https://github.com/dsh-external/dsh-vision-toolkit/releases)
-[![License](https://img.shields.io/github/license/dsh-external/dsh-vision-toolkit?style=flat-square)](LICENSE)
+[![Release v0.1.1](https://img.shields.io/badge/release-v0.1.1-5B4CF0?style=flat-square)](https://github.com/dsh-external/dsh-vision-toolkit/releases/tag/v0.1.1)
+[![Verified: 134 tests](https://img.shields.io/badge/verified-134%20tests-2EA44F?style=flat-square)](tests)
+[![License: MIT](https://img.shields.io/badge/license-MIT-0B7285?style=flat-square)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-%5E22.19%20%7C%20%3E%3D24-339933?style=flat-square&logo=nodedotjs&logoColor=white)](package.json)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)](runtime/requirements.lock)
 [![DSH profiles](https://img.shields.io/badge/DSH-Web%20%2B%20Headless-5B4CF0?style=flat-square)](cordis.patch.yml)
@@ -48,7 +48,7 @@
 
 ## 快速开始
 
-前置条件：DeepSeek Harness、Python 3.11+，并确保 `dsh plugin` 可以使用 `pnpm`。克隆发布仓库，将其加入所需 Profile，并确认 Bundle 行已经挂载：
+前置条件：拥有此私有仓库的访问权限、DeepSeek Harness、Python 3.11+，并确保 `dsh plugin` 可以使用 `pnpm`。使用已认证的 GitHub 凭据克隆发布仓库，将其加入所需 Profile，并确认 Bundle 行已经挂载：
 
 ```sh
 git clone https://github.com/dsh-external/dsh-vision-toolkit.git
@@ -313,7 +313,7 @@ pnpm run example:ui-restoration
 pnpm pack --dry-run
 ```
 
-`npm run verify:portable` 是不依赖外部开发包的公开 CI 门禁：验证上游快照、package 元数据与 exports、已提交 JavaScript 语法、README 链接和图片、必需的开源门面文件、social preview 尺寸以及 dry-run tarball。完整 TypeScript 构建和 134 项测试会在 DeepSeek Harness 源码树中运行，本 checkout 需位于其中的 `dsh-vision-toolkit/`，以使用对应的 peer API 类型和真实 Profile fixture。
+`npm run verify:portable` 是不依赖外部开发包的可移植验证门禁：验证上游快照、package 元数据与 exports、已提交 JavaScript 语法、README 链接和图片、必需的开源门面文件、social preview 尺寸以及 dry-run tarball。完整 TypeScript 构建和 134 项测试会在 DeepSeek Harness 源码树中运行，本 checkout 需位于其中的 `dsh-vision-toolkit/`，以使用对应的 peer API 类型和真实 Profile fixture。
 
 `pnpm run build` 会先验证 vendored manifest，再生成 JavaScript、声明文件和 loader 兼容 Web 客户端。本包提交 `lib/`，因此从 checkout 安装时不要求消费方构建。无真实 Key 的真实 Profile 测试会安装到干净 `DSH_HOME`、启动 Headless、通过真实工具调用执行全部五个 P0 工具和具有代表性的 P1 本地/远程工具、验证禁用与重新启用行为，并卸载 Bundle。每项 P0/P1 需求对应的实现与验证位置见[需求追踪参考](docs/requirements-traceability/README.md)。
 
@@ -321,7 +321,7 @@ pnpm pack --dry-run
 
 ## 项目状态与范围
 
-版本 `0.1.0` 是首个公开发布。P0 和 P1 是本包的产品承诺。P2 是设计门槛：至少一个独立插件消费内部能力形态前，不发布稳定 `ctx.visionToolkit` 服务、能力发现 API 或提供方生态。Web 上传、拖拽、摄像头/视频/音频/文档输入、交互式标注框编辑、GUI 自动点击、远程服务集群、模型路由、模型投票和跨会话视觉缓存不属于当前产品范围。
+版本 `0.1.0` 是首个 GitHub 私有发布。P0 和 P1 是本包的产品承诺。P2 是设计门槛：至少一个独立插件消费内部能力形态前，不发布稳定 `ctx.visionToolkit` 服务、能力发现 API 或提供方生态。Web 上传、拖拽、摄像头/视频/音频/文档输入、交互式标注框编辑、GUI 自动点击、远程服务集群、模型路由、模型投票和跨会话视觉缓存不属于当前产品范围。
 
 ## 社区与关于
 

@@ -4,6 +4,17 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-08-11
+
+### Changed
+
+- Replaced private-repository GitHub metadata badges with versioned static badges that remain truthful without unauthenticated repository access.
+- Gated GitHub-hosted CI and Pages jobs to public repository visibility while keeping the workflows ready for a future visibility change.
+
+### Fixed
+
+- Package homepage and bilingual release guidance now point authenticated users to the private repository instead of an unavailable public Pages site.
+
 ## [0.1.0] - 2026-08-10
 
 ### Added
@@ -28,5 +39,6 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 - Runtime teardown cancels in-flight operations before removing Agent-scoped tools, the activation bootstrap, and the Skill.
 - The Web client is published through the current nested `dsh.client` manifest and loader-compatible built artifact required by DSH snapshot0810.
 
-[Unreleased]: https://github.com/dsh-external/dsh-vision-toolkit/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/dsh-external/dsh-vision-toolkit/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/dsh-external/dsh-vision-toolkit/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/dsh-external/dsh-vision-toolkit/releases/tag/v0.1.0

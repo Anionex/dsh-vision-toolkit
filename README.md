@@ -2,9 +2,9 @@
 
 # DSH Vision Toolkit
 
-[![CI](https://img.shields.io/github/actions/workflow/status/dsh-external/dsh-vision-toolkit/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/dsh-external/dsh-vision-toolkit/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/dsh-external/dsh-vision-toolkit?display_name=tag&sort=semver&style=flat-square)](https://github.com/dsh-external/dsh-vision-toolkit/releases)
-[![License](https://img.shields.io/github/license/dsh-external/dsh-vision-toolkit?style=flat-square)](LICENSE)
+[![Release v0.1.1](https://img.shields.io/badge/release-v0.1.1-5B4CF0?style=flat-square)](https://github.com/dsh-external/dsh-vision-toolkit/releases/tag/v0.1.1)
+[![Verified: 134 tests](https://img.shields.io/badge/verified-134%20tests-2EA44F?style=flat-square)](tests)
+[![License: MIT](https://img.shields.io/badge/license-MIT-0B7285?style=flat-square)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-%5E22.19%20%7C%20%3E%3D24-339933?style=flat-square&logo=nodedotjs&logoColor=white)](package.json)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)](runtime/requirements.lock)
 [![DSH profiles](https://img.shields.io/badge/DSH-Web%20%2B%20Headless-5B4CF0?style=flat-square)](cordis.patch.yml)
@@ -48,7 +48,7 @@ The checked-in UI-restoration workflow renders an intentionally inaccurate HTML 
 
 ## Quick start
 
-Prerequisites: DeepSeek Harness, Python 3.11+, and `pnpm` available to `dsh plugin`. Clone the release checkout, add it to the profiles you use, and confirm the bundle row:
+Prerequisites: access to this private repository, DeepSeek Harness, Python 3.11+, and `pnpm` available to `dsh plugin`. Clone the release checkout with your authenticated GitHub credentials, add it to the profiles you use, and confirm the bundle row:
 
 ```sh
 git clone https://github.com/dsh-external/dsh-vision-toolkit.git
@@ -313,7 +313,7 @@ pnpm run example:ui-restoration
 pnpm pack --dry-run
 ```
 
-`npm run verify:portable` is the dependency-free public CI gate: it validates the vendored snapshot, package metadata and exports, committed JavaScript syntax, README links and images, required facade files, social-preview dimensions, and the dry-run tarball. The full TypeScript build and 134-test suite intentionally run with this checkout at `dsh-vision-toolkit/` inside a DeepSeek Harness source tree, where the peer API types and real profile fixtures live.
+`npm run verify:portable` is the dependency-free portable verification gate: it validates the vendored snapshot, package metadata and exports, committed JavaScript syntax, README links and images, required facade files, social-preview dimensions, and the dry-run tarball. The full TypeScript build and 134-test suite intentionally run with this checkout at `dsh-vision-toolkit/` inside a DeepSeek Harness source tree, where the peer API types and real profile fixtures live.
 
 `pnpm run build` verifies the vendored manifest before emitting JavaScript, declarations, and the loader-compatible Web client. The package commits `lib/`, so installation from a checkout does not require a consumer-side build. The keyless real-profile test installs into a clean `DSH_HOME`, boots Headless, executes all five P0 tools plus representative P1 local/remote tools through real tool calls, verifies disable and re-enable behavior, and uninstalls the bundle. See the [requirements traceability reference](docs/requirements-traceability/README.md) for the implementation and verification home of every P0/P1 requirement.
 
@@ -321,7 +321,7 @@ Update the upstream snapshot only through `pnpm run upstream:sync -- <checkout>`
 
 ## Project status and scope
 
-Version `0.1.0` is the first public release. P0 and P1 are product commitments in this package. P2 is a design threshold: no stable `ctx.visionToolkit` service, capability-discovery API, or provider ecosystem is published until at least one independent plugin consumes the internal capability shape. Web upload, drag-and-drop, camera/video/audio/document ingestion, interactive box editing, automatic GUI clicking, service clusters, model routing, model voting, and cross-session vision caches remain outside the current product.
+Version `0.1.0` is the first private GitHub release. P0 and P1 are product commitments in this package. P2 is a design threshold: no stable `ctx.visionToolkit` service, capability-discovery API, or provider ecosystem is published until at least one independent plugin consumes the internal capability shape. Web upload, drag-and-drop, camera/video/audio/document ingestion, interactive box editing, automatic GUI clicking, service clusters, model routing, model voting, and cross-session vision caches remain outside the current product.
 
 ## Community and About
 
