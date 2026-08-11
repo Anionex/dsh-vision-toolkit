@@ -1,10 +1,14 @@
 {
   "name": "@dsh-external/dsh-vision-toolkit",
   "version": "0.1.1",
-  "description": "Native visual-engineering tools for text-only DeepSeek Harness agents: OCR, grounding, SVG tracing, pixel diff, Artifacts, and Web UI.",
+  "description": "DeepSeek Harness-native integration for agent-vision-toolkit: image Q&A, OCR, grounding, UI restoration, pixel diff, Artifacts, and Web UI.",
   "keywords": [
     "deepseek",
     "deepseek-harness",
+    "agent-vision-toolkit",
+    "agent-skills",
+    "text-only-llm",
+    "vision-language-model",
     "vision-tools",
     "computer-vision",
     "ocr",
@@ -19,7 +23,7 @@
   "bugs": {
     "url": "https://github.com/dsh-external/dsh-vision-toolkit/issues"
   },
-  "homepage": "https://github.com/dsh-external/dsh-vision-toolkit#readme",
+  "homepage": "https://agent-vision.anionex.me",
   "funding": "https://ifdian.net/a/anionex",
   "type": "module",
   "packageManager": "pnpm@11.7.0",

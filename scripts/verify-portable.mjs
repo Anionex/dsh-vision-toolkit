@@ -66,7 +66,7 @@ check(pkg.name === '@dsh-external/dsh-vision-toolkit', 'package name must stay @
 check(pkg.version === '0.1.1', 'package version and the latest release notes must stay aligned')
 check(pkg.repository?.url === 'git+https://github.com/dsh-external/dsh-vision-toolkit.git', 'repository URL is missing or mismatched')
 check(pkg.bugs?.url === 'https://github.com/dsh-external/dsh-vision-toolkit/issues', 'issue tracker URL is missing or mismatched')
-check(pkg.homepage === 'https://github.com/dsh-external/dsh-vision-toolkit#readme', 'homepage URL is missing or mismatched')
+check(pkg.homepage === 'https://agent-vision.anionex.me', 'homepage URL is missing or mismatched')
 check(pkg.funding === 'https://ifdian.net/a/anionex', 'funding metadata is missing or mismatched')
 check(pkg.engines?.node === '^22.19.0 || >=24.0.0', 'Node.js engine range must match DeepSeek Harness')
 check(pkg.dsh?.bundle?.patch === './cordis.patch.yml', 'dsh.bundle.patch must publish cordis.patch.yml')

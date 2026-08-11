@@ -9,15 +9,19 @@
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)](runtime/requirements.lock)
 [![DSH profiles](https://img.shields.io/badge/DSH-Web%20%2B%20Headless-5B4CF0?style=flat-square)](cordis.patch.yml)
 
-**DSH Vision Toolkit is a native visual-engineering Profile Bundle for text-only DeepSeek Harness agents that turns images and local HTML into structured evidence and previewable files.**
+**DSH Vision Toolkit brings [`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit) into DeepSeek Harness as a native Profile Bundle.**
 
-Ten independent tools provide OCR, original-pixel coordinates, SVG, pixel-diff evidence, and managed Artifacts—without patching DSH Core or making the model construct shell commands.
+Give text-only DSH agents eyes—and keep vision in the harness—with intent-aware image Q&A, OCR, original-pixel grounding, UI restoration, pixel verification, managed Artifacts, and Web Settings. Ten independent tools replace shell glue with structured schemas and Agent-scoped progressive exposure.
+
+**Upstream toolkit:** [Anionex/agent-vision-toolkit](https://github.com/Anionex/agent-vision-toolkit) · **Project website:** [agent-vision.anionex.me](https://agent-vision.anionex.me)
 
 English | [中文](README.zh.md)
 
 ## Why this exists
 
-Text-only agents can reason about code but cannot inspect the pixels that define a screenshot, icon, or visual regression. Passing image bytes through the model channel either fails for a text-only model or hides where the image was sent. Vision Toolkit keeps the flow explicit: the Agent loads one versioned Skill, receives only the visual schemas it needs, calls a pinned local or configured remote capability, and gets text, coordinates, JSON, and files that remain reconstructable from the Session log.
+`agent-vision-toolkit` treats vision as an Agent-callable capability rather than a property of the base model. Its method carries the reason for looking into the visual request, moves from the whole image to targeted regions, and verifies coordinates, colors, geometry, and differences with focused tools instead of accepting a generic description as evidence.
+
+DSH Vision Toolkit preserves that method while replacing CLI installation and Bash argument construction with native schemas, DSH Credentials, lifecycle-managed runtime preparation, structured Session-log results, previewable Artifacts, dedicated Web cards, and Settings. The Agent loads one versioned Skill and receives the ten visual schemas only when the current task needs them.
 
 The package delivers the committed P0 and P1 product scope. P2's stable `ctx.visionToolkit` service remains deliberately unpublished until an independent plugin becomes a real consumer; the internal runtime does not pretend that an unvalidated ecosystem API is stable.
 
@@ -330,8 +334,10 @@ Version `0.1.0` is the first private GitHub release. P0 and P1 are product commi
 - Report vulnerabilities privately through the process in [SECURITY.md](SECURITY.md), never in a public issue.
 - Follow releases and compatibility notes in [CHANGELOG.md](CHANGELOG.md).
 - Optional sponsorship is described transparently in [FUNDING.md](FUNDING.md); support does not purchase roadmap priority or private support.
+- Use the upstream [project website](https://agent-vision.anionex.me) and [repository](https://github.com/Anionex/agent-vision-toolkit) for the general toolkit, cross-harness integrations, visual-task playbooks, and reference runs.
+- Star, share, contribute to, or sponsor `agent-vision-toolkit` if its algorithms or methods save time; DSH-specific bugs and integration requests belong in this repository.
 
-DSH Vision Toolkit is maintained by [Anionex](https://github.com/Anionex) as the native DeepSeek Harness integration for the upstream [`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit). The DSH adapter owns lifecycle, security, structured results, Artifacts, and Web presentation; the upstream project remains the sole home of the visual algorithms.
+[`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit) was created by [Anionex](https://anionex.me/). This repository maintains its native DeepSeek Harness integration: DSH owns lifecycle, security, structured schemas, Credentials, Artifacts, and Web presentation, while the upstream project remains the home of the visual algorithms and reusable playbooks.
 
 ## License
 

@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>DSH Vision Toolkit</title>
-    <meta name="description" content="Native visual-engineering tools for text-only DeepSeek Harness agents: OCR, grounding, SVG tracing, pixel diff, Artifacts, and Web UI." />
-    <meta property="og:title" content="DSH Vision Toolkit" />
-    <meta property="og:description" content="Give text-only DeepSeek Harness agents structured visual evidence and previewable files." />
+    <title>DSH Vision Toolkit — agent-vision-toolkit for DeepSeek Harness</title>
+    <meta name="description" content="The DeepSeek Harness-native integration for agent-vision-toolkit: intent-aware image Q&amp;A, OCR, grounding, UI restoration, pixel verification, Artifacts, and Web UI." />
+    <meta property="og:title" content="DSH Vision Toolkit — agent-vision-toolkit for DeepSeek Harness" />
+    <meta property="og:description" content="Give text-only DSH agents eyes, with vision mounted in the harness instead of built into the base model." />
     <meta property="og:image" content="https://github.com/dsh-external/dsh-vision-toolkit/raw/main/assets/social-preview.png" />
     <meta name="theme-color" content="#5b4cf0" />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%235b4cf0'/%3E%3Cpath d='M13 46 25 34l11-16M25 34h20M45 34l7 12' fill='none' stroke='white' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E" />
@@ -455,9 +455,10 @@
           DSH Vision Toolkit
         </div>
         <div class="nav-links">
-          <a href="#proof">Proof</a>
+          <a href="#proof">DSH proof</a>
           <a href="#capabilities">Capabilities</a>
           <a href="#install">Install</a>
+          <a href="https://agent-vision.anionex.me">Upstream</a>
           <a href="https://github.com/dsh-external/dsh-vision-toolkit/blob/main/README.zh.md">中文</a>
           <a href="https://github.com/dsh-external/dsh-vision-toolkit">GitHub</a>
         </div>
@@ -465,12 +466,13 @@
 
       <div class="hero">
         <div>
-          <div class="eyebrow"><span class="dot"></span> Native DSH Profile Bundle</div>
-          <h1>Give text-only agents eyes.</h1>
-          <p class="lede">Turn screenshots and local HTML into structured OCR, pixel coordinates, SVG, visual-diff evidence, and previewable Artifacts—without patching DeepSeek Harness Core.</p>
+          <div class="eyebrow"><span class="dot"></span> DeepSeek Harness &times; agent-vision-toolkit</div>
+          <h1>Bring agent-vision-toolkit into DSH.</h1>
+          <p class="lede">Give text-only DeepSeek Harness agents eyes—and keep vision in the harness. The native bundle preserves the upstream intent-aware method while adding structured schemas, progressive exposure, Credentials, Artifacts, dedicated Web cards, and Settings.</p>
           <div class="actions">
             <a class="button primary" href="#install">Install the bundle</a>
-            <a class="button" href="https://github.com/dsh-external/dsh-vision-toolkit">Read the documentation</a>
+            <a class="button" href="https://github.com/Anionex/agent-vision-toolkit">Upstream GitHub</a>
+            <a class="button" href="https://agent-vision.anionex.me">Project website</a>
           </div>
         </div>
         <div class="hero-card">
@@ -482,7 +484,7 @@
     <main>
       <section id="proof">
         <div class="shell">
-          <div class="section-label">Reproducible proof</div>
+          <div class="section-label">DSH-native reproducible proof</div>
           <h2>From a rough rebuild to exact pixels.</h2>
           <p class="section-copy">The repository renders local HTML through the real runtime, compares it against a reference, ranks the changed regions, and records the final evidence. The checked-in example starts at a 6.04% pixel difference and ends at 0%.</p>
 
@@ -543,8 +545,8 @@ dsh --profile web --dump-config | grep vision-toolkit</code></pre>
     </main>
 
     <footer class="shell">
-      <span>DSH Vision Toolkit · MIT License · Maintained by Anionex</span>
-      <span><a href="https://github.com/dsh-external/dsh-vision-toolkit/blob/main/SECURITY.md">Security</a> · <a href="https://github.com/dsh-external/dsh-vision-toolkit/blob/main/CONTRIBUTING.md">Contributing</a> · <a href="https://github.com/dsh-external/dsh-vision-toolkit/releases">Releases</a></span>
+      <span>DeepSeek Harness integration for agent-vision-toolkit · MIT · Anionex</span>
+      <span><a href="https://agent-vision.anionex.me">Website</a> · <a href="https://github.com/Anionex/agent-vision-toolkit">Upstream</a> · <a href="https://github.com/dsh-external/dsh-vision-toolkit">DSH repository</a></span>
     </footer>
   </body>
 </html>

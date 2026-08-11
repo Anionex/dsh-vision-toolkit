@@ -9,15 +9,19 @@
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)](runtime/requirements.lock)
 [![DSH profiles](https://img.shields.io/badge/DSH-Web%20%2B%20Headless-5B4CF0?style=flat-square)](cordis.patch.yml)
 
-**DSH Vision Toolkit 是面向纯文本 DeepSeek Harness Agent 的原生视觉工程 Profile Bundle，可把图片和本地 HTML 转换为结构化证据与可预览文件。**
+**DSH Vision Toolkit 将 [`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit) 作为原生 Profile Bundle 带入 DeepSeek Harness。**
 
-10 个独立工具提供 OCR、原图像素坐标、SVG、像素差异证据和托管产物，无需修改 DSH Core，也无需让模型拼接 Shell 命令。
+让纯文本 DSH Agent 真正看见，并知道当前任务应该看哪里：通过带意图的图片问答、OCR、原图像素定位、UI 还原、像素验证、托管产物和 Web Settings 完成视觉闭环。10 个独立工具以结构化 schema 和 Agent 级渐进暴露取代 Shell 拼接。
+
+**上游工具箱：** [Anionex/agent-vision-toolkit](https://github.com/Anionex/agent-vision-toolkit) · **项目网站：** [agent-vision.anionex.me](https://agent-vision.anionex.me)
 
 [English](README.md) | 中文
 
 ## 为什么需要它
 
-纯文本 Agent 能理解代码，却无法直接检查截图、图标或视觉回归中的像素。把图片字节塞进模型附件通道，要么会被纯文本模型拒绝，要么会掩盖图片被发送到哪里。Vision Toolkit 保持数据流显式：Agent 加载一个带版本的 Skill，只获得当前任务需要的视觉 schema，再调用固定的本地能力或已配置的远程能力，最终得到可从 Session 日志重建的文字、坐标、JSON 和文件。
+`agent-vision-toolkit` 把视觉视为 Agent 可调用的能力，而不是基础模型自带的天赋。它会把“为什么要看这张图”带入视觉请求，从全局逐步收敛到目标区域，并用专用工具验证坐标、颜色、轮廓和差异，不把泛化描述直接当成证据。
+
+DSH Vision Toolkit 保留这套方法，并用原生 schema、DSH Credentials、受生命周期管理的运行时准备、可从 Session 日志重建的结构化结果、可预览产物、专用 Web 卡片和 Settings 取代 CLI 安装与 Bash 参数拼接。Agent 加载一个带版本的 Skill，只有当前任务需要视觉时才会获得 10 个工具 schema。
 
 本包完整交付已承诺的 P0 与 P1 产品范围。P2 的稳定 `ctx.visionToolkit` 服务会等到独立插件成为真实消费方后再发布；内部运行时不会把未经验证的生态接口伪装为稳定契约。
 
@@ -330,8 +334,10 @@ pnpm pack --dry-run
 - 安全漏洞必须按 [SECURITY.md](SECURITY.md) 私下报告，不要创建公开 Issue。
 - 版本与兼容性变化记录在 [CHANGELOG.md](CHANGELOG.md)。
 - 可选赞助方式与用途见 [FUNDING.md](FUNDING.md)；赞助不购买路线图优先级或私有支持。
+- 通用工具箱、跨 Harness 接入、视觉任务 playbook 和官方实跑案例请访问上游[项目网站](https://agent-vision.anionex.me)与[代码仓库](https://github.com/Anionex/agent-vision-toolkit)。
+- 如果 `agent-vision-toolkit` 的算法或方法节省了时间，欢迎为上游 star、分享、贡献或赞助；DSH 专属缺陷和集成需求请提交到本仓库。
 
-DSH Vision Toolkit 由 [Anionex](https://github.com/Anionex) 维护，是上游 [`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit) 面向 DeepSeek Harness 的原生集成。DSH 适配层负责生命周期、安全、结构化结果、产物和 Web 展示；视觉算法继续只由上游项目维护。
+[`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit) 由 [Anionex](https://anionex.me/) 创建。本仓库维护它面向 DeepSeek Harness 的原生集成：DSH 侧负责生命周期、安全、结构化 schema、Credentials、产物和 Web 展示；视觉算法与可复用 playbook 继续由上游项目维护。
 
 ## 许可证
 
