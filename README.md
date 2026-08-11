@@ -25,7 +25,40 @@ DSH Vision Toolkit preserves that method while replacing CLI installation and Ba
 
 The package delivers the committed P0 and P1 product scope. P2's stable `ctx.visionToolkit` service remains deliberately unpublished until an independent plugin becomes a real consumer; the internal runtime does not pretend that an unvalidated ecosystem API is stable.
 
-## Proof: reference-to-pixel verification
+## Proven use cases from agent-vision-toolkit
+
+The following panels are official upstream reference runs from the same pinned `agent-vision-toolkit` lineage packaged by this bundle. They demonstrate the workflows and methods DSH Vision Toolkit integrates; this repository does not claim that these particular runs were repeated through DSH. See the [asset provenance record](assets/upstream/README.md).
+
+### Infographic restoration: screenshot to editable HTML/CSS
+
+<p align="center">
+  <img src="assets/upstream/infographic-reference.webp" width="49%" alt="Upstream reference screenshot of a three-stage model-training infographic." />
+  <img src="assets/upstream/infographic-result.webp" width="49%" alt="Upstream editable HTML and CSS reconstruction of the model-training infographic." />
+</p>
+
+*Left: source screenshot. Right: the editable HTML/CSS result from the upstream [infographic-restoration reference](https://github.com/Anionex/agent-vision-toolkit/blob/c27d1a300962b553c0884993c575cd3e819465ce/examples/infographic-restoration/how-is-the-model-trained.html).*
+
+### UI restoration: sketch to working interface
+
+<p align="center">
+  <img src="assets/upstream/ui-sketch.webp" width="49%" alt="Upstream hand-drawn JupyterLab workspace used as a UI restoration reference." />
+  <img src="assets/upstream/ui-result.webp" width="49%" alt="Upstream JupyterLab-style working interface reconstructed from the hand-drawn reference." />
+</p>
+
+*Left: hand-drawn input. Right: the upstream reconstructed interface; the complete method lives in the [UI restoration playbook](https://github.com/Anionex/agent-vision-toolkit/blob/c27d1a300962b553c0884993c575cd3e819465ce/skills/vision-tools/references/restore-ui.md).*
+
+### Image Q&A and screenshot-guided debugging
+
+<p align="center">
+  <img src="assets/upstream/image-qa.webp" width="49%" alt="Upstream reference run in which a text-only coding agent answers a focused question about a UI background style." />
+  <img src="assets/upstream/screenshot-debugging.webp" width="49%" alt="Upstream reference run in which a text-only coding agent uses a screenshot to diagnose mismatched interface field names and continue editing code." />
+</p>
+
+*Left: intent-aware image Q&A. Right: a screenshot supplies the evidence needed to diagnose a UI field mismatch and continue the coding task. Both are official [`agent-vision-toolkit` reference runs](https://github.com/Anionex/agent-vision-toolkit/blob/c27d1a300962b553c0884993c575cd3e819465ce/README.md#real-world-effects).*
+
+DSH Vision Toolkit adds native tool schemas, versioned lifecycle, Credentials, structured Session results, Artifacts, Web presentation, Settings, and progressive exposure around these upstream capabilities. The next section is the reproducible proof executed and checked into this DSH repository.
+
+## DSH-native proof: reference-to-pixel verification
 
 The checked-in UI-restoration workflow renders an intentionally inaccurate HTML implementation, measures a `6.04%` pixel difference across six non-zero regions, iterates, and reaches an exact `0%` difference against the reference at `1200 × 720`.
 

@@ -25,7 +25,40 @@ DSH Vision Toolkit 保留这套方法，并用原生 schema、DSH Credentials、
 
 本包完整交付已承诺的 P0 与 P1 产品范围。P2 的稳定 `ctx.visionToolkit` 服务会等到独立插件成为真实消费方后再发布；内部运行时不会把未经验证的生态接口伪装为稳定契约。
 
-## 实证：从参考图到像素级一致
+## agent-vision-toolkit 已验证的真实用例
+
+以下图片均为本 Bundle 所打包 `agent-vision-toolkit` 固定版本同一代码线上的官方实跑结果，用于展示 DSH Vision Toolkit 所集成的工作流与方法。本仓库不声称这些特定案例已经通过 DSH 重新执行；详细来源见[素材溯源记录](assets/upstream/README.md)。
+
+### 信息图还原：从截图到可编辑 HTML/CSS
+
+<p align="center">
+  <img src="assets/upstream/infographic-reference.webp" width="49%" alt="上游用于还原的三阶段模型训练信息图原始截图。" />
+  <img src="assets/upstream/infographic-result.webp" width="49%" alt="上游使用 HTML 和 CSS 还原出的可编辑模型训练信息图。" />
+</p>
+
+*左：原始截图；右：上游[信息图还原示例](https://github.com/Anionex/agent-vision-toolkit/blob/c27d1a300962b553c0884993c575cd3e819465ce/examples/infographic-restoration/how-is-the-model-trained.html)生成的可编辑 HTML/CSS 结果。*
+
+### UI 还原：从手绘稿到可用界面
+
+<p align="center">
+  <img src="assets/upstream/ui-sketch.webp" width="49%" alt="上游用于 UI 还原的手绘 JupyterLab 工作区参考图。" />
+  <img src="assets/upstream/ui-result.webp" width="49%" alt="上游依据手绘参考图还原出的 JupyterLab 风格可用界面。" />
+</p>
+
+*左：手绘输入；右：上游还原出的界面，完整方法见 [UI 还原 playbook](https://github.com/Anionex/agent-vision-toolkit/blob/c27d1a300962b553c0884993c575cd3e819465ce/skills/vision-tools/references/restore-ui.md)。*
+
+### 图片问答与截图辅助排障
+
+<p align="center">
+  <img src="assets/upstream/image-qa.webp" width="49%" alt="上游实跑中，纯文本编程 Agent 针对 UI 背景风格回答聚焦问题。" />
+  <img src="assets/upstream/screenshot-debugging.webp" width="49%" alt="上游实跑中，纯文本编程 Agent 根据截图定位界面字段名不一致并继续修改代码。" />
+</p>
+
+*左：带意图的图片问答；右：截图提供定位 UI 字段不一致所需的证据，并让 Agent 继续完成编码任务。两张图均来自 [`agent-vision-toolkit` 官方实跑](https://github.com/Anionex/agent-vision-toolkit/blob/c27d1a300962b553c0884993c575cd3e819465ce/README.md#real-world-effects)。*
+
+DSH Vision Toolkit 在这些上游能力之外增加原生工具 schema、版本化生命周期、Credentials、结构化 Session 结果、产物、Web 展示、Settings 和渐进暴露。下一节展示由本 DSH 仓库实际执行并提交的可复现实证。
+
+## DSH 原生实证：从参考图到像素级一致
 
 仓库中的 UI 还原流程会渲染一个故意不准确的 HTML 实现，测得 `6.04%` 像素差异和 6 个非零差异区域；经过迭代后，在 `1200 × 720` 下达到相对参考图精确 `0%` 的差异。
 

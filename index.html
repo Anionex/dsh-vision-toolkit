@@ -234,6 +234,75 @@
         font-size: 18px;
       }
 
+      #upstream-use-cases {
+        border-top: 1px solid rgba(207, 211, 229, 0.78);
+        border-bottom: 1px solid rgba(207, 211, 229, 0.78);
+        background: rgba(255, 255, 255, 0.46);
+      }
+
+      .use-cases {
+        display: grid;
+        gap: 20px;
+      }
+
+      .use-case {
+        display: grid;
+        grid-template-columns: 0.62fr 1.38fr;
+        align-items: center;
+        gap: 28px;
+        padding: 26px;
+        border: 1px solid rgba(207, 211, 229, 0.9);
+        border-radius: 22px;
+        background: rgba(255, 255, 255, 0.92);
+        box-shadow: 0 18px 42px rgba(31, 36, 68, 0.07);
+      }
+
+      .case-kicker {
+        display: block;
+        margin-bottom: 10px;
+        color: var(--violet-dark);
+        font-size: 11px;
+        font-weight: 850;
+        letter-spacing: 0.11em;
+        text-transform: uppercase;
+      }
+
+      .use-case h3 {
+        margin: 0 0 10px;
+        font-size: 25px;
+        line-height: 1.15;
+        letter-spacing: -0.035em;
+      }
+
+      .use-case p {
+        margin-bottom: 14px;
+        color: var(--muted);
+        font-size: 15px;
+      }
+
+      .use-case a {
+        color: var(--violet-dark);
+        font-size: 14px;
+        font-weight: 800;
+        text-decoration: none;
+      }
+
+      .use-case-images {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+
+      .use-case-images img {
+        display: block;
+        width: 100%;
+        aspect-ratio: 16 / 10;
+        object-fit: contain;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: #f7f8fc;
+      }
+
       .metrics {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
@@ -388,7 +457,8 @@
 
       @media (max-width: 900px) {
         .hero,
-        .install-card {
+        .install-card,
+        .use-case {
           grid-template-columns: 1fr;
         }
 
@@ -435,7 +505,8 @@
 
         .metrics,
         .proof-grid,
-        .features {
+        .features,
+        .use-case-images {
           grid-template-columns: 1fr;
         }
 
@@ -455,6 +526,7 @@
           DSH Vision Toolkit
         </div>
         <div class="nav-links">
+          <a href="#upstream-use-cases">Use cases</a>
           <a href="#proof">DSH proof</a>
           <a href="#capabilities">Capabilities</a>
           <a href="#install">Install</a>
@@ -482,6 +554,55 @@
     </header>
 
     <main>
+      <section id="upstream-use-cases">
+        <div class="shell">
+          <div class="section-label">Official upstream reference runs</div>
+          <h2>Proven methods from agent-vision-toolkit.</h2>
+          <p class="section-copy">These official upstream results show the visual workflows this bundle integrates. They are attributed reference runs, not DSH reruns; DSH adds native schemas, lifecycle, Credentials, Artifacts, Web presentation, Settings, and Agent-scoped progressive exposure.</p>
+
+          <div class="use-cases">
+            <article class="use-case">
+              <div>
+                <span class="case-kicker">01 · Infographic restoration</span>
+                <h3>Screenshot to editable HTML/CSS</h3>
+                <p>Recover layout, typography, icons, and hierarchy as maintainable browser code instead of flattening the result into another image.</p>
+                <a href="https://github.com/Anionex/agent-vision-toolkit/blob/c27d1a300962b553c0884993c575cd3e819465ce/examples/infographic-restoration/how-is-the-model-trained.html">Open upstream source →</a>
+              </div>
+              <div class="use-case-images">
+                <img src="assets/upstream/infographic-reference.webp" alt="Official upstream reference screenshot of a model-training infographic." />
+                <img src="assets/upstream/infographic-result.webp" alt="Official upstream editable HTML and CSS reconstruction of the infographic." />
+              </div>
+            </article>
+
+            <article class="use-case">
+              <div>
+                <span class="case-kicker">02 · UI restoration</span>
+                <h3>Sketch to working interface</h3>
+                <p>Read the visual hierarchy, reuse real components and assets, render the implementation, and iterate from observed differences.</p>
+                <a href="https://github.com/Anionex/agent-vision-toolkit/blob/c27d1a300962b553c0884993c575cd3e819465ce/skills/vision-tools/references/restore-ui.md">Read the upstream playbook →</a>
+              </div>
+              <div class="use-case-images">
+                <img src="assets/upstream/ui-sketch.webp" alt="Official upstream hand-drawn JupyterLab workspace used as a UI restoration reference." />
+                <img src="assets/upstream/ui-result.webp" alt="Official upstream working JupyterLab-style interface reconstructed from the sketch." />
+              </div>
+            </article>
+
+            <article class="use-case">
+              <div>
+                <span class="case-kicker">03 · Intent-aware inspection</span>
+                <h3>Image Q&amp;A to code diagnosis</h3>
+                <p>Carry the current task into the visual request, answer the detail that matters, then use the screenshot as evidence for the next coding action.</p>
+                <a href="https://github.com/Anionex/agent-vision-toolkit/blob/c27d1a300962b553c0884993c575cd3e819465ce/README.md#real-world-effects">View upstream reference runs →</a>
+              </div>
+              <div class="use-case-images">
+                <img src="assets/upstream/image-qa.webp" alt="Official upstream run answering a focused question about a UI background style." />
+                <img src="assets/upstream/screenshot-debugging.webp" alt="Official upstream run using a screenshot to diagnose mismatched UI field names and continue editing code." />
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
       <section id="proof">
         <div class="shell">
           <div class="section-label">DSH-native reproducible proof</div>
