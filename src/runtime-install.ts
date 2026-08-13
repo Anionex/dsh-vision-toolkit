@@ -509,9 +509,10 @@ async function prepareManaged(
       try {
         const uv = await runCollected(ctx, ['uv', '--version'], stateRoot, { env: installEnv })
         if (uv.exitCode === 0 && !uv.timedOut) {
+          const interpreter = await ctx.subprocess.resolveExecutable(bootstrap.command.program, installEnv)
           const create = await runCollected(
             ctx,
-            ['uv', 'venv', '--python', bootstrap.command.program, staging],
+            ['uv', 'venv', '--python', interpreter, staging],
             stateRoot,
             { timeoutMs: PREPARE_TIMEOUT_MS, env: installEnv },
           )
