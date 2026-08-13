@@ -10,7 +10,7 @@ import type { Context } from 'cordis'
 import type { CredentialInfo } from '@deepseek-ai/dsh-credentials'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import { SettingsConflictError, type SettingsDescriptor } from '@deepseek-ai/dsh-settings'
-// Type-only import activates the optional httpServer Context declaration.
+// Type-only import activates the optional webServer Context declaration.
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import { ArtifactAccessController, ARTIFACT_ROUTE_PREFIX } from './artifact-access.ts'
 import {
@@ -302,7 +302,7 @@ export class VisionToolkitWebBackend {
 }
 
 /**
- * Attach optional Web routes whenever an httpServer service is present.
+ * Attach optional Web routes whenever an webServer service is present.
  * @param ctx - plugin context owning route effects.
  * @param backend - Settings handler.
  * @param artifacts - signed Artifact handler.
@@ -312,15 +312,15 @@ export function installVisionToolkitWeb(
   backend: VisionToolkitWebBackend,
   artifacts: ArtifactAccessController,
 ): void {
-  ctx.inject(['httpServer'], (webCtx) => {
+  ctx.inject(['webServer'], (webCtx) => {
     webCtx.effect(() => {
       const detach = artifacts.attachRoute()
-      const disposeArtifact = webCtx.httpServer.register({
+      const disposeArtifact = webCtx.webServer.register({
         kind: 'prefix',
         path: ARTIFACT_ROUTE_PREFIX,
         handler: (req, res) => artifacts.handle(req, res),
       })
-      const disposeSettings = webCtx.httpServer.register({
+      const disposeSettings = webCtx.webServer.register({
         kind: 'exact',
         path: SETTINGS_ROUTE,
         handler: (req, res) => backend.handle(req, res),

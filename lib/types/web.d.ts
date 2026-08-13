@@ -64,7 +64,7 @@ export declare class VisionToolkitWebBackend {
     handle(req: IncomingMessage, res: ServerResponse): Promise<void>;
 }
 /**
- * Attach optional Web routes whenever an httpServer service is present.
+ * Attach optional Web routes whenever an webServer service is present.
  * @param ctx - plugin context owning route effects.
  * @param backend - Settings handler.
  * @param artifacts - signed Artifact handler.
