@@ -19,6 +19,21 @@ import {
 } from './runtime-install.ts'
 import { UPSTREAM_COMMIT, UPSTREAM_REPOSITORY, UPSTREAM_VERSION } from './version.ts'
 
+function pythonEnvironment(cleanHome: string): NodeJS.ProcessEnv {
+  return {
+    HOME: cleanHome,
+    USERPROFILE: cleanHome,
+    LOCALAPPDATA: cleanHome,
+    PYTHONHOME: undefined,
+    PYTHONPATH: undefined,
+    VIRTUAL_ENV: undefined,
+    PYTHONDONTWRITEBYTECODE: '1',
+    PYTHONIOENCODING: 'utf-8',
+    PYTHONNOUSERSITE: '1',
+    PYTHONUTF8: '1',
+  }
+}
+
 /** One pinned upstream CLI/script exposed by the runtime. */
 export type UpstreamTool =
   | 'glance'
@@ -604,14 +619,7 @@ export class UpstreamAdapter {
     const prepared = this.requirePrepared()
     const script = join(prepared.root, ...TOOL_PATHS[tool])
     const env: NodeJS.ProcessEnv = {
-      HOME: prepared.cleanHome,
-      USERPROFILE: prepared.cleanHome,
-      LOCALAPPDATA: prepared.cleanHome,
-      PYTHONHOME: undefined,
-      PYTHONPATH: undefined,
-      VIRTUAL_ENV: undefined,
-      PYTHONDONTWRITEBYTECODE: '1',
-      PYTHONNOUSERSITE: '1',
+      ...pythonEnvironment(prepared.cleanHome),
       ...(options.env === undefined
         ? {}
         : {
@@ -677,16 +685,7 @@ export class UpstreamAdapter {
         },
         graceMs: 2000,
         signal: options.signal,
-        env: {
-          HOME: prepared.cleanHome,
-          USERPROFILE: prepared.cleanHome,
-          LOCALAPPDATA: prepared.cleanHome,
-          PYTHONHOME: undefined,
-          PYTHONPATH: undefined,
-          VIRTUAL_ENV: undefined,
-          PYTHONDONTWRITEBYTECODE: '1',
-          PYTHONNOUSERSITE: '1',
-        },
+        env: pythonEnvironment(prepared.cleanHome),
       })
     } catch (error) {
       throw new VisionToolkitError('runtime', `cannot start ${displayCommand(prepared.python)} to inspect the image`, { cause: error })
@@ -732,16 +731,7 @@ export class UpstreamAdapter {
         },
         graceMs: 2000,
         signal: options.signal,
-        env: {
-          HOME: prepared.cleanHome,
-          USERPROFILE: prepared.cleanHome,
-          LOCALAPPDATA: prepared.cleanHome,
-          PYTHONHOME: undefined,
-          PYTHONPATH: undefined,
-          VIRTUAL_ENV: undefined,
-          PYTHONDONTWRITEBYTECODE: '1',
-          PYTHONNOUSERSITE: '1',
-        },
+        env: pythonEnvironment(prepared.cleanHome),
       })
     } catch (error) {
       throw new VisionToolkitError('runtime', `cannot start ${displayCommand(prepared.python)} helper`, { cause: error })
