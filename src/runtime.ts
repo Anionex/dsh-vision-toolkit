@@ -1151,7 +1151,8 @@ export class VisionToolkitRuntime {
           throw new VisionToolkitError('output', 'trace: reported path count does not match the generated SVG')
         }
         const svgInfo = await stat(staged)
-        if (svgInfo.size !== parsed.bytes) {
+        const windowsNewlineBytes = (svg.match(/\r\n/g) ?? []).length
+        if (svgInfo.size !== parsed.bytes && svgInfo.size - windowsNewlineBytes !== parsed.bytes) {
           throw new VisionToolkitError('output', 'trace: reported byte count does not match the generated SVG')
         }
         await commitStagedOutput(staged, finalPath, policy)

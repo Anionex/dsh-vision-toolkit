@@ -270,6 +270,18 @@ describe('VisionToolkitRuntime', () => {
     await expect(readFile(result.outputPath, 'utf8')).resolves.toBe(svg)
   })
 
+  it('accepts the trace character count when Windows expands SVG newlines to CRLF', async () => {
+    const { adapter, runtime } = await setup({}, null)
+    const workspace = await tempWorkspace()
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg">\r\n<path/>\r\n</svg>\r\n'
+    mockTraceDocument(adapter, svg, 1, Buffer.byteLength(svg) - 3)
+
+    const result = await runtime.trace({ image: 'sample.png' }, { signal, workspace })
+
+    expect(result.geometry).toMatchObject({ status: 'generated', pathCount: 1, bytes: Buffer.byteLength(svg) - 3 })
+    await expect(readFile(result.outputPath, 'utf8')).resolves.toBe(svg)
+  })
+
   it.each([
     ['a doctype', '<!DOCTYPE svg><svg xmlns="http://www.w3.org/2000/svg"><path/></svg>\n'],
     ['malformed nesting', '<svg xmlns="http://www.w3.org/2000/svg"><path></svg>\n'],
@@ -627,6 +639,21 @@ describe('upstream adapter version facts', () => {
       dependencies: { pillow: 'fixture' },
     })
     expect(await adapter.readCheckoutVersion()).toBe(UPSTREAM_VERSION)
+  })
+
+  it('forces UTF-8 for direct tools, image probes, and Python helpers', async () => {
+    const { ctx, adapter } = await setup({}, null)
+    const workspace = await tempWorkspace()
+    const spawn = vi.spyOn(ctx.subprocess, 'spawn')
+
+    await adapter.run('crop', [SAMPLE_IMAGE, '--region', '0,0,2,2', '-o', join(workspace, 'crop.png')], { signal })
+    await adapter.probeImageSize(SAMPLE_IMAGE, { signal })
+    await adapter.renderAnnotatedPreview(SAMPLE_IMAGE, join(workspace, 'preview.png'), [], { signal })
+
+    expect(spawn).toHaveBeenCalledTimes(3)
+    for (const [spec] of spawn.mock.calls) {
+      expect(spec.env).toMatchObject({ PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' })
+    }
   })
 
   it('fails prepare with a clear runtime error when the external path is missing', async () => {
