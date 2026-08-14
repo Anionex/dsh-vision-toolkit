@@ -10,6 +10,8 @@
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)](runtime/requirements.lock)
 [![DSH profiles](https://img.shields.io/badge/DSH-Web%20%2B%20Headless-5B4CF0?style=flat-square)](cordis.patch.yml)
 
+**Install:** `dsh plugin --profile web add @dsh-external/dsh-vision-toolkit`
+
 **DSH Vision Toolkit brings [`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit) into DeepSeek Harness as a native Profile Bundle.**
 
 Give text-only DSH agents eyes—and keep vision in the harness—with intent-aware image Q&A, OCR, original-pixel grounding, UI restoration, pixel verification, managed Artifacts, and Web Settings. Ten independent tools replace shell glue with structured schemas and Agent-scoped progressive exposure.
@@ -86,13 +88,11 @@ The checked-in UI-restoration workflow renders an intentionally inaccurate HTML 
 
 ## Quick start
 
-Prerequisites: access to this private repository, DeepSeek Harness, Python 3.11+, and `pnpm` available to `dsh plugin`. Clone the release checkout with your authenticated GitHub credentials, add it to the profiles you use, and confirm the bundle row:
+Prerequisites: DeepSeek Harness, Python 3.11+, and `pnpm` available to `dsh plugin`. Install the published bundle from npm, add it to the profiles you use, and confirm the bundle row:
 
 ```sh
-git clone https://github.com/dsh-external/dsh-vision-toolkit.git
-PLUGIN="$PWD/dsh-vision-toolkit"
-dsh plugin --profile web add "$PLUGIN"
-dsh plugin --profile headless add "$PLUGIN"
+dsh plugin --profile web add @dsh-external/dsh-vision-toolkit
+dsh plugin --profile headless add @dsh-external/dsh-vision-toolkit
 dsh --profile web --dump-config | grep vision-toolkit
 dsh --profile headless --dump-config | grep vision-toolkit
 ```
@@ -159,8 +159,8 @@ Health checks, connection testing, and plugin/upstream version inspection are ad
 Install the bundle into each profile that should expose it:
 
 ```sh
-dsh plugin --profile web add /path/to/dsh-vision-toolkit
-dsh plugin --profile headless add /path/to/dsh-vision-toolkit
+dsh plugin --profile web add @dsh-external/dsh-vision-toolkit
+dsh plugin --profile headless add @dsh-external/dsh-vision-toolkit
 dsh --profile web --dump-config | grep vision-toolkit
 dsh --profile headless --dump-config | grep vision-toolkit
 ```

@@ -10,6 +10,8 @@
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)](runtime/requirements.lock)
 [![DSH profiles](https://img.shields.io/badge/DSH-Web%20%2B%20Headless-5B4CF0?style=flat-square)](cordis.patch.yml)
 
+**安装：** `dsh plugin --profile web add @dsh-external/dsh-vision-toolkit`
+
 **DSH Vision Toolkit 将 [`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit) 作为原生 Profile Bundle 带入 DeepSeek Harness。**
 
 让纯文本 DSH Agent 真正看见，并知道当前任务应该看哪里：通过带意图的图片问答、OCR、原图像素定位、UI 还原、像素验证、托管产物和 Web Settings 完成视觉闭环。10 个独立工具以结构化 schema 和 Agent 级渐进暴露取代 Shell 拼接。
@@ -86,13 +88,11 @@ DSH Vision Toolkit 在这些上游能力之外增加原生工具 schema、版本
 
 ## 快速开始
 
-前置条件：拥有此私有仓库的访问权限、DeepSeek Harness、Python 3.11+，并确保 `dsh plugin` 可以使用 `pnpm`。使用已认证的 GitHub 凭据克隆发布仓库，将其加入所需 Profile，并确认 Bundle 行已经挂载：
+前置条件：DeepSeek Harness、Python 3.11+，并确保 `dsh plugin` 可以使用 `pnpm`。从 npm 安装已发布的 Bundle，将其加入所需 Profile，并确认 Bundle 行已经挂载：
 
 ```sh
-git clone https://github.com/dsh-external/dsh-vision-toolkit.git
-PLUGIN="$PWD/dsh-vision-toolkit"
-dsh plugin --profile web add "$PLUGIN"
-dsh plugin --profile headless add "$PLUGIN"
+dsh plugin --profile web add @dsh-external/dsh-vision-toolkit
+dsh plugin --profile headless add @dsh-external/dsh-vision-toolkit
 dsh --profile web --dump-config | grep vision-toolkit
 dsh --profile headless --dump-config | grep vision-toolkit
 ```
@@ -159,8 +159,8 @@ flowchart LR
 将 Bundle 安装到需要暴露能力的每个 Profile：
 
 ```sh
-dsh plugin --profile web add /path/to/dsh-vision-toolkit
-dsh plugin --profile headless add /path/to/dsh-vision-toolkit
+dsh plugin --profile web add @dsh-external/dsh-vision-toolkit
+dsh plugin --profile headless add @dsh-external/dsh-vision-toolkit
 dsh --profile web --dump-config | grep vision-toolkit
 dsh --profile headless --dump-config | grep vision-toolkit
 ```
