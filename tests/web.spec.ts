@@ -1,4 +1,4 @@
-import { createServer, type Server } from 'node:http'
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Credentials } from '@deepseek-ai/dsh-credentials'
@@ -7,7 +7,9 @@ import { ArtifactAccessController } from '../src/artifact-access.ts'
 import { Config, VISION_TOOLKIT_SETTINGS_NAMESPACE, resolveConfig } from '../src/config.ts'
 import type { VisionToolkitRuntime, VisionToolkitHealthResult } from '../src/runtime.ts'
 import type { PreparedRuntimeGeneration, RuntimeManagerStatus } from '../src/runtime-manager.ts'
-import { VisionToolkitWebBackend, type WebRuntimeManager } from '../src/web.ts'
+import { installVisionToolkitWeb, SETTINGS_ROUTE, VisionToolkitWebBackend, type WebRuntimeManager } from '../src/web.ts'
+import { ARTIFACT_ROUTE_PREFIX } from '../src/artifact-access.ts'
+import { PASTE_IMAGES_ROUTE, type PastedImageBackend } from '../src/paste-images.ts'
 
 const contexts: Context[] = []
 const servers: Server[] = []
@@ -173,4 +175,45 @@ describe('VisionToolkitWebBackend', () => {
     })
     expect(plain.status).toBe(400)
   })
+})
+
+describe('installVisionToolkitWeb', () => {
+  for (const serviceName of ['httpServer', 'webServer'] as const) {
+    it(`registers and disposes routes through ${serviceName}`, async () => {
+      const ctx = new Context()
+      contexts.push(ctx)
+      const routes: Array<{
+        kind: 'exact' | 'prefix'
+        path: string
+        handler: (req: IncomingMessage, res: ServerResponse) => void | Promise<void>
+      }> = []
+      const disposed: string[] = []
+      ctx.provide(serviceName as never, {
+        register(route: (typeof routes)[number]) {
+          routes.push(route)
+          return () => { disposed.push(route.path) }
+        },
+      } as never)
+      const artifacts = new ArtifactAccessController(Buffer.alloc(32, 9))
+      installVisionToolkitWeb(
+        ctx,
+        { handle: vi.fn() } as unknown as VisionToolkitWebBackend,
+        artifacts,
+        { handle: vi.fn() } as unknown as PastedImageBackend,
+      )
+      await Promise.resolve()
+
+      expect(routes.map(route => [route.kind, route.path])).toEqual([
+        ['prefix', ARTIFACT_ROUTE_PREFIX],
+        ['exact', SETTINGS_ROUTE],
+        ['exact', PASTE_IMAGES_ROUTE],
+      ])
+      expect(artifacts.routeAvailable).toBe(true)
+
+      await ctx.fiber.dispose()
+      contexts.splice(contexts.indexOf(ctx), 1)
+      expect(disposed).toEqual([PASTE_IMAGES_ROUTE, SETTINGS_ROUTE, ARTIFACT_ROUTE_PREFIX])
+      expect(artifacts.routeAvailable).toBe(false)
+    })
+  }
 })

@@ -1,6 +1,7 @@
 import { readFile, stat } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { satisfies } from 'semver'
 import { describe, expect, it } from 'vitest'
 
 const ROOT = dirname(fileURLToPath(new URL('../package.json', import.meta.url)))
@@ -54,7 +55,7 @@ describe('package layout contract', () => {
       '@deepseek-ai/dsh-client-locale',
     ]))
     expect(PACKAGE.dsh?.client?.inject).not.toContain('@deepseek-ai/dsh-client-ui-slash')
-    expect(PACKAGE.peerDependenciesMeta?.['@deepseek-ai/dsh-client-ui-slash']).toEqual({ optional: true })
+    expect(PACKAGE.peerDependencies).not.toHaveProperty('@deepseek-ai/dsh-client-ui-slash')
   })
 
   it('ships runtime, pinned upstream, lib, src, patch, and docs in files', () => {
@@ -65,6 +66,7 @@ describe('package layout contract', () => {
 
   it('has reproducible build and prepack scripts', () => {
     expect(PACKAGE.scripts.build).toContain('node scripts/upstream-manifest.mjs')
+    expect(PACKAGE.scripts.build).toContain('node scripts/clean-build.mjs')
     expect(PACKAGE.scripts.build).toContain('tsc -p tsconfig.json')
     expect(PACKAGE.scripts.build).toContain('tsc -p tsconfig.client.json')
     expect(PACKAGE.scripts.build).toContain('node scripts/build-client.mjs')
@@ -87,6 +89,17 @@ describe('package layout contract', () => {
         expect(spec, `${name}`).not.toMatch(/^\/|^[A-Za-z]:\\|^file:|^link:|^workspace:/)
       }
     }
+  })
+
+  it('accepts the supported DSH prerelease family', () => {
+    for (const name of Object.keys(PACKAGE.peerDependencies ?? {}).filter(name => name.startsWith('@deepseek-ai/dsh-'))) {
+      const range = PACKAGE.peerDependencies?.[name]
+      expect(range, name).toBeDefined()
+      for (const version of ['0.0.1-rc.2', '0.0.1-rc.5', '0.0.1-rc.6']) {
+        expect(satisfies(version, range!), `${name}@${version} in ${range}`).toBe(true)
+      }
+    }
+    expect(satisfies('4.0.1-rc.1', PACKAGE.peerDependencies?.['@deepseek-ai/cordis'] ?? '')).toBe(true)
   })
 
   it('emits no raw .ts relative imports in built JavaScript', async () => {

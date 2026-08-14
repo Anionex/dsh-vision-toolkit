@@ -3,8 +3,23 @@
 import { useSyncExternalStore, type ReactNode } from 'react'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { SlashServiceContract, SlashSource } from '@deepseek-ai/dsh-client-ui-slash/client'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+
+interface SlashSource {
+  trigger: string
+  name: string
+  order: number
+  candidates: () => Promise<readonly unknown[]>
+  onPick: () => undefined
+  codec: {
+    clipboardText: (ref: string) => string
+    serialize: (ref: string, signal: AbortSignal) => Promise<string>
+  }
+}
+
+interface SlashServiceContract {
+  registerSource: (source: SlashSource) => () => void
+}
 
 declare module '@deepseek-ai/cordis' {
   interface Context {

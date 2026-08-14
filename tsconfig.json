@@ -27,17 +27,17 @@
     "noEmitOnError": true,
     "tsBuildInfoFile": "lib/.tsbuildinfo",
     "paths": {
-      "@deepseek-ai/cordis": ["../vendor/cordis/lib/types/index.d.ts"],
-      "@deepseek-ai/schemastery": ["../vendor/schemastery/lib/types/index.d.ts"],
-      "@deepseek-ai/dsh-agent": ["../packages/core/agent/lib/types/index.d.ts"],
-      "@deepseek-ai/dsh-tools": ["../packages/core/tools/lib/types/index.d.ts"],
-      "@deepseek-ai/dsh-credentials": ["../packages/credentials/credentials/lib/types/index.d.ts"],
-      "@deepseek-ai/dsh-skill": ["../packages/skill/skill/lib/types/index.d.ts"],
-      "@deepseek-ai/dsh-subprocess": ["../packages/subprocess/subprocess/lib/types/index.d.ts"],
-      "@deepseek-ai/dsh-settings": ["../packages/settings/settings/lib/types/index.d.ts"],
-      "@deepseek-ai/dsh-host-webserver": ["../packages/host/webserver/lib/types/index.d.ts"],
-      "@deepseek-ai/dsh-llm": ["../packages/llm/llm/lib/types/index.d.ts"],
-      "@deepseek-ai/dsh-session": ["../packages/core/session/lib/types/index.d.ts"]
+      "@deepseek-ai/cordis": ["../vendor/cordis/lib/types/index.d.ts", "./node_modules/@deepseek-ai/cordis/lib/types/index.d.ts"],
+      "@deepseek-ai/schemastery": ["../vendor/schemastery/lib/types/index.d.ts", "./node_modules/@deepseek-ai/schemastery/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-agent": ["../packages/core/agent/lib/types/index.d.ts", "./node_modules/@deepseek-ai/dsh-agent/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-tools": ["../packages/core/tools/lib/types/index.d.ts", "./node_modules/@deepseek-ai/dsh-tools/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-credentials": ["../packages/credentials/credentials/lib/types/index.d.ts", "./node_modules/@deepseek-ai/dsh-credentials/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-skill": ["../packages/skill/skill/lib/types/index.d.ts", "./node_modules/@deepseek-ai/dsh-skill/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-subprocess": ["../packages/subprocess/subprocess/lib/types/index.d.ts", "./node_modules/@deepseek-ai/dsh-subprocess/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-settings": ["../packages/settings/settings/lib/types/index.d.ts", "./node_modules/@deepseek-ai/dsh-settings/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-host-webserver": ["../packages/host/webserver/lib/types/index.d.ts", "./node_modules/@deepseek-ai/dsh-host-webserver/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-llm": ["../packages/llm/llm/lib/types/index.d.ts", "./node_modules/@deepseek-ai/dsh-llm/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-session": ["../packages/core/session/lib/types/index.d.ts", "./node_modules/@deepseek-ai/dsh-session/lib/types/index.d.ts"]
     }
   },
   "include": ["src"],

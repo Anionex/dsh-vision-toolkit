@@ -118,7 +118,7 @@ flowchart LR
     Artifacts --> Web["Preview, download, or open file"]
 ```
 
-所有工具定义都调用同一个 Runtime；Runtime 在分发到固定上游快照或已配置的 OpenAI 兼容视觉端点前，统一验证路径、限制、Credential、取消和超时。Web 展示读取相同的结构化结果与产物描述，因此不会改变 Headless 语义。健康、连接测试和版本检查只留在 Settings，不进入模型工具 schema。
+所有工具定义都调用同一个 Runtime；Runtime 在分发到固定上游快照或已配置的视觉提供方端点前，统一验证路径、限制、Credential、取消和超时。Web 展示读取相同的结构化结果与产物描述，因此不会改变 Headless 语义。健康、连接测试和版本检查只留在 Settings，不进入模型工具 schema。
 
 ## 工具
 
@@ -148,7 +148,7 @@ flowchart LR
 - 启用 Web 或 Headless Profile 的 DeepSeek Harness，并确保 `dsh plugin` 可以使用 `pnpm`。
 - Python 3.11 或更高版本。Managed 模式会创建隔离环境，用户无需手工安装上游 CLI（命令行界面）或 Python 包。
 - 首次启用 managed 运行时需要联网；如果配置的软件包缓存已有 `runtime/requirements.lock` 中的精确版本，则无需联网。
-- `vision_glance`、`vision_ground`、`vision_detect` 和非仅切分长截图 OCR 需要 OpenAI 兼容视觉端点及 DSH Credential。本地工具无需该 Credential 也可使用。
+- `vision_glance`、`vision_ground`、`vision_detect` 和非仅切分长截图 OCR 需要 OpenAI 兼容或 Anthropic 视觉端点及 DSH Credential。本地工具无需该 Credential 也可使用。
 - 只有 `vision_html_screenshot` 需要 Chrome、Chromium 或 Edge；未安装受支持浏览器时，其他工具保持可用。
 - 输入必须是会话工作区或显式 `allowedDirs` 根目录内的 PNG、JPEG、GIF 或 WebP。
 
@@ -232,7 +232,7 @@ Bundle 默认使用 managed 运行时。Profile patch 可以覆盖提供方与�
 | `provider.credential` | `VISION_API_KEY` | DSH Credential 引用，不是密钥值 |
 | `provider.model` | `gemini-3.6-flash` | 远程工具使用的多模态模型名 |
 | `provider.protocol` | `openai` | `openai` 发送 Chat Completions 请求；`anthropic` 发送原生 Messages 请求 |
-| `provider.anthropicThinking` | `omit` | Anthropic thinking 字段：`omit` 保留模型默认值，`disabled` 请求关闭 thinking，`adaptive` 请求由提供方管理 thinking |
+| `provider.anthropicThinking` | `omit` | Anthropic thinking 字段。`omit` 不发送 thinking 字段，兼容性最好；仅当所选模型明确支持时使用 `disabled` 或 `adaptive`，提供方返回 HTTP 400 时应先恢复 `omit`。 |
 | `provider.userAgent` | 浏览器兼容默认值 | 视觉请求和显式连接测试发送的 User-Agent；可为提供方或代理兼容性覆盖 |
 | `language` | `zh` | 视觉输出语言：`zh` 或 `en` |
 | `timeoutMs` | `60000` | 完整操作截止时间，1000-600000 毫秒；每个工具可请求更窄的覆盖值 |
@@ -269,7 +269,7 @@ External 模式用于开发或受控部署：
       python: python3.12
 ```
 
-该路径必须是与打包 manifest 一致的导出副本，或 commit `4b3dbfe9fdd13061989c449bfe3ef3477835cb4d` 的干净 Git checkout 根目录。插件拒绝已修改的 tracked 文件和 untracked 文件，因为它们可能改变或遮蔽固定 Python 行为。
+该路径必须是与打包 manifest 一致的导出副本，或 commit `bc9803d7d6300c864d17460ecbb33540b26638e0` 的干净 Git checkout 根目录。插件拒绝已修改的 tracked 文件和 untracked 文件，因为它们可能改变或遮蔽固定 Python 行为。
 
 ## Web Settings
 
@@ -357,7 +357,7 @@ pnpm run example:ui-restoration
 pnpm pack --dry-run
 ```
 
-`npm run verify:portable` 是不依赖外部开发包的可移植验证门禁：验证上游快照、package 元数据与 exports、已提交 JavaScript 语法、README 链接和图片、必需的开源门面文件、social preview 尺寸以及 dry-run tarball。完整 TypeScript 构建和 136 项测试会在 DeepSeek Harness 源码树中运行，本 checkout 需位于其中的 `dsh-vision-toolkit/`，以使用对应的 peer API 类型和真实 Profile fixture。
+`npm run verify:portable` 验证不依赖外部开发包的 package 表面：上游快照、package 元数据与 exports、已提交 JavaScript 语法、README 链接和图片、必需的开源门面文件、social preview 尺寸以及 dry-run tarball。CI 会另行安装已发布的 DSH rc.2 peer fixture，运行完整 TypeScript 测试、重新构建 `lib/`，并拒绝任何已提交产物差异；`lib/BUILD_MANIFEST.json` 仅保留为审计记录，不再承担唯一 freshness 证明。
 
 `pnpm run build` 会先验证 vendored manifest，再生成 JavaScript、声明文件和 loader 兼容 Web 客户端。本包提交 `lib/`，因此从 checkout 安装时不要求消费方构建。无真实 Key 的真实 Profile 测试会安装到干净 `DSH_HOME`、启动 Headless、通过真实工具调用执行全部五个 P0 工具和具有代表性的 P1 本地/远程工具、验证禁用与重新启用行为，并卸载 Bundle。每项 P0/P1 需求对应的实现与验证位置见[需求追踪参考](docs/requirements-traceability/README.md)。
 

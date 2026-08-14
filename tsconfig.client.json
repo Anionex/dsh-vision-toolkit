@@ -31,17 +31,14 @@
     ],
     "noEmitOnError": true,
     "paths": {
-      "@deepseek-ai/cordis": ["../vendor/cordis/lib/types/index.d.ts"],
-      "@deepseek-ai/dsh-api-remotes/client": ["../packages/api/remotes/lib/types/client/index.d.ts"],
-      "@deepseek-ai/dsh-client-runtime/client": ["../packages/client/runtime/lib/types/client/index.d.ts"],
-      "@deepseek-ai/dsh-credentials/types": ["../packages/credentials/credentials/lib/types/types.d.ts"],
-      "@deepseek-ai/dsh-settings/types": ["../packages/settings/settings/lib/types/types.d.ts"],
-      "@deepseek-ai/dsh-client-ui-settings/client": ["../packages/client/ui-settings/lib/types/client/index.d.ts"],
-      "@deepseek-ai/dsh-client-ui-conversation/client": ["../packages/client/ui-conversation/lib/types/client/index.d.ts"],
-      "@deepseek-ai/dsh-client-ui-slash/client": ["../packages/client/ui-slash/lib/types/client/index.d.ts"],
-      "@deepseek-ai/dsh-client-locale/client": ["../packages/client/locale/lib/types/client/index.d.ts"],
-      "@deepseek-ai/dsh-client-ui-slots": ["../packages/client/ui-slots/lib/types/index.d.ts"],
-      "@deepseek-ai/dsh-client-ui-primitives": ["../packages/client/ui-primitives/lib/types/index.d.ts"]
+      "@deepseek-ai/cordis": ["../vendor/cordis/lib/types/index.d.ts", "./node_modules/@deepseek-ai/cordis/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-api-remotes/client": ["../packages/api/remotes/lib/types/client/index.d.ts", "./node_modules/@deepseek-ai/dsh-api-remotes/lib/types/client/index.d.ts"],
+      "@deepseek-ai/dsh-client-runtime/client": ["../packages/client/runtime/lib/types/client/index.d.ts", "./node_modules/@deepseek-ai/dsh-client-runtime/lib/types/client/index.d.ts"],
+      "@deepseek-ai/dsh-client-ui-settings/client": ["../packages/client/ui-settings/lib/types/client/index.d.ts", "./node_modules/@deepseek-ai/dsh-client-ui-settings/lib/types/client/index.d.ts"],
+      "@deepseek-ai/dsh-client-ui-conversation/client": ["../packages/client/ui-conversation/lib/types/client/index.d.ts", "./node_modules/@deepseek-ai/dsh-client-ui-conversation/lib/types/client/index.d.ts"],
+      "@deepseek-ai/dsh-client-locale/client": ["../packages/client/locale/lib/types/client/index.d.ts", "./node_modules/@deepseek-ai/dsh-client-locale/lib/types/client/index.d.ts"],
+      "@deepseek-ai/dsh-client-ui-slots": ["../packages/client/ui-slots/lib/types/index.d.ts", "./node_modules/@deepseek-ai/dsh-client-ui-slots/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-client-ui-primitives": ["../packages/client/ui-primitives/lib/types/index.d.ts", "./node_modules/@deepseek-ai/dsh-client-ui-primitives/lib/types/index.d.ts"]
     }
   },
   "include": ["src/client/**/*.ts", "src/client/**/*.tsx"],

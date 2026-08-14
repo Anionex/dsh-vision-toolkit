@@ -118,7 +118,7 @@ flowchart LR
     Artifacts --> Web["Preview, download, or open file"]
 ```
 
-Tool definitions call one runtime; the runtime validates paths, limits, credentials, cancellation, and deadlines before dispatching to the pinned upstream snapshot or configured OpenAI-compatible vision endpoint. Web presentation consumes the same structured results and Artifact descriptors, so it does not change Headless behavior. Health, connection testing, and version inspection stay in Settings rather than model tool schemas.
+Tool definitions call one runtime; the runtime validates paths, limits, credentials, cancellation, and deadlines before dispatching to the pinned upstream snapshot or configured vision provider endpoint. Web presentation consumes the same structured results and Artifact descriptors, so it does not change Headless behavior. Health, connection testing, and version inspection stay in Settings rather than model tool schemas.
 
 ## Tools
 
@@ -148,7 +148,7 @@ Health checks, connection testing, and plugin/upstream version inspection are ad
 - DeepSeek Harness with a Web or Headless profile and `pnpm` available to `dsh plugin`.
 - Python 3.11 or newer. Managed mode creates an isolated environment, so users do not install the upstream CLI or Python packages manually.
 - Network access on the first managed-runtime activation unless the exact packages in `runtime/requirements.lock` are already available in the configured package cache.
-- An OpenAI-compatible vision endpoint and DSH Credential for `vision_glance`, `vision_ground`, `vision_detect`, and non-split-only long-screenshot OCR. Local tools remain usable without that credential.
+- An OpenAI-compatible or Anthropic vision endpoint and DSH Credential for `vision_glance`, `vision_ground`, `vision_detect`, and non-split-only long-screenshot OCR. Local tools remain usable without that credential.
 - Chrome, Chromium, or Edge only for `vision_html_screenshot`; all other tools remain available when no supported browser is installed.
 - PNG, JPEG, GIF, or WebP inputs inside the session workspace or an explicitly configured `allowedDirs` root.
 
@@ -232,7 +232,7 @@ The bundle defaults to the managed runtime. A profile patch can override the pro
 | `provider.credential` | `VISION_API_KEY` | DSH Credential reference, never a secret value |
 | `provider.model` | `gemini-3.6-flash` | Multimodal model name sent to remote tools |
 | `provider.protocol` | `openai` | `openai` sends Chat Completions requests; `anthropic` sends native Messages requests |
-| `provider.anthropicThinking` | `omit` | Anthropic thinking field: `omit` preserves model defaults, `disabled` requests no thinking, and `adaptive` requests provider-managed thinking |
+| `provider.anthropicThinking` | `omit` | Anthropic thinking field. `omit` sends no thinking field and has the broadest compatibility. Use `disabled` or `adaptive` only when the selected model documents that mode; restore `omit` first if the provider returns HTTP 400. |
 | `provider.userAgent` | browser-compatible default | User-Agent sent by vision requests and explicit connection tests; override it for provider or proxy compatibility |
 | `language` | `zh` | Vision output language: `zh` or `en` |
 | `timeoutMs` | `60000` | Whole-operation deadline, 1000-600000 ms; each tool may request a narrower override |
@@ -269,7 +269,7 @@ External mode is intended for development or controlled deployments:
       python: python3.12
 ```
 
-The path must be an exported copy matching the packaged manifest or the root of a clean Git checkout at `4b3dbfe9fdd13061989c449bfe3ef3477835cb4d`. Modified tracked files and untracked files are rejected because they can change or shadow the pinned Python behavior.
+The path must be an exported copy matching the packaged manifest or the root of a clean Git checkout at `bc9803d7d6300c864d17460ecbb33540b26638e0`. Modified tracked files and untracked files are rejected because they can change or shadow the pinned Python behavior.
 
 ## Web Settings
 
@@ -357,7 +357,7 @@ pnpm run example:ui-restoration
 pnpm pack --dry-run
 ```
 
-`npm run verify:portable` is the dependency-free portable verification gate: it validates the vendored snapshot, package metadata and exports, committed JavaScript syntax, README links and images, required facade files, social-preview dimensions, and the dry-run tarball. The full TypeScript build and 136-test suite intentionally run with this checkout at `dsh-vision-toolkit/` inside a DeepSeek Harness source tree, where the peer API types and real profile fixtures live.
+`npm run verify:portable` validates the dependency-free package surface: the vendored snapshot, package metadata and exports, committed JavaScript syntax, README links and images, required facade files, social-preview dimensions, and the dry-run tarball. CI separately installs the published DSH rc.2 peer fixture, runs the complete TypeScript suite, rebuilds `lib/`, and rejects any committed artifact difference; `lib/BUILD_MANIFEST.json` remains an audit record rather than the sole freshness proof.
 
 `pnpm run build` verifies the vendored manifest before emitting JavaScript, declarations, and the loader-compatible Web client. The package commits `lib/`, so installation from a checkout does not require a consumer-side build. The keyless real-profile test installs into a clean `DSH_HOME`, boots Headless, executes all five P0 tools plus representative P1 local/remote tools through real tool calls, verifies disable and re-enable behavior, and uninstalls the bundle. See the [requirements traceability reference](docs/requirements-traceability/README.md) for the implementation and verification home of every P0/P1 requirement.
 

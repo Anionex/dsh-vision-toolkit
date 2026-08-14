@@ -342,6 +342,7 @@ describe('Vision Toolkit client plugin', () => {
     const runtimeMode = await screen.findByLabelText('runtimeMode')
     const protocol = screen.getByLabelText('protocol')
     fireEvent.change(protocol, { target: { value: 'anthropic' } })
+    expect(screen.getByText('anthropicThinkingHint')).toBeTruthy()
     fireEvent.change(screen.getByLabelText('anthropicThinking'), { target: { value: 'disabled' } })
     fireEvent.change(screen.getByLabelText('userAgent'), { target: { value: 'custom-agent/2.0' } })
     fireEvent.change(runtimeMode, { target: { value: 'external' } })

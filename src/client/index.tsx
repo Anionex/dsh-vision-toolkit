@@ -12,11 +12,8 @@ import {
 import { Button, Input } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ClientContext, ToolCallBlock } from '@deepseek-ai/dsh-client-runtime/client'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
-import type {} from '@deepseek-ai/dsh-credentials/types'
-import type {} from '@deepseek-ai/dsh-settings/types'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
-import type {} from '@deepseek-ai/dsh-client-ui-slash/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { installPasteImages } from './paste-images.tsx'
@@ -37,6 +34,7 @@ const en = {
   model: 'Model',
   protocol: 'API protocol',
   anthropicThinking: 'Anthropic thinking',
+  anthropicThinkingHint: 'omit has the broadest compatibility. Use disabled or adaptive only when the selected model documents that mode; restore omit first after HTTP 400.',
   userAgent: 'User-Agent',
   language: 'Output language',
   limits: 'Limits',
@@ -102,6 +100,7 @@ const zh: Record<LocaleKey, string> = {
   model: '模型',
   protocol: 'API 协议',
   anthropicThinking: 'Anthropic thinking',
+  anthropicThinkingHint: 'omit 兼容性最好。仅当所选模型明确支持时使用 disabled 或 adaptive；遇到 HTTP 400 时先恢复 omit。',
   userAgent: 'User-Agent',
   language: '输出语言',
   limits: '限制',
@@ -772,7 +771,7 @@ function LoadedSettings({ controller, t }: SettingsInjected) {
           <Field label={t('baseUrl')}><Input value={draft.baseUrl} onChange={(event) => { update('baseUrl', event.target.value) }} /></Field>
           <Field label={t('model')}><Input value={draft.model} onChange={(event) => { update('model', event.target.value) }} /></Field>
           <Field label={t('protocol')}><select value={draft.protocol} onChange={(event) => { update('protocol', event.target.value as 'openai' | 'anthropic') }}><option value="openai">OpenAI Chat Completions</option><option value="anthropic">Anthropic Messages</option></select></Field>
-          {draft.protocol === 'anthropic' ? <Field label={t('anthropicThinking')}><select value={draft.anthropicThinking} onChange={(event) => { update('anthropicThinking', event.target.value as 'omit' | 'disabled' | 'adaptive') }}><option value="omit">omit (model default)</option><option value="disabled">disabled</option><option value="adaptive">adaptive</option></select></Field> : null}
+          {draft.protocol === 'anthropic' ? <Field label={t('anthropicThinking')} hint={t('anthropicThinkingHint')}><select aria-label={t('anthropicThinking')} value={draft.anthropicThinking} onChange={(event) => { update('anthropicThinking', event.target.value as 'omit' | 'disabled' | 'adaptive') }}><option value="omit">omit (widest compatibility)</option><option value="disabled">disabled (model support required)</option><option value="adaptive">adaptive (model support required)</option></select></Field> : null}
           <Field label={t('userAgent')}><Input value={draft.userAgent} onChange={(event) => { update('userAgent', event.target.value) }} /></Field>
           <Field label={t('credential')} hint={snapshot.credential.source === undefined ? undefined : `${t('source')}: ${snapshot.credential.source}`}><Input value={draft.credential} onChange={(event) => { update('credential', event.target.value) }} /></Field>
           <Field label={t('language')}><select value={draft.language} onChange={(event) => { update('language', event.target.value as 'zh' | 'en') }}><option value="zh">中文</option><option value="en">English</option></select></Field>
@@ -867,16 +866,20 @@ export function apply(ctx: ClientContext): void {
     const legacyRemote = ctx.remote as typeof ctx.remote & {
       $on?: (event: string, listener: (value: string) => void) => () => void
     }
+    const currentEvents = ctx as unknown as {
+      on(event: 'settings/changed', listener: (namespace: string) => void): () => void
+      on(event: 'credentials/changed', listener: (ref: string) => void): () => void
+    }
     const disposers = typeof legacyRemote.$on === 'function'
       ? [
         legacyRemote.$on('settings/document-updated', refreshSettings),
         legacyRemote.$on('credentials/updated', refreshCredential),
       ]
       : [
-        ctx.on('settings/changed', (namespace) => {
+        currentEvents.on('settings/changed', (namespace) => {
           refreshSettings(namespace)
         }),
-        ctx.on('credentials/changed', (ref) => {
+        currentEvents.on('credentials/changed', (ref) => {
           refreshCredential(ref)
         }),
       ]

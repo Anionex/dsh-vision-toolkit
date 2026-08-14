@@ -14,6 +14,7 @@ declare const en: {
     readonly model: "Model";
     readonly protocol: "API protocol";
     readonly anthropicThinking: "Anthropic thinking";
+    readonly anthropicThinkingHint: "omit has the broadest compatibility. Use disabled or adaptive only when the selected model documents that mode; restore omit first after HTTP 400.";
     readonly userAgent: "User-Agent";
     readonly language: "Output language";
     readonly limits: "Limits";

@@ -7,6 +7,11 @@
       "sha256": "67eed30c851fb008a829e33092b2ac655122ac29538bf48ea756b5393f579840"
     },
     {
+      "path": "scripts/clean-build.mjs",
+      "bytes": 357,
+      "sha256": "5ff5b20f7f75fc53e82c6a3f2150c71cec3981772ceb1389717f2a2e5bb5545d"
+    },
+    {
       "path": "src/artifact-access.ts",
       "bytes": 14649,
       "sha256": "ab6a3d87f95f3da6ea97de9726d73f6aa03af0915b1ef59f3ab9b2bdd102c7b2"
@@ -18,13 +23,13 @@
     },
     {
       "path": "src/client/index.tsx",
-      "bytes": 51052,
-      "sha256": "3561ba52b46a9e9796d13261025b82e7b775355a11701e9d668128152a191169"
+      "bytes": 51576,
+      "sha256": "34decc75cd9327e535ddebde86d8ea859202ff2cc974a2c31e31ccb020a2a0ee"
     },
     {
       "path": "src/client/paste-images.tsx",
-      "bytes": 16613,
-      "sha256": "64dc0ebccb7f0061211b9bfd42241594d1f8e58f55675b1c5fbcfb712b47c747"
+      "bytes": 16883,
+      "sha256": "450539704ed9af9557697294346dff9e3dfe816364940e4e8ad22031a357cf0f"
     },
     {
       "path": "src/config.ts",
@@ -98,18 +103,18 @@
     },
     {
       "path": "src/web.ts",
-      "bytes": 11956,
-      "sha256": "ef1429ac6fe223a462753f6c3761bbb167a452a5bfaa0e703005bf757c189ff6"
+      "bytes": 12329,
+      "sha256": "4d8379c18b39aee1720196a9254f73c798988e33d7b4ffb649fd0ede5306c96d"
     },
     {
       "path": "tsconfig.client.json",
-      "bytes": 2245,
-      "sha256": "9b636a8a24b55b3baf96805c7abd0b9b275854705fc358678426597242dac974"
+      "bytes": 2538,
+      "sha256": "3b497934fcf0922d86c17028db55b21792030db39a0f90c141902613f999e5b7"
     },
     {
       "path": "tsconfig.json",
-      "bytes": 1877,
-      "sha256": "976eaf75970f6480c61f3a6008a7edb4577f5678661221a422ef477dd7a21768"
+      "bytes": 2581,
+      "sha256": "91ec911a6228e512d344b7e38e8ee51a4fedf07ec5e8e33f1e5d7252cc58a126"
     }
   ],
   "outputs": [
@@ -135,13 +140,13 @@
     },
     {
       "path": "lib/client.js",
-      "bytes": 71256,
-      "sha256": "937c6a409bded4b491d584029c89bd91f239589473b7c549d415f0598ae68d00"
+      "bytes": 71771,
+      "sha256": "2cb97536674fa9abba04f5c2a67510f0a3e837b7e3ed8a4df37dc0104d8d6707"
     },
     {
       "path": "lib/client.js.map",
-      "bytes": 53764,
-      "sha256": "b57983cd72f44fc0d758d8d2d1cbeb81032b55e92365906fd97516fd0bce61b1"
+      "bytes": 53911,
+      "sha256": "ab7c2846d466835f24157dc7fb2e4a019813a6688af0873eb3d400c7c2d8d3e0"
     },
     {
       "path": "lib/config.js",
@@ -275,23 +280,23 @@
     },
     {
       "path": "lib/types/client/index.d.ts",
-      "bytes": 6943,
-      "sha256": "d2039bf3fc2f7424b13991f8a3bc6df75c872e5cab67189ac28f9e4087bbd0ae"
+      "bytes": 7129,
+      "sha256": "0ce0e848860c9b1f70c9e16b94650e4f733e182e4182a60ce94441c85cbb9cb0"
     },
     {
       "path": "lib/types/client/index.d.ts.map",
       "bytes": 3370,
-      "sha256": "0feff98e5cf2a1b8e4aca9be165e83652503b7e62e1665009a380d86a01deaec"
+      "sha256": "d9851de58724d3e8320943a5336dff2a63c968c3b33002320382c2d83295220e"
     },
     {
       "path": "lib/types/client/paste-images.d.ts",
-      "bytes": 2349,
-      "sha256": "befdecbfb597e4a83ff97dd5b65c19afc50f9c6dc25dfc747990cb1518b2c149"
+      "bytes": 2649,
+      "sha256": "98635d0d07824b565b1c9ac7308e03ee6f1d5d963c7c716c505f07e250a2ca24"
     },
     {
       "path": "lib/types/client/paste-images.d.ts.map",
-      "bytes": 1886,
-      "sha256": "b11a7cdd1f67c3ed948d4a27a5dffddb44ed6baff0b025e9f730c6626c9cfc4b"
+      "bytes": 2250,
+      "sha256": "d069aaa8d9456bc3ed1dba8fc7d0f27d67e1cdaabf4677c9ab23c6f1db18efcd"
     },
     {
       "path": "lib/types/config.d.ts",
@@ -435,13 +440,13 @@
     },
     {
       "path": "lib/types/web.d.ts",
-      "bytes": 3154,
-      "sha256": "b260cb258442a51af1dfef39e98928882beb2ca9af95f23932865627b4f56aec"
+      "bytes": 3160,
+      "sha256": "7c575a63a705cd444578350d755fbbcfba751b31b0955938873c627162dd82e1"
     },
     {
       "path": "lib/types/web.d.ts.map",
       "bytes": 2020,
-      "sha256": "d4c1170a129f44c7e439d800641c724af884e68796fd0374023c8948e75d6935"
+      "sha256": "4f8d698c89e53f1c8a38247c77f700d4cb5d6fde9795cbf74f8541aa95e697e7"
     },
     {
       "path": "lib/upstream.js",
@@ -475,13 +480,13 @@
     },
     {
       "path": "lib/web.js",
-      "bytes": 10132,
-      "sha256": "aa9b0c8f9b3475e7a3fa785813793a926e9a982853d71b44204d6ddf1019a181"
+      "bytes": 10421,
+      "sha256": "4f8fe16e10cce27143dfe5e294ec53d8e85f89e71cefeca7e5f348157f0a1eb3"
     },
     {
       "path": "lib/web.js.map",
-      "bytes": 9184,
-      "sha256": "5793cf1dc5f382a25f215eb89f777dfab636214f05ea70df11a18dbac937e0b2"
+      "bytes": 9371,
+      "sha256": "fd9637274bd40b94ddaa188f9dd2d1a91c6a74619ddaee5b997b6e255bd4b9f6"
     }
   ]
 }

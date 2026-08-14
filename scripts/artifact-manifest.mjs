@@ -39,6 +39,7 @@ async function rows(paths) {
 const inputs = [
   ...await filesBelow(join(root, 'src')),
   join(root, 'scripts', 'build-client.mjs'),
+  join(root, 'scripts', 'clean-build.mjs'),
   join(root, 'tsconfig.json'),
   join(root, 'tsconfig.client.json'),
 ]
