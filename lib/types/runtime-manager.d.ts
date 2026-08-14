@@ -4,7 +4,7 @@
  * runtime, so failed Settings edits never interrupt in-flight or later calls.
  * @module dsh-vision-toolkit/runtime-manager
  */
-import type { Context } from 'cordis';
+import type { Context } from '@deepseek-ai/cordis';
 import { type ResolvedVisionToolkitConfig, type VisionToolkitConfig } from './config.ts';
 import { VisionToolkitRuntime } from './runtime.ts';
 import { type UpstreamVersionInfo } from './upstream.ts';

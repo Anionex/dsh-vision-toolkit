@@ -1,8 +1,14 @@
 /** Clipboard-only multi-image input for DSH Web. */
 import { type ReactNode } from 'react';
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client';
-import type { SlashSource } from '@deepseek-ai/dsh-client-ui-slash/client';
+import type { SlashServiceContract, SlashSource } from '@deepseek-ai/dsh-client-ui-slash/client';
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots';
+declare module '@deepseek-ai/cordis' {
+    interface Context {
+        /** Slash source registry supplied by the injected Web client plugin. */
+        slash: SlashServiceContract;
+    }
+}
 export declare const PASTE_IMAGES_ROUTE = "/_dsh/vision-toolkit/paste-images";
 interface PasteRecord {
     ref: string;
