@@ -660,6 +660,26 @@ describe('upstream adapter version facts', () => {
     }
   })
 
+  it('forwards the resolved Anthropic protocol to remote upstream tools', async () => {
+    const { ctx, adapter, runtime } = await setup({
+      provider: {
+        baseUrl: 'https://vision.example/v1',
+        credential: 'VISION_API_KEY',
+        model: 'fixture-model',
+        protocol: 'anthropic',
+      },
+    })
+    const spawn = vi.spyOn(ctx.subprocess, 'spawn')
+
+    await adapter.run('glance', [SAMPLE_IMAGE], { signal, env: await runtime.resolveVisionEnv() })
+
+    expect(spawn).toHaveBeenCalledOnce()
+    expect(spawn.mock.calls[0]?.[0].env).toMatchObject({
+      VISION_API_PROTOCOL: 'anthropic',
+      VISION_API_KEY: 'test-vision-key',
+    })
+  })
+
   it('fails prepare with a clear runtime error when the external path is missing', async () => {
     const ctx = new Context()
     contexts.push(ctx)

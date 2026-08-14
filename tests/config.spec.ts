@@ -7,6 +7,7 @@ describe('resolveConfig', () => {
     expect(config.provider.baseUrl).toBe('https://api.inferera.com/v1')
     expect(config.provider.credential).toBe('VISION_API_KEY')
     expect(config.provider.model).toBe('gemini-3.6-flash')
+    expect(config.provider.protocol).toBe('openai')
     expect(config.language).toBe('zh')
     expect(config.timeoutMs).toBe(60000)
     expect(config.maxImageBytes).toBe(10485760)
@@ -19,7 +20,12 @@ describe('resolveConfig', () => {
 
   it('normalizes the provider URL and credential', () => {
     const config = resolveConfig({
-      provider: { baseUrl: 'https://example.com/v1/', credential: 'MY_VISION_KEY', model: 'model-x' },
+      provider: {
+        baseUrl: 'https://example.com/v1/',
+        credential: 'MY_VISION_KEY',
+        model: 'model-x',
+        protocol: 'anthropic',
+      },
       language: 'en',
       runtime: { mode: 'external', agentVisionToolkitPath: '/tmp/toolkit', python: 'python3.12' },
       allowedDirs: ['~/Pictures'],
@@ -27,6 +33,7 @@ describe('resolveConfig', () => {
     expect(config.provider.baseUrl).toBe('https://example.com/v1')
     expect(config.provider.credential).toBe('MY_VISION_KEY')
     expect(config.runtime.agentVisionToolkitPath).toBe('/tmp/toolkit')
+    expect(config.provider.protocol).toBe('anthropic')
     expect(config.allowedDirs).toEqual(['~/Pictures'])
   })
 

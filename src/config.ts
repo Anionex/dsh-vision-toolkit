@@ -18,12 +18,14 @@ export const VISION_TOOLKIT_SETTINGS_NAMESPACE = settingsNamespace('vision-toolk
 /** Full user-facing configuration; every field defaults at the schema boundary. */
 export interface VisionToolkitConfig {
   provider?: {
-    /** OpenAI-compatible chat/completions base URL. */
+    /** Provider API base URL. */
     baseUrl?: string
     /** DSH Credential reference holding the API key (an environment-style name). */
     credential?: string
     /** Multimodal model name. */
     model?: string
+    /** Vision request protocol: OpenAI Chat Completions or Anthropic Messages. */
+    protocol?: 'openai' | 'anthropic'
   }
   /** Vision output language (`zh` or `en`). */
   language?: 'zh' | 'en'
@@ -53,6 +55,7 @@ export const Config: Schema<VisionToolkitConfig> = z.object({
     baseUrl: z.string().default('https://api.inferera.com/v1'),
     credential: z.string().default('VISION_API_KEY'),
     model: z.string().default('gemini-3.6-flash'),
+    protocol: z.union(['openai', 'anthropic'] as const).default('openai'),
   }),
   language: z.union(['zh', 'en'] as const).default('zh'),
   timeoutMs: z.number().default(60000),
@@ -73,6 +76,7 @@ export interface ResolvedVisionToolkitConfig {
     baseUrl: string
     credential: CredentialRef
     model: string
+    protocol: 'openai' | 'anthropic'
   }
   language: 'zh' | 'en'
   timeoutMs: number
@@ -121,6 +125,10 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
   if (model.length === 0) {
     throw new VisionToolkitError('config', 'provider.model must not be empty')
   }
+  const protocol = provider.protocol ?? 'openai'
+  if (protocol !== 'openai' && protocol !== 'anthropic') {
+    throw new VisionToolkitError('config', 'provider.protocol must be "openai" or "anthropic"')
+  }
   const language = config.language ?? 'zh'
   if (language !== 'zh' && language !== 'en') {
     throw new VisionToolkitError('config', 'language must be "zh" or "en"')
@@ -161,7 +169,7 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
   }
   const allowedDirs = (config.allowedDirs ?? []).map(dir => dir.trim()).filter(dir => dir.length > 0)
   return {
-    provider: { baseUrl, credential, model },
+    provider: { baseUrl, credential, model, protocol },
     language,
     timeoutMs,
     maxImageBytes,

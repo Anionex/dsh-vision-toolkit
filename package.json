@@ -85,8 +85,8 @@
     },
     "visionToolkit": {
       "upstreamRepository": "https://github.com/Anionex/agent-vision-toolkit",
-      "upstreamVersion": "v0.1.0+snapshot.8ccf9d7",
-      "upstreamCommit": "8ccf9d7d89bc395ad7dd19dde840401a5b84623d"
+      "upstreamVersion": "v0.1.0+snapshot.2c87e20",
+      "upstreamCommit": "2c87e20fd60421e59b588aad4d26f0359c9518ff"
     }
   },
   "dependencies": {

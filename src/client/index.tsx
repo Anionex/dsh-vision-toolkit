@@ -34,6 +34,7 @@ const en = {
   baseUrl: 'Base URL',
   credential: 'Credential reference',
   model: 'Model',
+  protocol: 'API protocol',
   language: 'Output language',
   limits: 'Limits',
   timeout: 'Request timeout (ms)',
@@ -96,6 +97,7 @@ const zh: Record<LocaleKey, string> = {
   baseUrl: '服务地址',
   credential: 'Credential 引用',
   model: '模型',
+  protocol: 'API 协议',
   language: '输出语言',
   limits: '限制',
   timeout: '请求超时（毫秒）',
@@ -202,7 +204,7 @@ interface HealthResult {
 }
 
 interface SettingsValue {
-  provider?: { baseUrl?: string; credential?: string; model?: string }
+  provider?: { baseUrl?: string; credential?: string; model?: string; protocol?: 'openai' | 'anthropic' }
   language?: 'zh' | 'en'
   timeoutMs?: number
   maxImageBytes?: number
@@ -630,6 +632,7 @@ interface Draft {
   baseUrl: string
   credential: string
   model: string
+  protocol: 'openai' | 'anthropic'
   language: 'zh' | 'en'
   timeoutMs: string
   maxImageBytes: string
@@ -646,6 +649,7 @@ function draftOf(value: SettingsValue): Draft {
     baseUrl: value.provider?.baseUrl ?? 'https://api.inferera.com/v1',
     credential: value.provider?.credential ?? 'VISION_API_KEY',
     model: value.provider?.model ?? 'gemini-3.6-flash',
+    protocol: value.provider?.protocol ?? 'openai',
     language: value.language ?? 'zh',
     timeoutMs: String(value.timeoutMs ?? 60000),
     maxImageBytes: String(value.maxImageBytes ?? 10485760),
@@ -666,7 +670,12 @@ function positiveInteger(raw: string, label: string): number {
 
 function valueOf(draft: Draft): SettingsValue {
   return {
-    provider: { baseUrl: draft.baseUrl.trim(), credential: draft.credential.trim(), model: draft.model.trim() },
+    provider: {
+      baseUrl: draft.baseUrl.trim(),
+      credential: draft.credential.trim(),
+      model: draft.model.trim(),
+      protocol: draft.protocol,
+    },
     language: draft.language,
     timeoutMs: positiveInteger(draft.timeoutMs, 'timeoutMs'),
     maxImageBytes: positiveInteger(draft.maxImageBytes, 'maxImageBytes'),
@@ -744,6 +753,7 @@ function LoadedSettings({ controller, t }: SettingsInjected) {
         <div className="dvt-form-grid">
           <Field label={t('baseUrl')}><Input value={draft.baseUrl} onChange={(event) => { update('baseUrl', event.target.value) }} /></Field>
           <Field label={t('model')}><Input value={draft.model} onChange={(event) => { update('model', event.target.value) }} /></Field>
+          <Field label={t('protocol')}><select value={draft.protocol} onChange={(event) => { update('protocol', event.target.value as 'openai' | 'anthropic') }}><option value="openai">OpenAI Chat Completions</option><option value="anthropic">Anthropic Messages</option></select></Field>
           <Field label={t('credential')} hint={snapshot.credential.source === undefined ? undefined : `${t('source')}: ${snapshot.credential.source}`}><Input value={draft.credential} onChange={(event) => { update('credential', event.target.value) }} /></Field>
           <Field label={t('language')}><select value={draft.language} onChange={(event) => { update('language', event.target.value as 'zh' | 'en') }}><option value="zh">中文</option><option value="en">English</option></select></Field>
         </div>
