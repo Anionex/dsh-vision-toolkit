@@ -3,7 +3,7 @@
 import { useSyncExternalStore, type ReactNode } from 'react'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { SlashSource } from '@deepseek-ai/dsh-client-ui-slash/client'
+import type { InputTriggerSource } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 
 const SOURCE = 'vision-toolkit-pasted-image'
@@ -48,7 +48,7 @@ type PasteDockProps = PropsRuntime<'conversation.input.dock'> & {
 }
 
 interface ReferenceSourceRegistry {
-  registerSource: (source: SlashSource) => () => void
+  registerSource: (source: InputTriggerSource) => () => void
 }
 
 interface ReferenceSourceRegistration {
@@ -58,6 +58,10 @@ interface ReferenceSourceRegistration {
 
 interface LegacyTriggerContext {
   inputTriggers: ReferenceSourceRegistry
+}
+
+interface LegacySlashContext {
+  slash: ReferenceSourceRegistry
 }
 
 const CORDIS_ORIGINAL = Symbol.for('cordis.original')
@@ -143,7 +147,7 @@ export class PasteImageController {
     for (const listener of this.listeners) listener()
   }
 
-  source(): SlashSource {
+  source(): InputTriggerSource {
     return {
       trigger: '@',
       name: SOURCE,
@@ -399,7 +403,9 @@ export function installPasteImages(ctx: ClientContext): void {
       }
     }, 'dsh-vision-toolkit: pasted image reference codec')
   }
-  ctx.inject(['slash'], (scope: ClientContext) => { register(scope, scope.slash) })
+  ctx.inject(['slash'], (scope: ClientContext) => {
+    register(scope, (scope as unknown as LegacySlashContext).slash)
+  })
   ctx.inject(['inputTriggers'], (scope: ClientContext) => {
     register(scope, (scope as unknown as LegacyTriggerContext).inputTriggers)
   })

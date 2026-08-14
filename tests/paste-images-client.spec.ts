@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createElement, type ComponentType } from 'react'
 import { fireEvent, render, screen } from '@testing-library/react'
-import { Context, Service } from 'cordis'
+import { Context, Service } from '@deepseek-ai/cordis'
 import {
   installPasteImages,
   PASTE_IMAGES_ROUTE as CLIENT_PASTE_IMAGES_ROUTE,

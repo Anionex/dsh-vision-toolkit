@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.client.json",
+  "compilerOptions": {
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "paths": {}
+  }
+}

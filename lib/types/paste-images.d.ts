@@ -1,6 +1,6 @@
 /** Workspace-local storage for images pasted into the DSH Web composer. */
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { Context } from 'cordis';
+import type { Context } from '@deepseek-ai/cordis';
 /** Exact route used by the browser paste integration. */
 export declare const PASTE_IMAGES_ROUTE = "/_dsh/vision-toolkit/paste-images";
 /** Convert an untrusted browser label into one portable leaf filename. */

@@ -112,9 +112,11 @@ async function verifyWindowsCheckout() {
 
 const packagePath = join(root, 'package.json')
 const pkg = JSON.parse(await readFile(packagePath, 'utf8'))
+const changelog = await readFile(join(root, 'CHANGELOG.md'), 'utf8')
+const latestRelease = changelog.match(/^## \[(\d+\.\d+\.\d+)\]/mu)?.[1]
 
 check(pkg.name === '@dsh-external/dsh-vision-toolkit', 'package name must stay @dsh-external/dsh-vision-toolkit')
-check(pkg.version === '0.1.2', 'package version and the latest release notes must stay aligned')
+check(pkg.version === latestRelease, 'package version and the latest release notes must stay aligned')
 check(pkg.repository?.url === 'git+https://github.com/Anionex/dsh-vision-toolkit.git', 'repository URL is missing or mismatched')
 check(pkg.bugs?.url === 'https://github.com/Anionex/dsh-vision-toolkit/issues', 'issue tracker URL is missing or mismatched')
 check(pkg.homepage === 'https://agent-vision.anionex.me', 'homepage URL is missing or mismatched')
@@ -126,7 +128,7 @@ check(pkg.dshClient === undefined, 'legacy top-level dshClient metadata must rem
 check(pkg.exports?.['./client']?.default === './lib/client.js', 'the Web client export must resolve to lib/client.js')
 check(Array.isArray(pkg.files) && pkg.files.includes('assets'), 'package files must include README visual assets')
 check(pkg.scripts?.['verify:portable'] === 'node scripts/upstream-manifest.mjs && node scripts/verify-portable.mjs', 'verify:portable script is missing or changed')
-check(pkg.peerDependencies?.['@deepseek-ai/schemastery'] === '^3.18.1-rc.1', '@deepseek-ai/schemastery must be a host-provided peer dependency')
+check(pkg.peerDependencies?.['@deepseek-ai/schemastery'] === '^3.18.1', '@deepseek-ai/schemastery must be a host-provided peer dependency')
 check(pkg.peerDependencies?.schemastery === undefined, 'unscoped schemastery peer dependency must remain absent')
 
 const dependencyGroups = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']
@@ -159,6 +161,8 @@ const requiredFiles = [
   '.github/workflows/pages.yml',
   'index.html',
   'cordis.patch.yml',
+  'pnpm-lock.yaml',
+  'tsconfig.client.public.json',
   'lib/index.js',
   'lib/types/index.d.ts',
   'lib/client.js',

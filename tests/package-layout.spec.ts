@@ -49,12 +49,11 @@ describe('package layout contract', () => {
     expect(PACKAGE.dsh?.client?.inject).toEqual(expect.arrayContaining([
       '@deepseek-ai/dsh-api-remotes',
       '@deepseek-ai/dsh-client-runtime',
+      '@deepseek-ai/dsh-client-ui-input-trigger',
       '@deepseek-ai/dsh-client-ui-tool',
       '@deepseek-ai/dsh-client-ui-settings',
       '@deepseek-ai/dsh-client-locale',
     ]))
-    expect(PACKAGE.dsh?.client?.inject).not.toContain('@deepseek-ai/dsh-client-ui-slash')
-    expect(PACKAGE.peerDependenciesMeta?.['@deepseek-ai/dsh-client-ui-slash']).toEqual({ optional: true })
   })
 
   it('ships runtime, pinned upstream, lib, src, patch, and docs in files', () => {
@@ -67,6 +66,7 @@ describe('package layout contract', () => {
     expect(PACKAGE.scripts.build).toContain('node scripts/upstream-manifest.mjs')
     expect(PACKAGE.scripts.build).toContain('tsc -p tsconfig.json')
     expect(PACKAGE.scripts.build).toContain('tsc -p tsconfig.client.json')
+    expect(PACKAGE.scripts.build).toContain('tsc -p tsconfig.client.public.json')
     expect(PACKAGE.scripts.build).toContain('node scripts/build-client.mjs')
     expect(PACKAGE.scripts['upstream:sync']).toBe('node scripts/sync-upstream.mjs')
     expect(PACKAGE.scripts['upstream:manifest']).toContain('--write')
@@ -76,13 +76,27 @@ describe('package layout contract', () => {
 
   it('keeps every dependency specifier portable', () => {
     expect(PACKAGE.peerDependencies).toHaveProperty('@deepseek-ai/dsh-agent')
+    expect(PACKAGE.peerDependencies).toHaveProperty('@deepseek-ai/cordis')
     expect(PACKAGE.peerDependencies).toHaveProperty('@deepseek-ai/schemastery')
+    expect(PACKAGE.peerDependencies).not.toHaveProperty('cordis')
     expect(PACKAGE.peerDependencies).not.toHaveProperty('schemastery')
     for (const section of [PACKAGE.dependencies ?? {}, PACKAGE.peerDependencies ?? {}, PACKAGE.devDependencies ?? {}]) {
       for (const [name, spec] of Object.entries(section)) {
         expect(spec, `${name}`).not.toMatch(/^\/|^[A-Za-z]:\\|^file:|^link:|^workspace:/)
       }
     }
+  })
+
+  it('targets the published DSH prerelease line without retired package names', () => {
+    const peers = PACKAGE.peerDependencies ?? {}
+    for (const [name, spec] of Object.entries(peers)) {
+      if (name.startsWith('@deepseek-ai/dsh-')) expect(spec, name).toBe('^0.1.0-rc.6')
+    }
+    expect(peers).toHaveProperty('@deepseek-ai/dsh-client-ui-input-trigger')
+    expect(peers).not.toHaveProperty('@deepseek-ai/dsh-client-ui-slash')
+    expect(peers).not.toHaveProperty('@deepseek-ai/dsh-host-apiproxy')
+    expect(PACKAGE.peerDependenciesMeta?.['@deepseek-ai/dsh-host-webserver']?.optional).toBe(true)
+    expect(PACKAGE.dsh?.client?.inject).not.toContain('@deepseek-ai/dsh-client-ui-slash')
   })
 
   it('emits no raw .ts relative imports in built JavaScript', async () => {
