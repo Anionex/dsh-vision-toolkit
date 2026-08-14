@@ -289,7 +289,7 @@ export class VisionToolkitWebBackend {
 }
 
 /**
- * Attach optional Web routes whenever an webServer service is present.
+ * Attach optional Web routes whenever a webServer service is present.
  * @param ctx - plugin context owning route effects.
  * @param backend - Settings handler.
  * @param artifacts - signed Artifact handler.

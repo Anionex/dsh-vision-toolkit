@@ -17,6 +17,9 @@ export interface UpstreamEnvironment {
     VISION_API_KEY: string;
     VISION_BASE_URL: string;
     VISION_MODEL: string;
+    VISION_API_PROTOCOL: 'chat_completions' | 'anthropic';
+    VISION_ANTHROPIC_THINKING: 'omit' | 'disabled' | 'adaptive';
+    VISION_USER_AGENT: string;
     LANG: 'zh' | 'en';
 }
 /** Pinned upstream identity plus prepared runtime facts. */

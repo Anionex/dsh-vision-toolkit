@@ -78,7 +78,14 @@ function settingsSnapshot(runtime: { ready: boolean; lastError?: string } = { re
     writable: true,
     settings: {
       value: {
-        provider: { baseUrl: 'https://api.inferera.com/v1', credential: 'VISION_API_KEY', model: 'gemini-3.6-flash' },
+        provider: {
+          baseUrl: 'https://api.inferera.com/v1',
+          credential: 'VISION_API_KEY',
+          model: 'gemini-3.6-flash',
+          protocol: 'openai',
+          anthropicThinking: 'omit',
+          userAgent: 'fixture-agent/1.0',
+        },
         language: 'zh',
         timeoutMs: 61000,
         maxImageBytes: 10485760,
@@ -332,11 +339,26 @@ describe('Vision Toolkit client plugin', () => {
     }))
 
     const runtimeMode = await screen.findByLabelText('runtimeMode')
+    const protocol = screen.getByLabelText('protocol')
+    fireEvent.change(protocol, { target: { value: 'anthropic' } })
+    expect(screen.getByText('anthropicThinkingHint')).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('anthropicThinking'), { target: { value: 'disabled' } })
+    fireEvent.change(screen.getByLabelText('userAgent'), { target: { value: 'custom-agent/2.0' } })
     fireEvent.change(runtimeMode, { target: { value: 'external' } })
     const toolkitPath = await screen.findByLabelText('toolkitPath')
     fireEvent.change(toolkitPath, { target: { value: '/nonexistent/dsh-vision-toolkit' } })
     fireEvent.click(screen.getByRole('button', { name: 'save' }))
     await screen.findByText('agent-vision-toolkit path does not exist')
+    const saveRequest = fetchMock.mock.calls[1]?.[1] as RequestInit
+    expect(JSON.parse(String(saveRequest.body))).toMatchObject({
+      value: {
+        provider: {
+          protocol: 'anthropic',
+          anthropicThinking: 'disabled',
+          userAgent: 'custom-agent/2.0',
+        },
+      },
+    })
 
     fireEvent.click(screen.getByRole('button', { name: 'reload' }))
     await waitFor(() => {

@@ -58,7 +58,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "node scripts/upstream-manifest.mjs && tsc -p tsconfig.json && tsc -p tsconfig.client.json && tsc -p tsconfig.client.public.json && node scripts/build-client.mjs",
+    "build": "node scripts/upstream-manifest.mjs && node scripts/clean-build.mjs && tsc -p tsconfig.json && tsc -p tsconfig.client.json && tsc -p tsconfig.client.public.json && node scripts/build-client.mjs",
     "prepack": "npm run build",
     "test": "vitest run tests",
     "verify:portable": "node scripts/upstream-manifest.mjs && node scripts/verify-portable.mjs",
@@ -85,8 +85,8 @@
     },
     "visionToolkit": {
       "upstreamRepository": "https://github.com/Anionex/agent-vision-toolkit",
-      "upstreamVersion": "v0.1.0+snapshot.8ccf9d7",
-      "upstreamCommit": "8ccf9d7d89bc395ad7dd19dde840401a5b84623d"
+      "upstreamVersion": "v0.1.0+snapshot.bc9803d",
+      "upstreamCommit": "bc9803d7d6300c864d17460ecbb33540b26638e0"
     }
   },
   "dependencies": {

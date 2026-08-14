@@ -12,6 +12,10 @@ declare const en: {
     readonly baseUrl: "Base URL";
     readonly credential: "Credential reference";
     readonly model: "Model";
+    readonly protocol: "API protocol";
+    readonly anthropicThinking: "Anthropic thinking";
+    readonly anthropicThinkingHint: "omit has the broadest compatibility. Use disabled or adaptive only when the selected model documents that mode; restore omit first after HTTP 400.";
+    readonly userAgent: "User-Agent";
     readonly language: "Output language";
     readonly limits: "Limits";
     readonly timeout: "Request timeout (ms)";
@@ -100,6 +104,9 @@ interface SettingsValue {
         baseUrl?: string;
         credential?: string;
         model?: string;
+        protocol?: 'openai' | 'anthropic';
+        anthropicThinking?: 'omit' | 'disabled' | 'adaptive';
+        userAgent?: string;
     };
     language?: 'zh' | 'en';
     timeoutMs?: number;

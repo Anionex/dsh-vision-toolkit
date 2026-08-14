@@ -58,7 +58,7 @@ This reference maps the DSH Vision Toolkit product brief's committed P0/P1 requi
 | Scope | Status | Decision |
 |---|---|---|
 | P2 stable `ctx.visionToolkit` service and capability discovery | **Deferred by design** | The product brief requires at least one independent plugin consumer before stabilizing this API. `VisionToolkitRuntime` remains package-internal, so P0/P1 can evolve without creating a false compatibility promise. |
-| P2 provider ecosystem | **Deferred by design** | The package supports its pinned upstream and one configured OpenAI-compatible vision endpoint; it does not prebuild an unused provider registry. |
+| P2 provider ecosystem | **Deferred by design** | The package supports its pinned upstream and one configured endpoint through OpenAI Chat Completions or Anthropic Messages; it does not prebuild an unused provider registry. |
 | P3 exploratory inputs and automation | **Out of scope** | Upload/drag-and-drop, camera/video/audio/document ingestion, interactive annotations, automatic clicking, remote clusters, model routing/voting, and cross-session caches are not part of this release contract. |
 
 ## Reproducible verification

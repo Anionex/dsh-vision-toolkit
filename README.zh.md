@@ -120,7 +120,7 @@ flowchart LR
     Artifacts --> Web["Preview, download, or open file"]
 ```
 
-所有工具定义都调用同一个 Runtime；Runtime 在分发到固定上游快照或已配置的 OpenAI 兼容视觉端点前，统一验证路径、限制、Credential、取消和超时。Web 展示读取相同的结构化结果与产物描述，因此不会改变 Headless 语义。健康、连接测试和版本检查只留在 Settings，不进入模型工具 schema。
+所有工具定义都调用同一个 Runtime；Runtime 在分发到固定上游快照或已配置的视觉提供方端点前，统一验证路径、限制、Credential、取消和超时。Web 展示读取相同的结构化结果与产物描述，因此不会改变 Headless 语义。健康、连接测试和版本检查只留在 Settings，不进入模型工具 schema。
 
 ## 工具
 
@@ -150,7 +150,7 @@ flowchart LR
 - 启用 Web 或 Headless Profile 的 DeepSeek Harness，并确保 `dsh plugin` 可以使用 `pnpm`。
 - Python 3.11 或更高版本。Managed 模式会创建隔离环境，用户无需手工安装上游 CLI（命令行界面）或 Python 包。
 - 首次启用 managed 运行时需要联网；如果配置的软件包缓存已有 `runtime/requirements.lock` 中的精确版本，则无需联网。
-- `vision_glance`、`vision_ground`、`vision_detect` 和非仅切分长截图 OCR 需要 OpenAI 兼容视觉端点及 DSH Credential。本地工具无需该 Credential 也可使用。
+- `vision_glance`、`vision_ground`、`vision_detect` 和非仅切分长截图 OCR 需要 OpenAI 兼容或 Anthropic 视觉端点及 DSH Credential。本地工具无需该 Credential 也可使用。
 - 只有 `vision_html_screenshot` 需要 Chrome、Chromium 或 Edge；未安装受支持浏览器时，其他工具保持可用。
 - 输入必须是会话工作区或显式 `allowedDirs` 根目录内的 PNG、JPEG、GIF 或 WebP。
 
@@ -213,6 +213,9 @@ Bundle 默认使用 managed 运行时。Profile patch 可以覆盖提供方与�
       baseUrl: https://api.inferera.com/v1
       credential: VISION_API_KEY
       model: gemini-3.6-flash
+      protocol: openai
+      anthropicThinking: omit
+      userAgent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36
     language: zh
     timeoutMs: 60000
     maxImageBytes: 10485760
@@ -227,9 +230,12 @@ Bundle 默认使用 managed 运行时。Profile patch 可以覆盖提供方与�
 
 | 字段 | 默认值 | 契约 |
 |---|---|---|
-| `provider.baseUrl` | `https://api.inferera.com/v1` | OpenAI 兼容基础 URL；去除结尾斜杠后使用 |
+| `provider.baseUrl` | `https://api.inferera.com/v1` | 提供方 API 基础 URL；去除结尾斜杠后使用。Anthropic 应填写以 `/v1` 结尾的基础 URL，不要填写完整 `/messages` URL |
 | `provider.credential` | `VISION_API_KEY` | DSH Credential 引用，不是密钥值 |
 | `provider.model` | `gemini-3.6-flash` | 远程工具使用的多模态模型名 |
+| `provider.protocol` | `openai` | `openai` 发送 Chat Completions 请求；`anthropic` 发送原生 Messages 请求 |
+| `provider.anthropicThinking` | `omit` | Anthropic thinking 字段。`omit` 不发送 thinking 字段，兼容性最好；仅当所选模型明确支持时使用 `disabled` 或 `adaptive`，提供方返回 HTTP 400 时应先恢复 `omit`。 |
+| `provider.userAgent` | 浏览器兼容默认值 | 视觉请求和显式连接测试发送的 User-Agent；可为提供方或代理兼容性覆盖 |
 | `language` | `zh` | 视觉输出语言：`zh` 或 `en` |
 | `timeoutMs` | `60000` | 完整操作截止时间，1000-600000 毫秒；每个工具可请求更窄的覆盖值 |
 | `maxImageBytes` | `10485760` | 每张输入图片的编码字节上限 |
@@ -265,15 +271,15 @@ External 模式用于开发或受控部署：
       python: python3.12
 ```
 
-该路径必须是与打包 manifest 一致的导出副本，或 commit `c27d1a300962b553c0884993c575cd3e819465ce` 的干净 Git checkout 根目录。插件拒绝已修改的 tracked 文件和 untracked 文件，因为它们可能改变或遮蔽固定 Python 行为。
+该路径必须是与打包 manifest 一致的导出副本，或 commit `bc9803d7d6300c864d17460ecbb33540b26638e0` 的干净 Git checkout 根目录。插件拒绝已修改的 tracked 文件和 untracked 文件，因为它们可能改变或遮蔽固定 Python 行为。
 
 ## Web Settings
 
-Web Profile 会注册 Vision Toolkit Settings 分区，可配置提供方 URL、Credential 引用、模型、语言、超时、字节/像素限制、并发数、运行时模式、Python 覆盖值、external 源码路径和允许目录。该页面还会显示插件/上游版本、当前运行时 generation、不含密钥的 Credential configured/source/writable 状态、运行时路径、健康检查结果和产物路由可用性。
+Web Profile 会注册 Vision Toolkit Settings 分区，可配置提供方 URL、Credential 引用、模型、OpenAI/Anthropic 协议、Anthropic thinking 模式、User-Agent、语言、超时、字节/像素限制、并发数、运行时模式、Python 覆盖值、external 源码路径和允许目录。该页面还会显示插件/上游版本、当前运行时 generation、不含密钥的 Credential configured/source/writable 状态、运行时路径、健康检查结果和产物路由可用性。
 
 “保存并应用”会验证完整配置，准备候选 Python/上游运行时，提交 Settings revision，最后才原子切换 generation。候选被拒绝时，之前的 generation 继续服务，页面也会把这种状态与运行时确实不可用区分开来。“重新加载”始终恢复后端已保存的权威值，即使 revision 没有变化也会丢弃被拒绝的浏览器草稿。初始启动无法准备运行时时，Settings 路由仍可用于提交有效配置并激活首个 generation。陈旧浏览器 revision 不会覆盖较新的保存结果，而是返回冲突；刷新后再重试。只读 Settings 提供方允许查看和健康检查，但禁用保存。
 
-“运行健康检查”只执行本地检查。“测试连接”是显式操作，会把已配置 Credential 发送到 `GET /models`；它不会上传图片，也不会创建 completion。插件加载和普通 Settings 读取不会发送该请求。
+“运行健康检查”只执行本地检查。“测试连接”是显式操作，会把已配置 Credential 发送到 `GET /models`；OpenAI 使用 Bearer 认证，Anthropic 使用 `x-api-key` 与 `anthropic-version`。该检查不会上传图片，也不会创建 completion。插件加载和普通 Settings 读取不会发送该请求。
 
 健康检查、连接测试以及插件/上游版本检查属于 Web Settings 管理能力，而不是模型工具，因此其 schema 永远不会占用 agent 请求上下文。
 

@@ -64,6 +64,7 @@ describe('package layout contract', () => {
 
   it('has reproducible build and prepack scripts', () => {
     expect(PACKAGE.scripts.build).toContain('node scripts/upstream-manifest.mjs')
+    expect(PACKAGE.scripts.build).toContain('node scripts/clean-build.mjs')
     expect(PACKAGE.scripts.build).toContain('tsc -p tsconfig.json')
     expect(PACKAGE.scripts.build).toContain('tsc -p tsconfig.client.json')
     expect(PACKAGE.scripts.build).toContain('tsc -p tsconfig.client.public.json')
@@ -112,9 +113,20 @@ describe('package layout contract', () => {
     const config = await readFile(join(ROOT, 'lib', 'config.js'), 'utf8')
     expect(config).toContain("from '@deepseek-ai/schemastery'")
     expect(config).not.toContain("from 'schemastery'")
+    expect(config).toContain('anthropicThinking')
+    expect(config).toContain('userAgent')
     const client = await readFile(join(ROOT, 'lib', 'client.js'), 'utf8')
     expect(client).toContain('window.__ModuleLoader__.load({ id: "@anionex/dsh-vision-toolkit"')
+    expect(client).toContain('anthropicThinking')
+    expect(client).toContain('userAgent')
     expect(client).not.toMatch(/require\("\.\//)
+    const runtime = await readFile(join(ROOT, 'lib', 'runtime.js'), 'utf8')
+    expect(runtime).toContain('anthropic-version')
+    expect(runtime).toContain('x-api-key')
+    const upstream = await readFile(join(ROOT, 'lib', 'upstream.js'), 'utf8')
+    expect(upstream).toContain('VISION_API_PROTOCOL')
+    expect(upstream).toContain('VISION_ANTHROPIC_THINKING')
+    expect(upstream).toContain('VISION_USER_AGENT')
   })
 
   it('indexes each client source map section at the generated module source line', async () => {

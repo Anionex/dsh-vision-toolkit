@@ -66,6 +66,9 @@ jobs:
       - name: Verify portable package surface
         run: npm run verify:portable
 
+      - name: Exercise vendored provider transports
+        run: PYTHONDONTWRITEBYTECODE=1 python vendor/agent-vision-toolkit/tests/test_vision_client.py
+
       - name: Parse vendored Python sources without writing bytecode
         run: |
           python - <<'PY'

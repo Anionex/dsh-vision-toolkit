@@ -9,15 +9,23 @@ import type Schema from '@deepseek-ai/schemastery';
 import { type CredentialRef } from '@deepseek-ai/dsh-credentials';
 /** Settings document namespace owned by this plugin. */
 export declare const VISION_TOOLKIT_SETTINGS_NAMESPACE: import("@deepseek-ai/dsh-settings").SettingsNamespace;
+/** Browser-compatible default shared with the vendored Python client. */
+export declare const DEFAULT_VISION_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 /** Full user-facing configuration; every field defaults at the schema boundary. */
 export interface VisionToolkitConfig {
     provider?: {
-        /** OpenAI-compatible chat/completions base URL. */
+        /** Provider API base URL. */
         baseUrl?: string;
         /** DSH Credential reference holding the API key (an environment-style name). */
         credential?: string;
         /** Multimodal model name. */
         model?: string;
+        /** Vision request protocol: OpenAI Chat Completions or Anthropic Messages. */
+        protocol?: 'openai' | 'anthropic';
+        /** Anthropic thinking field behavior; `omit` leaves model defaults untouched. */
+        anthropicThinking?: 'omit' | 'disabled' | 'adaptive';
+        /** Outbound User-Agent for provider requests and connection tests. */
+        userAgent?: string;
     };
     /** Vision output language (`zh` or `en`). */
     language?: 'zh' | 'en';
@@ -48,6 +56,9 @@ export interface ResolvedVisionToolkitConfig {
         baseUrl: string;
         credential: CredentialRef;
         model: string;
+        protocol: 'openai' | 'anthropic';
+        anthropicThinking: 'omit' | 'disabled' | 'adaptive';
+        userAgent: string;
     };
     language: 'zh' | 'en';
     timeoutMs: number;
