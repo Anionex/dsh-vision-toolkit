@@ -3,8 +3,8 @@
 # DSH Vision Toolkit
 
 [![X (Twitter)](https://img.shields.io/badge/-@anion__ex-000000?style=flat-square&logo=x&logoColor=white)](https://x.com/anion_ex)
-[![Release v0.1.2](https://img.shields.io/badge/release-v0.1.2-5B4CF0?style=flat-square)](https://github.com/dsh-external/dsh-vision-toolkit/releases/tag/v0.1.2)
-[![Verified: 134 tests](https://img.shields.io/badge/verified-134%20tests-2EA44F?style=flat-square)](tests)
+[![Release v0.1.4](https://img.shields.io/badge/release-v0.1.4-5B4CF0?style=flat-square)](https://github.com/Anionex/dsh-vision-toolkit/releases/tag/v0.1.4)
+[![Verified: 136 tests](https://img.shields.io/badge/verified-136%20tests-2EA44F?style=flat-square)](tests)
 [![License: MIT](https://img.shields.io/badge/license-MIT-0B7285?style=flat-square)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-%5E22.19%20%7C%20%3E%3D24-339933?style=flat-square&logo=nodedotjs&logoColor=white)](package.json)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)](runtime/requirements.lock)
@@ -73,7 +73,7 @@ The checked-in UI-restoration workflow renders an intentionally inaccurate HTML 
 | Verified surface | Evidence |
 |---|---|
 | Product scope | 10 independent visual tools, matching `vision-tools` Skill, Artifacts, dedicated Web cards, and live Settings |
-| Automated coverage | 17 Vitest files / 134 passing tests, plus a dependency-free portable package check |
+| Automated coverage | 17 Vitest files / 136 passing tests, plus a dependency-free portable package check |
 | Real profiles | Clean temporary Web and Headless installation, activation, disable, re-enable, and uninstall |
 | Visual acceptance | Reproducible HTML screenshot → pixel diff example with a final `0%` difference |
 
@@ -351,7 +351,7 @@ pnpm run example:ui-restoration
 pnpm pack --dry-run
 ```
 
-`npm run verify:portable` is the dependency-free portable verification gate: it validates the vendored snapshot, package metadata and exports, committed JavaScript syntax, README links and images, required facade files, social-preview dimensions, and the dry-run tarball. The full TypeScript build and 134-test suite intentionally run with this checkout at `dsh-vision-toolkit/` inside a DeepSeek Harness source tree, where the peer API types and real profile fixtures live.
+`npm run verify:portable` is the dependency-free portable verification gate: it validates the vendored snapshot, package metadata and exports, committed JavaScript syntax, README links and images, required facade files, social-preview dimensions, and the dry-run tarball. The full TypeScript build and 136-test suite intentionally run with this checkout at `dsh-vision-toolkit/` inside a DeepSeek Harness source tree, where the peer API types and real profile fixtures live.
 
 `pnpm run build` verifies the vendored manifest before emitting JavaScript, declarations, and the loader-compatible Web client. The package commits `lib/`, so installation from a checkout does not require a consumer-side build. The keyless real-profile test installs into a clean `DSH_HOME`, boots Headless, executes all five P0 tools plus representative P1 local/remote tools through real tool calls, verifies disable and re-enable behavior, and uninstalls the bundle. See the [requirements traceability reference](docs/requirements-traceability/README.md) for the implementation and verification home of every P0/P1 requirement.
 
@@ -359,7 +359,7 @@ Update the upstream snapshot only through `pnpm run upstream:sync -- <checkout>`
 
 ## Project status and scope
 
-Version `0.1.2` is the current private GitHub release. P0 and P1 are product commitments in this package. P2 is a design threshold: no stable `ctx.visionToolkit` service, capability-discovery API, or provider ecosystem is published until at least one independent plugin consumes the internal capability shape. Web upload, drag-and-drop, camera/video/audio/document ingestion, interactive box editing, automatic GUI clicking, service clusters, model routing, model voting, and cross-session vision caches remain outside the current product.
+Version `0.1.4` is the current public npm release. P0 and P1 are product commitments in this package. P2 is a design threshold: no stable `ctx.visionToolkit` service, capability-discovery API, or provider ecosystem is published until at least one independent plugin consumes the internal capability shape. Web upload, drag-and-drop, camera/video/audio/document ingestion, interactive box editing, automatic GUI clicking, service clusters, model routing, model voting, and cross-session vision caches remain outside the current product.
 
 ## Community and About
 
