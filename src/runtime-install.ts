@@ -94,7 +94,7 @@ function sha256(bytes: string | Buffer): string {
   return createHash('sha256').update(bytes).digest('hex')
 }
 
-function isolatedPythonEnv(home: string): NodeJS.ProcessEnv {
+export function isolatedPythonEnvironment(home: string): NodeJS.ProcessEnv {
   return {
     HOME: home,
     USERPROFILE: home,
@@ -103,7 +103,9 @@ function isolatedPythonEnv(home: string): NodeJS.ProcessEnv {
     PYTHONPATH: undefined,
     VIRTUAL_ENV: undefined,
     PYTHONDONTWRITEBYTECODE: '1',
+    PYTHONIOENCODING: 'utf-8',
     PYTHONNOUSERSITE: '1',
+    PYTHONUTF8: '1',
   }
 }
 
@@ -233,7 +235,7 @@ async function pythonMetadata(
   let result: CommandResult
   try {
     result = await runCollected(ctx, [command.program, ...command.prefix, '-c', script], cwd, {
-      env: isolatedPythonEnv(cwd),
+      env: isolatedPythonEnvironment(cwd),
     })
   } catch {
     return undefined
@@ -314,7 +316,7 @@ async function dependencyVersions(
   let result: CommandResult
   try {
     result = await runCollected(ctx, [python.program, ...python.prefix, '-c', script], cwd, {
-      env: isolatedPythonEnv(cwd),
+      env: isolatedPythonEnvironment(cwd),
     })
   } catch (error) {
     throw new VisionToolkitError('runtime', `failed to start ${displayCommand(python)}`, { cause: error })
@@ -494,7 +496,7 @@ async function prepareManaged(
 
   const staging = await mkdtemp(join(parent, '.prepare-'))
   const installEnv: NodeJS.ProcessEnv = {
-    ...isolatedPythonEnv(cleanHome),
+    ...isolatedPythonEnvironment(cleanHome),
     UV_CACHE_DIR: join(stateRoot, 'uv-cache'),
   }
   const heartbeat = setInterval(() => {
