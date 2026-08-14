@@ -5,7 +5,7 @@
  * operation through `ctx.credentials`.
  * @module dsh-vision-toolkit/config
  */
-import type Schema from 'schemastery';
+import type Schema from '@deepseek-ai/schemastery';
 import { type CredentialRef } from '@deepseek-ai/dsh-credentials';
 /** Settings document namespace owned by this plugin. */
 export declare const VISION_TOOLKIT_SETTINGS_NAMESPACE: import("@deepseek-ai/dsh-settings").SettingsNamespace;

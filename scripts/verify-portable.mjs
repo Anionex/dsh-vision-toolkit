@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
-import { access, readFile, readdir, stat } from 'node:fs/promises'
+import { access, cp, mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
+import { tmpdir } from 'node:os'
 import { dirname, extname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -59,6 +60,56 @@ function pngDimensions(bytes) {
   }
 }
 
+function run(command, args, cwd) {
+  return spawnSync(command, args, { cwd, encoding: 'utf8' })
+}
+
+async function verifyWindowsCheckout() {
+  const temporaryRoot = await mkdtemp(join(tmpdir(), 'dsh-vision-autocrlf-'))
+  const seed = join(temporaryRoot, 'seed')
+  const checkout = join(temporaryRoot, 'checkout')
+  try {
+    await mkdir(join(seed, 'scripts'), { recursive: true })
+    await mkdir(join(seed, 'vendor'), { recursive: true })
+    await cp(join(root, '.gitattributes'), join(seed, '.gitattributes'))
+    await cp(join(root, 'package.json'), join(seed, 'package.json'))
+    await cp(join(root, 'scripts', 'upstream-manifest.mjs'), join(seed, 'scripts', 'upstream-manifest.mjs'))
+    await cp(join(root, 'vendor', 'agent-vision-toolkit'), join(seed, 'vendor', 'agent-vision-toolkit'), { recursive: true })
+    await writeFile(join(seed, 'autocrlf-probe.txt'), 'line one\nline two\n')
+
+    const setupCommands = [
+      ['init', '--quiet'],
+      ['config', 'user.name', 'DSH portable verification'],
+      ['config', 'user.email', 'portable@example.invalid'],
+      ['config', 'core.autocrlf', 'false'],
+      ['add', '.'],
+      ['commit', '--quiet', '-m', 'checkout fixture'],
+    ]
+    for (const args of setupCommands) {
+      const result = run('git', args, seed)
+      if (result.status !== 0) {
+        failures.push(`could not prepare Windows checkout fixture: ${(result.stderr || result.stdout).trim()}`)
+        return
+      }
+    }
+
+    const clone = run('git', ['-c', 'core.autocrlf=true', 'clone', '--no-local', '--quiet', seed, checkout], temporaryRoot)
+    if (clone.status !== 0) {
+      failures.push(`core.autocrlf=true checkout failed: ${(clone.stderr || clone.stdout).trim()}`)
+      return
+    }
+    const probe = await readFile(join(checkout, 'autocrlf-probe.txt'))
+    check(probe.includes(Buffer.from('\r\n')), 'core.autocrlf=true checkout fixture did not exercise CRLF conversion')
+
+    const manifest = run(process.execPath, ['scripts/upstream-manifest.mjs'], checkout)
+    if (manifest.status !== 0) {
+      failures.push(`vendored upstream is not byte-stable under core.autocrlf=true: ${(manifest.stderr || manifest.stdout).trim()}`)
+    }
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true })
+  }
+}
+
 const packagePath = join(root, 'package.json')
 const pkg = JSON.parse(await readFile(packagePath, 'utf8'))
 
@@ -75,6 +126,8 @@ check(pkg.dshClient === undefined, 'legacy top-level dshClient metadata must rem
 check(pkg.exports?.['./client']?.default === './lib/client.js', 'the Web client export must resolve to lib/client.js')
 check(Array.isArray(pkg.files) && pkg.files.includes('assets'), 'package files must include README visual assets')
 check(pkg.scripts?.['verify:portable'] === 'node scripts/upstream-manifest.mjs && node scripts/verify-portable.mjs', 'verify:portable script is missing or changed')
+check(pkg.peerDependencies?.['@deepseek-ai/schemastery'] === '^3.18.1-rc.1', '@deepseek-ai/schemastery must be a host-provided peer dependency')
+check(pkg.peerDependencies?.schemastery === undefined, 'unscoped schemastery peer dependency must remain absent')
 
 const dependencyGroups = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']
 for (const group of dependencyGroups) {
@@ -87,6 +140,7 @@ for (const group of dependencyGroups) {
 }
 
 const requiredFiles = [
+  '.gitattributes',
   'LICENSE',
   'README.md',
   'README.zh.md',
@@ -116,6 +170,8 @@ const requiredFiles = [
 for (const path of requiredFiles) {
   check(await exists(join(root, path)), `required file is missing: ${path}`)
 }
+
+await verifyWindowsCheckout()
 
 const declaredEntrypoints = [
   pkg.main,
