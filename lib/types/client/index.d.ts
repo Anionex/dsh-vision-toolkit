@@ -171,7 +171,7 @@ export declare class VisionSettingsController {
     save(value: SettingsValue, expectedRevision: number): Promise<void>;
     runHealth(testConnection: boolean): Promise<void>;
 }
-/** Required client services. */
+/** Required client services. The pasted-image codec attaches to either trigger-service generation after load. */
 export declare const inject: string[];
 /** Register dedicated Tool views and the Vision Settings section. */
 export declare function apply(ctx: ClientContext): void;

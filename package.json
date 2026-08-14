@@ -78,7 +78,6 @@
         "@deepseek-ai/dsh-client-ui-conversation",
         "@deepseek-ai/dsh-client-ui-tool",
         "@deepseek-ai/dsh-client-ui-settings",
-        "@deepseek-ai/dsh-client-ui-slash",
         "@deepseek-ai/dsh-client-locale"
       ],
       "platform": "web"

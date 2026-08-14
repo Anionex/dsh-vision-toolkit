@@ -47,6 +47,14 @@ type PasteDockProps = PropsRuntime<'conversation.input.dock'> & {
   remove: (occurrence: PasteOccurrence) => void
 }
 
+interface ReferenceSourceRegistry {
+  registerSource: (source: SlashSource) => () => void
+}
+
+interface LegacyTriggerContext {
+  inputTriggers: ReferenceSourceRegistry
+}
+
 let fallbackId = 0
 
 function id(): string {
@@ -354,7 +362,23 @@ export function PasteImageDock(props: PasteDockProps): ReactNode {
 /** Install capture interception, the text-reference codec, and composer feedback. */
 export function installPasteImages(ctx: ClientContext): void {
   const controller = new PasteImageController(ctx)
-  ctx.effect(() => ctx.slash.registerSource(controller.source()), 'dsh-vision-toolkit: pasted image reference codec')
+  const registered = new WeakMap<ReferenceSourceRegistry, () => void>()
+  const register = (scope: ClientContext, registry: ReferenceSourceRegistry): void => {
+    scope.effect(() => {
+      if (registered.has(registry)) return () => {}
+      const dispose = registry.registerSource(controller.source())
+      registered.set(registry, dispose)
+      return () => {
+        if (registered.get(registry) !== dispose) return
+        registered.delete(registry)
+        dispose()
+      }
+    }, 'dsh-vision-toolkit: pasted image reference codec')
+  }
+  ctx.inject(['slash'], (scope: ClientContext) => { register(scope, scope.slash) })
+  ctx.inject(['inputTriggers'], (scope: ClientContext) => {
+    register(scope, (scope as unknown as LegacyTriggerContext).inputTriggers)
+  })
   ctx.effect(() => {
     const listener = (event: ClipboardEvent): void => { controller.handlePaste(event) }
     document.addEventListener('paste', listener, true)

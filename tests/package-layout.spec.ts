@@ -52,6 +52,7 @@ describe('package layout contract', () => {
       '@deepseek-ai/dsh-client-ui-settings',
       '@deepseek-ai/dsh-client-locale',
     ]))
+    expect(PACKAGE.dsh?.client?.inject).not.toContain('@deepseek-ai/dsh-client-ui-slash')
   })
 
   it('ships runtime, pinned upstream, lib, src, patch, and docs in files', () => {
