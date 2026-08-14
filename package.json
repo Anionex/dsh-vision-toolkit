@@ -18,10 +18,10 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dsh-external/dsh-vision-toolkit.git"
+    "url": "git+https://github.com/Anionex/dsh-vision-toolkit.git"
   },
   "bugs": {
-    "url": "https://github.com/dsh-external/dsh-vision-toolkit/issues"
+    "url": "https://github.com/Anionex/dsh-vision-toolkit/issues"
   },
   "homepage": "https://agent-vision.anionex.me",
   "funding": "https://ifdian.net/a/anionex",

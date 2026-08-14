@@ -115,8 +115,8 @@ const pkg = JSON.parse(await readFile(packagePath, 'utf8'))
 
 check(pkg.name === '@dsh-external/dsh-vision-toolkit', 'package name must stay @dsh-external/dsh-vision-toolkit')
 check(pkg.version === '0.1.2', 'package version and the latest release notes must stay aligned')
-check(pkg.repository?.url === 'git+https://github.com/dsh-external/dsh-vision-toolkit.git', 'repository URL is missing or mismatched')
-check(pkg.bugs?.url === 'https://github.com/dsh-external/dsh-vision-toolkit/issues', 'issue tracker URL is missing or mismatched')
+check(pkg.repository?.url === 'git+https://github.com/Anionex/dsh-vision-toolkit.git', 'repository URL is missing or mismatched')
+check(pkg.bugs?.url === 'https://github.com/Anionex/dsh-vision-toolkit/issues', 'issue tracker URL is missing or mismatched')
 check(pkg.homepage === 'https://agent-vision.anionex.me', 'homepage URL is missing or mismatched')
 check(pkg.funding === 'https://ifdian.net/a/anionex', 'funding metadata is missing or mismatched')
 check(pkg.engines?.node === '^22.19.0 || >=24.0.0', 'Node.js engine range must match DeepSeek Harness')
@@ -169,6 +169,23 @@ const requiredFiles = [
 ]
 for (const path of requiredFiles) {
   check(await exists(join(root, path)), `required file is missing: ${path}`)
+}
+
+const publicRepositoryFiles = [
+  '.github/ISSUE_TEMPLATE/config.yml',
+  'CHANGELOG.md',
+  'README.md',
+  'README.zh.md',
+  'SUPPORT.md',
+  'index.html',
+  'package.json',
+]
+for (const path of publicRepositoryFiles) {
+  const content = await readFile(join(root, path), 'utf8')
+  check(
+    !content.includes('https://github.com/dsh-external/dsh-vision-toolkit'),
+    `${path} still links to the retired dsh-external repository`,
+  )
 }
 
 await verifyWindowsCheckout()

@@ -364,7 +364,7 @@ pnpm pack --dry-run
 ## 社区与关于
 
 - 提交代码、协议或上游快照变更前，请先阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
-- 可复现缺陷、范围明确的功能建议和使用问题请提交到 [GitHub Issues](https://github.com/dsh-external/dsh-vision-toolkit/issues)；如何选择渠道见 [SUPPORT.md](SUPPORT.md)。
+- 可复现缺陷、范围明确的功能建议和使用问题请提交到 [GitHub Issues](https://github.com/Anionex/dsh-vision-toolkit/issues)；如何选择渠道见 [SUPPORT.md](SUPPORT.md)。
 - 安全漏洞必须按 [SECURITY.md](SECURITY.md) 私下报告，不要创建公开 Issue。
 - 版本与兼容性变化记录在 [CHANGELOG.md](CHANGELOG.md)。
 - 可选赞助方式与用途见 [FUNDING.md](FUNDING.md)；赞助不购买路线图优先级或私有支持。
