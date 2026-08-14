@@ -50,7 +50,7 @@ class ProbeSubprocessService extends SubprocessRuntime {
       : command.includes('with Image.open')
         ? '{"width":256,"height":256,"format":"png","mode":"RGBA"}\n'
         : command.includes('import PIL')
-          ? '{"pillow":"12.3.0","numpy":"2.5.1","vtracer":"0.6.15"}\n'
+          ? '{"pillow":"12.3.0","numpy":"2.4.6","vtracer":"0.6.15"}\n'
           : ''
     const read = (text: string): SubprocessOutputRead => ({ text, nextOffset: Buffer.byteLength(text), lossy: false })
     return {

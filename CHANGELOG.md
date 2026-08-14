@@ -21,6 +21,7 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 - Require the compatible DSH `0.1.0-rc.6` release line so package managers cannot select the broken `dsh-client-runtime@0.0.1-rc.1` release through the `latest` dist-tag.
 - Use the published `@deepseek-ai/dsh-client-ui-input-trigger` package while retaining runtime registration compatibility with the earlier `ctx.slash` service alias.
 - Publish only rescoped `@deepseek-ai/cordis` imports and declare every directly consumed DSH host/client peer.
+- Pin NumPy to the newest release that still supports the documented Python 3.11 minimum, so managed runtime preparation works on Python 3.11.
 
 ## [0.1.4] - 2026-08-14
 
