@@ -10,7 +10,7 @@
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)](runtime/requirements.lock)
 [![DSH profiles](https://img.shields.io/badge/DSH-Web%20%2B%20Headless-5B4CF0?style=flat-square)](cordis.patch.yml)
 
-**安装：** `dsh plugin --profile web add @dsh-external/dsh-vision-toolkit`
+**安装：** `dsh plugin --profile web add @anionex/dsh-vision-toolkit`
 
 **DSH Vision Toolkit 将 [`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit) 作为原生 Profile Bundle 带入 DeepSeek Harness。**
 
@@ -91,8 +91,8 @@ DSH Vision Toolkit 在这些上游能力之外增加原生工具 schema、版本
 前置条件：DeepSeek Harness `0.1.0-rc.6` 或兼容的后续 `0.1.x` 版本、Python 3.11+，并确保 `dsh plugin` 可以使用 `pnpm`。从 npm 安装已发布的 Bundle，将其加入所需 Profile，并确认 Bundle 行已经挂载：
 
 ```sh
-dsh plugin --profile web add @dsh-external/dsh-vision-toolkit
-dsh plugin --profile headless add @dsh-external/dsh-vision-toolkit
+dsh plugin --profile web add @anionex/dsh-vision-toolkit
+dsh plugin --profile headless add @anionex/dsh-vision-toolkit
 dsh --profile web --dump-config | grep vision-toolkit
 dsh --profile headless --dump-config | grep vision-toolkit
 ```
@@ -161,8 +161,8 @@ flowchart LR
 将 Bundle 安装到需要暴露能力的每个 Profile：
 
 ```sh
-dsh plugin --profile web add @dsh-external/dsh-vision-toolkit
-dsh plugin --profile headless add @dsh-external/dsh-vision-toolkit
+dsh plugin --profile web add @anionex/dsh-vision-toolkit
+dsh plugin --profile headless add @anionex/dsh-vision-toolkit
 dsh --profile web --dump-config | grep vision-toolkit
 dsh --profile headless --dump-config | grep vision-toolkit
 ```
@@ -187,8 +187,8 @@ dsh --profile headless --dump-config | grep vision-toolkit
 通过注册表安装时，使用 Profile 的包管理命令更新依赖：
 
 ```sh
-dsh plugin --profile web update @dsh-external/dsh-vision-toolkit
-dsh plugin --profile headless update @dsh-external/dsh-vision-toolkit
+dsh plugin --profile web update @anionex/dsh-vision-toolkit
+dsh plugin --profile headless update @anionex/dsh-vision-toolkit
 ```
 
 通过本地路径安装时，对替换后的 checkout 或 tarball 再次执行 `add`。Settings 保存在 Profile 的 Settings 提供方中。候选运行时完成验证和准备后才会持久化并启用；失败候选或已经陈旧的并发候选无法替换当前服务 generation。
@@ -196,8 +196,8 @@ dsh plugin --profile headless update @dsh-external/dsh-vision-toolkit
 ### 卸载
 
 ```sh
-dsh plugin --profile web remove @dsh-external/dsh-vision-toolkit
-dsh plugin --profile headless remove @dsh-external/dsh-vision-toolkit
+dsh plugin --profile web remove @anionex/dsh-vision-toolkit
+dsh plugin --profile headless remove @anionex/dsh-vision-toolkit
 ```
 
 `dsh plugin remove` 会同时移除依赖及其 Bundle 层。Profile 随即不再暴露激活引导工具、Agent 级 Vision Toolkit 工具或 skill 条目。没有 Profile 使用本包时可以另行删除 managed 缓存；缓存不是活动配置，无法自行注册任何能力。

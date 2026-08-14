@@ -8,7 +8,7 @@ import { apply, decodeVisionResult, inject, VisionSettingsController } from '../
 
 afterEach(() => {
   cleanup()
-  document.querySelectorAll('style[data-plugin-css="@dsh-external/dsh-vision-toolkit/client"]').forEach(element => { element.remove() })
+  document.querySelectorAll('style[data-plugin-css="@anionex/dsh-vision-toolkit/client"]').forEach(element => { element.remove() })
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
@@ -179,7 +179,7 @@ describe('Vision Toolkit client plugin', () => {
     const { ctx } = fakeClientContext()
     apply(ctx as never)
 
-    const styles = document.querySelector<HTMLStyleElement>('style[data-plugin-css="@dsh-external/dsh-vision-toolkit/client"]')
+    const styles = document.querySelector<HTMLStyleElement>('style[data-plugin-css="@anionex/dsh-vision-toolkit/client"]')
     const css = styles?.textContent ?? ''
     expect(css).toContain('.dvt-preview{display:block;width:100%;max-height:360px;object-fit:contain;background:repeating-conic-gradient(var(--dsw-alias-bg-module-platform) 0 25%,var(--dsw-alias-bg-layer-1) 0 50%)')
     expect(css).toContain('.dvt-download{display:inline-flex;align-items:center;height:28px;padding:0 12px;border-radius:999px;background:var(--dsw-alias-button-primary-fill);color:var(--dsw-alias-label-primary-foreground)')

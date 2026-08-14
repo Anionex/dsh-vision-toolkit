@@ -106,7 +106,7 @@ describe('package layout contract', () => {
     expect(config).toContain("from '@deepseek-ai/schemastery'")
     expect(config).not.toContain("from 'schemastery'")
     const client = await readFile(join(ROOT, 'lib', 'client.js'), 'utf8')
-    expect(client).toContain('window.__ModuleLoader__.load({ id: "@dsh-external/dsh-vision-toolkit"')
+    expect(client).toContain('window.__ModuleLoader__.load({ id: "@anionex/dsh-vision-toolkit"')
     expect(client).not.toMatch(/require\("\.\//)
   })
 

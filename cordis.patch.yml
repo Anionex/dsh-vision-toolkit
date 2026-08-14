@@ -3,4 +3,4 @@
 # their profile patch row with the same id.
 - insert:
     - id: vision-toolkit
-      name: '@dsh-external/dsh-vision-toolkit'
+      name: '@anionex/dsh-vision-toolkit'
