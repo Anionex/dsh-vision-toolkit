@@ -43,7 +43,13 @@ jobs:
         run: pnpm install --frozen-lockfile --trust-lockfile --registry=https://registry.npmjs.org
 
       - name: Install the compatible DSH CLI for Profile acceptance
-        run: pnpm add --global @deepseek-ai/dsh@0.1.0-rc.6 --registry=https://registry.npmjs.org --config.minimumReleaseAge=0
+        run: >-
+          pnpm add --global
+          --allow-build=@deepseek-ai/dsh-subprocess-local
+          --allow-build=node-pty
+          @deepseek-ai/dsh@0.1.0-rc.6
+          --registry=https://registry.npmjs.org
+          --config.minimumReleaseAge=0
 
       - name: Build against public registry exports
         run: pnpm run build

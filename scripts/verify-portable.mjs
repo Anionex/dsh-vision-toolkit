@@ -162,6 +162,7 @@ const requiredFiles = [
   'index.html',
   'cordis.patch.yml',
   'pnpm-lock.yaml',
+  'pnpm-workspace.yaml',
   'tsconfig.client.public.json',
   'lib/index.js',
   'lib/types/index.d.ts',
