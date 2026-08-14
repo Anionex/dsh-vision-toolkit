@@ -243,11 +243,16 @@ export class PasteImageController {
     const input = this.inputFor(sessionId)
     const snapshot = input.state.getSnapshot()
     if (snapshot.phase !== 'plain') return
+    const current = snapshot.occurrences.find(candidate =>
+      candidate.source === SOURCE
+      && candidate.occurrenceId === occurrence.occurrenceId
+      && candidate.ref === occurrence.ref)
+    if (current === undefined) return
     const accepted = (input as typeof input & {
       insertText: (text: string, span: { start: number; end: number; draftRev: number }) => boolean
     }).insertText('', {
-      start: occurrence.offset,
-      end: occurrence.offset + 1,
+      start: current.offset,
+      end: current.offset + 1,
       draftRev: snapshot.draftRev,
     })
     if (!accepted) return

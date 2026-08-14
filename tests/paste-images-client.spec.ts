@@ -253,14 +253,15 @@ describe('clipboard image client', () => {
     expect(afterFirst.map(row => row.ref)).toEqual(original.slice(1).map(row => row.ref))
     expect(afterFirst.map(row => row.offset)).toEqual([1, 3])
 
-    const later = afterFirst[1]
-    if (later === undefined) throw new Error('later occurrence was not retained')
+    const staleLater = original[2]
+    const currentLater = afterFirst[1]
+    if (staleLater === undefined || currentLater === undefined) throw new Error('later occurrence was not retained')
     const laterRev = bench.input.state.getSnapshot().draftRev
-    injected.remove(later)
+    injected.remove(staleLater)
 
     expect(bench.input.insertText).toHaveBeenLastCalledWith('', {
-      start: later.offset,
-      end: later.offset + 1,
+      start: currentLater.offset,
+      end: currentLater.offset + 1,
       draftRev: laterRev,
     })
     expect(bench.input.state.getSnapshot().occurrences.map(row => row.ref)).toEqual([original[1]?.ref])
