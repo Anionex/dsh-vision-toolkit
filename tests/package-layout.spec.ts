@@ -68,6 +68,7 @@ describe('package layout contract', () => {
     expect(PACKAGE.scripts.build).toContain('node scripts/upstream-manifest.mjs')
     expect(PACKAGE.scripts.build).toContain('tsc -p tsconfig.json')
     expect(PACKAGE.scripts.build).toContain('tsc -p tsconfig.client.json')
+    expect(PACKAGE.scripts.build).toContain('tsc -p tsconfig.client.public.json')
     expect(PACKAGE.scripts.build).toContain('node scripts/build-client.mjs')
     expect(PACKAGE.scripts['upstream:sync']).toBe('node scripts/sync-upstream.mjs')
     expect(PACKAGE.scripts['upstream:manifest']).toContain('--write')
@@ -95,6 +96,8 @@ describe('package layout contract', () => {
     }
     expect(peers).toHaveProperty('@deepseek-ai/dsh-client-ui-input-trigger')
     expect(peers).not.toHaveProperty('@deepseek-ai/dsh-client-ui-slash')
+    expect(peers).not.toHaveProperty('@deepseek-ai/dsh-host-apiproxy')
+    expect(PACKAGE.peerDependenciesMeta?.['@deepseek-ai/dsh-host-webserver']?.optional).toBe(true)
     expect(PACKAGE.dsh?.client?.inject).not.toContain('@deepseek-ai/dsh-client-ui-slash')
   })
 

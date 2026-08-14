@@ -161,6 +161,8 @@ const requiredFiles = [
   '.github/workflows/pages.yml',
   'index.html',
   'cordis.patch.yml',
+  'pnpm-lock.yaml',
+  'tsconfig.client.public.json',
   'lib/index.js',
   'lib/types/index.d.ts',
   'lib/client.js',

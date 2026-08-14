@@ -23,15 +23,38 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
+          cache: pnpm
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
+      - name: Install project dependencies
+        run: pnpm install --frozen-lockfile --trust-lockfile --registry=https://registry.npmjs.org
+
+      - name: Install the compatible DSH CLI for Profile acceptance
+        run: pnpm add --global @deepseek-ai/dsh@0.1.0-rc.6 --registry=https://registry.npmjs.org --config.minimumReleaseAge=0
+
+      - name: Build against public registry exports
+        run: pnpm run build
+
+      - name: Verify committed build artifacts
+        run: git diff --exit-code -- lib
+
+      - name: Run unit and required Profile acceptance tests
+        run: pnpm test
+        env:
+          DSH_VISION_REQUIRE_PROFILE_E2E: "1"
 
       - name: Verify portable package surface
         run: npm run verify:portable
