@@ -9,9 +9,17 @@ declare const en: {
     readonly settingsIntro: "Configure the pinned visual engineering runtime, its external vision endpoint, and local safety limits.";
     readonly externalNotice: "Remote tools send the selected image bytes to the configured external vision API. Local crop, trace, pixel diff, palette, foreground extraction, and HTML rendering do not upload images.";
     readonly provider: "Vision service";
-    readonly providerHint: "Choose the API protocol, then provide the service address, model, and credential used by online vision features.";
+    readonly providerHint: "Choose the API protocol, then provide the service address, model, and API key used by online vision features.";
     readonly baseUrl: "Base URL";
-    readonly credential: "Credential reference";
+    readonly apiKey: "API key";
+    readonly apiKeyPlaceholderMissing: "Paste the API key";
+    readonly apiKeyPlaceholderConfigured: "Saved; leave blank to keep it";
+    readonly apiKeyHint: "The key is stored in DSH Credentials and is never shown again after saving.";
+    readonly apiKeyLocked: "The current key comes from a read-only source and cannot be replaced here.";
+    readonly apiKeyBlank: "The API key cannot contain only spaces.";
+    readonly apiKeyInvalid: "Paste only the key, without a variable name, quotes, spaces, or line breaks.";
+    readonly credential: "Credential name";
+    readonly credentialHint: "Advanced: the API key is stored under this name. Keep VISION_API_KEY unless another plugin configuration requires a different reference.";
     readonly model: "Model";
     readonly protocol: "API protocol";
     readonly anthropicThinking: "Anthropic thinking";
@@ -33,7 +41,7 @@ declare const en: {
     readonly saving: "Validating runtime…";
     readonly reload: "Reload";
     readonly saved: "Settings validated and applied.";
-    readonly readOnly: "The active Settings provider is read-only.";
+    readonly readOnly: "Service settings are read-only. A writable API key can still be saved.";
     readonly configured: "Configured";
     readonly missing: "Missing";
     readonly source: "Source";
@@ -47,7 +55,7 @@ declare const en: {
     readonly connectionHint: "Connection testing explicitly sends the configured credential to GET /models. It uploads no image and creates no completion.";
     readonly saveBeforeTesting: "Save service changes before testing the connection.";
     readonly advanced: "Advanced settings";
-    readonly advancedHint: "Provider compatibility, output language, resource limits, runtime source, Python, and additional readable directories.";
+    readonly advancedHint: "Credential name, provider compatibility, output language, resource limits, runtime source, Python, and additional readable directories.";
     readonly pluginVersion: "Plugin";
     readonly upstreamVersion: "Upstream";
     readonly activeGeneration: "Runtime generation";
@@ -241,7 +249,7 @@ export declare class VisionSettingsController {
     private set;
     load(): Promise<void>;
     refreshIfLoaded(): void;
-    save(value: SettingsValue, expectedRevision: number): Promise<void>;
+    save(value: SettingsValue, expectedRevision: number, credentialValue: string | undefined, writeSettings: boolean): Promise<boolean>;
     runHealth(testConnection: boolean): Promise<void>;
 }
 /** Required client services. The pasted-image codec attaches to either trigger-service generation after load. */

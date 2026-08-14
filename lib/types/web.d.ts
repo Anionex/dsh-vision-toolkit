@@ -60,6 +60,7 @@ export declare class VisionToolkitWebBackend {
     /** Build the current settings/runtime/credential snapshot without secrets. */
     snapshot(): Promise<VisionToolkitSettingsSnapshot>;
     private save;
+    private saveCredential;
     private health;
     /** Handle the exact Settings route. */
     handle(req: IncomingMessage, res: ServerResponse): Promise<void>;

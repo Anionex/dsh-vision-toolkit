@@ -32,9 +32,17 @@ const en = {
   settingsIntro: 'Configure the pinned visual engineering runtime, its external vision endpoint, and local safety limits.',
   externalNotice: 'Remote tools send the selected image bytes to the configured external vision API. Local crop, trace, pixel diff, palette, foreground extraction, and HTML rendering do not upload images.',
   provider: 'Vision service',
-  providerHint: 'Choose the API protocol, then provide the service address, model, and credential used by online vision features.',
+  providerHint: 'Choose the API protocol, then provide the service address, model, and API key used by online vision features.',
   baseUrl: 'Base URL',
-  credential: 'Credential reference',
+  apiKey: 'API key',
+  apiKeyPlaceholderMissing: 'Paste the API key',
+  apiKeyPlaceholderConfigured: 'Saved; leave blank to keep it',
+  apiKeyHint: 'The key is stored in DSH Credentials and is never shown again after saving.',
+  apiKeyLocked: 'The current key comes from a read-only source and cannot be replaced here.',
+  apiKeyBlank: 'The API key cannot contain only spaces.',
+  apiKeyInvalid: 'Paste only the key, without a variable name, quotes, spaces, or line breaks.',
+  credential: 'Credential name',
+  credentialHint: 'Advanced: the API key is stored under this name. Keep VISION_API_KEY unless another plugin configuration requires a different reference.',
   model: 'Model',
   protocol: 'API protocol',
   anthropicThinking: 'Anthropic thinking',
@@ -56,7 +64,7 @@ const en = {
   saving: 'Validating runtime…',
   reload: 'Reload',
   saved: 'Settings validated and applied.',
-  readOnly: 'The active Settings provider is read-only.',
+  readOnly: 'Service settings are read-only. A writable API key can still be saved.',
   configured: 'Configured',
   missing: 'Missing',
   source: 'Source',
@@ -70,7 +78,7 @@ const en = {
   connectionHint: 'Connection testing explicitly sends the configured credential to GET /models. It uploads no image and creates no completion.',
   saveBeforeTesting: 'Save service changes before testing the connection.',
   advanced: 'Advanced settings',
-  advancedHint: 'Provider compatibility, output language, resource limits, runtime source, Python, and additional readable directories.',
+  advancedHint: 'Credential name, provider compatibility, output language, resource limits, runtime source, Python, and additional readable directories.',
   pluginVersion: 'Plugin',
   upstreamVersion: 'Upstream',
   activeGeneration: 'Runtime generation',
@@ -164,9 +172,17 @@ const zh: Record<LocaleKey, string> = {
   settingsIntro: '在这里设置视觉模型服务、工具运行环境，以及图片和文件的本地访问范围。',
   externalNotice: '使用图像理解、目标定位、界面检测或文字识别等在线功能时，所选图片会发送到下方配置的视觉服务。图片裁剪、轮廓描摹、像素对比、主色提取、前景提取和网页截图均在本机完成，不会上传图片。',
   provider: '在线视觉服务',
-  providerHint: '选择接口协议后，填写在线视觉功能使用的 API 地址、模型名称和密钥名称。',
+  providerHint: '选择接口协议后，填写在线视觉功能使用的 API 地址、模型名称和 API 密钥。',
   baseUrl: 'API 地址',
-  credential: 'API 密钥名称',
+  apiKey: 'API 密钥',
+  apiKeyPlaceholderMissing: '粘贴 API 密钥',
+  apiKeyPlaceholderConfigured: '已保存；留空表示不修改',
+  apiKeyHint: '密钥会保存到 DSH 凭据存储，保存后不会在页面中回显。',
+  apiKeyLocked: '当前密钥来自只读配置，无法在此替换。',
+  apiKeyBlank: 'API 密钥不能只包含空格。',
+  apiKeyInvalid: '请只粘贴密钥本身，不要包含变量名、引号、空格或换行。',
+  credential: '凭据名称',
+  credentialHint: '高级用法：API 密钥会按此名称保存。除非其他插件配置要求不同名称，否则保持 VISION_API_KEY。',
   model: '模型名称',
   protocol: 'API 协议',
   anthropicThinking: 'Anthropic thinking',
@@ -188,7 +204,7 @@ const zh: Record<LocaleKey, string> = {
   saving: '正在检查并应用…',
   reload: '重新加载',
   saved: '设置已保存并生效。',
-  readOnly: '当前设置由只读配置提供，无法在此修改。',
+  readOnly: '服务设置来自只读配置；如果 API 密钥可写，仍可在此保存密钥。',
   configured: '已就绪',
   missing: '未配置',
   source: '配置来源',
@@ -202,7 +218,7 @@ const zh: Record<LocaleKey, string> = {
   connectionHint: '“检查本地环境”只检查本机依赖和目录；“测试服务连接”会携带已配置的 API 密钥请求 /models，但不会上传图片或调用模型。',
   saveBeforeTesting: '修改服务配置后，请先保存，再测试连接。',
   advanced: '高级设置',
-  advancedHint: '服务兼容参数、结果语言、资源限制、运行环境来源、Python 和额外可读目录。一般无需修改。',
+  advancedHint: '凭据名称、服务兼容参数、结果语言、资源限制、运行环境来源、Python 和额外可读目录。一般无需修改。',
   pluginVersion: '插件版本',
   upstreamVersion: '工具包版本',
   activeGeneration: '本次运行已应用',
@@ -779,17 +795,50 @@ export class VisionSettingsController {
     void this.load()
   }
 
-  async save(value: SettingsValue, expectedRevision: number): Promise<void> {
+  async save(
+    value: SettingsValue,
+    expectedRevision: number,
+    credentialValue: string | undefined,
+    writeSettings: boolean,
+  ): Promise<boolean> {
     this.set({ ...this.state, action: 'save', error: undefined, message: undefined })
+    let snapshot = this.state.snapshot
     try {
-      const snapshot = await apiRequest<SettingsSnapshot>({
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'save', expectedRevision, value }),
-      })
+      if (writeSettings) {
+        snapshot = await apiRequest<SettingsSnapshot>({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'save', expectedRevision, value }),
+        })
+      }
+      if (snapshot === undefined) throw new Error('Vision Toolkit Settings are unavailable')
+      if (credentialValue !== undefined) {
+        try {
+          snapshot = await apiRequest<SettingsSnapshot>({
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'credential',
+              expectedRevision: snapshot.settings.revision,
+              ref: snapshot.credential.ref,
+              value: credentialValue,
+            }),
+          })
+        } catch (error) {
+          this.set({
+            status: 'ready',
+            snapshot,
+            health: this.state.health,
+            error: error instanceof Error ? error.message : String(error),
+          })
+          return false
+        }
+      }
       this.set({ status: 'ready', snapshot, health: this.state.health, message: 'saved' })
+      return true
     } catch (error) {
       this.set({ ...this.state, action: undefined, error: error instanceof Error ? error.message : String(error) })
+      return false
     }
   }
 
@@ -850,6 +899,16 @@ function positiveInteger(raw: string, label: string, t: Translate): number {
   const value = Number(raw)
   if (!Number.isSafeInteger(value) || value <= 0) throw new Error(t('positiveInteger', { field: label }))
   return value
+}
+
+function apiKeyFailure(value: string, t: Translate): string | undefined {
+  if (value.length === 0) return undefined
+  const trimmed = value.trim()
+  if (trimmed.length === 0) return t('apiKeyBlank')
+  const quoted = trimmed.length > 1 && ['"', '\'', '`'].includes(trimmed[0] ?? '') && trimmed.endsWith(trimmed[0] ?? '')
+  const environmentLine = /^[A-Z][A-Z0-9_]*=[^=]/u.test(trimmed)
+  if (quoted || environmentLine || !/^[\x21-\x7E]+$/u.test(trimmed)) return t('apiKeyInvalid')
+  return undefined
 }
 
 function valueOf(draft: Draft, t: Translate): SettingsValue {
@@ -959,6 +1018,7 @@ function LoadedSettings({ controller, t }: SettingsInjected) {
   const state = useSyncExternalStore(controller.subscribe, controller.snapshot, controller.snapshot)
   const snapshot = state.snapshot
   const [draft, setDraft] = useState<Draft | undefined>(undefined)
+  const [apiKey, setApiKey] = useState('')
   const [draftError, setDraftError] = useState<string | undefined>(undefined)
 
   useEffect(() => { if (state.status === 'idle') void controller.load() }, [controller, state.status])
@@ -976,13 +1036,27 @@ function LoadedSettings({ controller, t }: SettingsInjected) {
   const update = <K extends keyof Draft>(key: K, value: Draft[K]): void => setDraft(current => current === undefined ? current : { ...current, [key]: value })
   const save = (): void => {
     try {
+      const keyFailure = apiKeyFailure(apiKey, t)
+      if (keyFailure !== undefined) {
+        setDraftError(keyFailure)
+        return
+      }
+      const credentialValue = apiKey.length === 0 ? undefined : apiKey.trim()
       setDraftError(undefined)
-      void controller.save(valueOf(draft, t), snapshot.settings.revision)
+      void controller.save(
+        valueOf(draft, t),
+        snapshot.settings.revision,
+        credentialValue,
+        snapshot.writable,
+      ).then(saved => { if (saved) setApiKey('') })
     } catch (error) {
       setDraftError(error instanceof Error ? error.message : String(error))
     }
   }
   const busy = state.action !== undefined
+  const credentialMatchesSnapshot = draft.credential.trim() === snapshot.credential.ref
+  const keyLocked = credentialMatchesSnapshot && !snapshot.credential.writable
+  const canSave = snapshot.writable || (apiKey.length > 0 && !keyLocked)
   const runtimeErrorTitle = snapshot.runtime.ready ? t('runtimeCandidateRejected') : t('runtimeUnavailable')
 
   return (
@@ -996,14 +1070,14 @@ function LoadedSettings({ controller, t }: SettingsInjected) {
 
       <section className="dvt-panel dvt-essential"><div className="dvt-panel-title"><div><h3>{t('provider')}</h3><p>{t('providerHint')}</p></div><span className={`dvt-badge ${snapshot.credential.configured ? 'ok' : 'error'}`}>{snapshot.credential.configured ? t('configured') : t('missing')}</span></div>
         <div className="dvt-form-grid">
-          <Field label={t('protocol')}><select value={draft.protocol} onChange={(event) => { update('protocol', event.target.value as 'openai' | 'anthropic') }}><option value="openai">OpenAI Chat Completions</option><option value="anthropic">Anthropic Messages</option></select></Field>
-          <Field label={t('baseUrl')}><Input value={draft.baseUrl} onChange={(event) => { update('baseUrl', event.target.value) }} /></Field>
-          <Field label={t('model')}><Input value={draft.model} onChange={(event) => { update('model', event.target.value) }} /></Field>
-          <Field label={t('credential')} hint={snapshot.credential.source === undefined ? undefined : t('sourceHint', { source: t('source'), value: credentialSource(snapshot.credential.source, t) })}><Input value={draft.credential} onChange={(event) => { update('credential', event.target.value) }} /></Field>
+          <Field label={t('protocol')}><select disabled={!snapshot.writable || busy} value={draft.protocol} onChange={(event) => { update('protocol', event.target.value as 'openai' | 'anthropic') }}><option value="openai">OpenAI Chat Completions</option><option value="anthropic">Anthropic Messages</option></select></Field>
+          <Field label={t('baseUrl')}><Input disabled={!snapshot.writable || busy} value={draft.baseUrl} onChange={(event) => { update('baseUrl', event.target.value) }} /></Field>
+          <Field label={t('model')}><Input disabled={!snapshot.writable || busy} value={draft.model} onChange={(event) => { update('model', event.target.value) }} /></Field>
+          <Field label={t('apiKey')} hint={keyLocked ? t('apiKeyLocked') : snapshot.credential.source === undefined ? t('apiKeyHint') : `${t('apiKeyHint')} ${t('sourceHint', { source: t('source'), value: credentialSource(snapshot.credential.source, t) })}`}><Input aria-label={t('apiKey')} type="password" autoComplete="new-password" disabled={busy || keyLocked} placeholder={snapshot.credential.configured ? t('apiKeyPlaceholderConfigured') : t('apiKeyPlaceholderMissing')} value={apiKey} onChange={(event) => { setApiKey(event.target.value); setDraftError(undefined) }} /></Field>
         </div>
       </section>
 
-      <div className="dvt-save-row"><Button variant="primary" disabled={!snapshot.writable || busy} onClick={save}>{state.action === 'save' ? t('saving') : t('save')}</Button><Button variant="outline" disabled={busy} onClick={() => { void controller.load() }}>{t('reload')}</Button></div>
+      <div className="dvt-save-row"><Button variant="primary" disabled={!canSave || busy} onClick={save}>{state.action === 'save' ? t('saving') : t('save')}</Button><Button variant="outline" disabled={busy} onClick={() => { void controller.load() }}>{t('reload')}</Button></div>
 
       <section className="dvt-panel"><div className="dvt-panel-title"><div><h3>{t('health')}</h3><p>{t('connectionHint')}</p></div><div className="dvt-actions"><Button size="sm" variant="outline" disabled={busy || !snapshot.runtime.ready} onClick={() => { void controller.runHealth(false) }}>{state.action === 'health' ? t('testing') : t('runHealth')}</Button><Button size="sm" variant="primary" disabled={busy || !snapshot.runtime.ready} onClick={() => { void controller.runHealth(true) }}>{state.action === 'connection' ? t('testing') : t('testConnection')}</Button></div></div>
         <p className="dvt-muted">{t('saveBeforeTesting')}</p>
@@ -1014,6 +1088,7 @@ function LoadedSettings({ controller, t }: SettingsInjected) {
         <summary><span><strong>{t('advanced')}</strong><small>{t('advancedHint')}</small></span><span className="dvt-details-chevron" aria-hidden="true">⌄</span></summary>
         <div className="dvt-advanced-body">
           <section className="dvt-panel"><div className="dvt-panel-title"><h3>{t('provider')}</h3></div><div className="dvt-form-grid">
+            <Field label={t('credential')} hint={t('credentialHint')}><Input aria-label={t('credential')} disabled={!snapshot.writable || busy} value={draft.credential} onChange={(event) => { update('credential', event.target.value) }} /></Field>
             {draft.protocol === 'anthropic' ? <Field label={t('anthropicThinking')} hint={t('anthropicThinkingHint')}><select aria-label={t('anthropicThinking')} value={draft.anthropicThinking} onChange={(event) => { update('anthropicThinking', event.target.value as 'omit' | 'disabled' | 'adaptive') }}><option value="omit">omit (widest compatibility)</option><option value="disabled">disabled (model support required)</option><option value="adaptive">adaptive (model support required)</option></select></Field> : null}
             <Field label={t('userAgent')}><Input value={draft.userAgent} onChange={(event) => { update('userAgent', event.target.value) }} /></Field>
           </div></section>

@@ -35,6 +35,8 @@ function credentials(): Credentials {
   return {
     resolve: vi.fn(async () => ({ value: 'never-exposed-secret', source: 'file' })),
     describe: vi.fn(async () => ({ configured: true, source: 'file', writable: true })),
+    set: vi.fn(async () => {}),
+    unset: vi.fn(async () => {}),
   } as unknown as Credentials
 }
 
@@ -91,7 +93,8 @@ async function setup() {
   const ctx = new Context()
   contexts.push(ctx)
   await ctx.plugin(MemorySettings)
-  ctx.provide('credentials', credentials())
+  const credentialService = credentials()
+  ctx.provide('credentials', credentialService)
   ctx.settings.register(VISION_TOOLKIT_SETTINGS_NAMESPACE, Config, {
     base: {}, applies: 'live', validate: (value) => { resolveConfig(value) },
   })
@@ -113,7 +116,7 @@ async function setup() {
     headers: { 'Content-Type': 'application/json', Origin: base },
     body: JSON.stringify(body),
   })
-  return { ctx, manager, activated, base, post }
+  return { ctx, credentialService, manager, activated, base, post }
 }
 
 describe('VisionToolkitWebBackend', () => {
@@ -148,6 +151,64 @@ describe('VisionToolkitWebBackend', () => {
     expect(stale.status).toBe(409)
     expect(staleBody.error.code).toBe('settings-conflict')
     expect(manager.status().activeConfig?.concurrency).toBe(2)
+  })
+
+  it('stores a write-only API key only after the saved credential reference is current', async () => {
+    const { credentialService, post } = await setup()
+    const value = {
+      provider: {
+        baseUrl: 'https://vision.example/v1', credential: 'VISION_API_KEY', model: 'next-model',
+        protocol: 'openai' as const,
+      },
+      language: 'en' as const, timeoutMs: 45000, maxImageBytes: 1000000, maxImagePixels: 2000000,
+      concurrency: 2, runtime: { mode: 'managed' as const }, allowedDirs: [],
+    }
+    const saved = await post({ action: 'save', expectedRevision: 0, value })
+    const savedBody = await saved.json() as { ok: true; value: { settings: { revision: number }; credential: { ref: string } } }
+
+    const stored = await post({
+      action: 'credential',
+      expectedRevision: savedBody.value.settings.revision,
+      ref: savedBody.value.credential.ref,
+      value: '  sk-browser-entry  ',
+    })
+    const storedText = await stored.text()
+
+    expect(stored.status).toBe(200)
+    expect(credentialService.set).toHaveBeenCalledWith('VISION_API_KEY', 'sk-browser-entry')
+    expect(storedText).not.toContain('sk-browser-entry')
+  })
+
+  it('rejects a stale or mismatched credential target before writing the secret', async () => {
+    const { credentialService, post } = await setup()
+
+    const stale = await post({
+      action: 'credential', expectedRevision: 99, ref: 'VISION_API_KEY', value: 'sk-stale',
+    })
+    expect(stale.status).toBe(409)
+
+    const mismatched = await post({
+      action: 'credential', expectedRevision: 0, ref: 'OTHER_API_KEY', value: 'sk-wrong-target',
+    })
+    const mismatchedBody = await mismatched.json() as { ok: false; error: { code: string } }
+    expect(mismatched.status).toBe(409)
+    expect(mismatchedBody.error.code).toBe('credential-conflict')
+    expect(credentialService.set).not.toHaveBeenCalled()
+  })
+
+  it('rejects wrapped or environment-assignment key pastes at the HTTP boundary', async () => {
+    const { credentialService, post } = await setup()
+
+    const assignment = await post({
+      action: 'credential', expectedRevision: 0, ref: 'VISION_API_KEY', value: 'VISION_API_KEY=sk-value',
+    })
+    const quoted = await post({
+      action: 'credential', expectedRevision: 0, ref: 'VISION_API_KEY', value: '"sk-value"',
+    })
+
+    expect(assignment.status).toBe(400)
+    expect(quoted.status).toBe(400)
+    expect(credentialService.set).not.toHaveBeenCalled()
   })
 
   it('runs no probe on reads and tests the connection only after the explicit action', async () => {

@@ -257,13 +257,9 @@ Bundle 默认使用 managed 运行时。Profile patch 可以覆盖提供方与�
 
 ### Credential
 
-通过 DSH Credentials 创建或替换引用指向的密钥：
+Web 设置页的只写 **API 密钥** 输入框直接接收真实密钥。留空表示保留现有密钥；填写后保存，会把密钥写入高级设置中的 **凭据名称**，默认名称是 `VISION_API_KEY`。Headless 部署可以在 `$DSH_HOME/.credentials.yaml` 中预置同名引用。
 
-```sh
-dsh credentials set VISION_API_KEY
-```
-
-Settings 只保存引用，不保存值。每次远程操作都会重新解析引用，并只把值注入对应子进程环境。插件排除用户 `.env`、checkout `.env`、`PYTHONPATH`、`PYTHONHOME`、`VIRTUAL_ENV` 和用户 site-packages，避免环境中的 Python 或上游配置覆盖选定的 DSH 提供方。日志、错误、工具结果、产物元数据和 Settings 响应都不包含密钥。
+Settings 只保存引用，不保存值。浏览器不会读取已保存的密钥，保存成功后输入框也会立即清空而不是回显。每次远程操作都会重新解析引用，并只把值注入对应子进程环境。插件排除用户 `.env`、checkout `.env`、`PYTHONPATH`、`PYTHONHOME`、`VIRTUAL_ENV` 和用户 site-packages，避免环境中的 Python 或上游配置覆盖选定的 DSH 提供方。日志、错误、工具结果、产物元数据和 Settings 响应都不包含密钥。
 
 ### Managed 与 external 运行时
 
@@ -346,7 +342,7 @@ npm run example:ui-restoration:write
 | 症状 | 解决方法 |
 |---|---|
 | `Model "..." does not support image input. (attachment-error)` | 图片走了 DSH 的模型原生附件通道，纯文本模型会在 Skill 或 Vision Toolkit 运行前拒绝该轮。请使用 DSH Paste Input 的附件按钮、粘贴或拖放流程，让文件先复制到会话工作区并以路径形式进入消息，再调用 `/vision-tools`。安装或升级任一浏览器插件后，需要重启 Web Profile 并刷新页面。 |
-| Credential 显示缺失 | 执行 `dsh credentials set <REF>`，确认 `provider.credential` 指向该引用，再重新运行健康检查。本地工具不需要它。 |
+| Credential 显示缺失 | 在 Web 设置页的 **API 密钥** 中粘贴密钥，确认高级设置中的 **凭据名称** 与 `provider.credential` 一致，保存后重新运行健康检查。Headless 部署可以在 `$DSH_HOME/.credentials.yaml` 中预置同名引用。本地工具不需要它。 |
 | 运行时准备失败 | 查看 Settings 中的运行时错误，检查 Python 3.11+、软件包缓存/网络、磁盘权限和精确 external 固定版本。修正候选后再保存；当前 generation 不受影响。 |
 | 找不到 Chrome | 安装 Chrome、Chromium 或 Edge，或让其中一个可被运行环境发现。只有 `vision_html_screenshot` 不可用。 |
 | macOS 弹出钥匙串对话框 | 确认安装的是当前构建产物，且没有遗留的外部 `html_shot`/headless Chrome 进程。当前启动使用 mock keychain 和一次性 profile；取消对话框，不要重置登录钥匙串。 |

@@ -4,6 +4,14 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+### Added
+
+- Added a write-only API key field to Web Settings so users can configure online vision without opening the credential file; saved values are never returned to the browser.
+
+### Changed
+
+- Moved the credential reference name into Advanced settings and protected browser credential writes with same-origin, Settings revision, and active-reference checks.
+
 ## [0.1.6] - 2026-08-14
 
 ### Added
