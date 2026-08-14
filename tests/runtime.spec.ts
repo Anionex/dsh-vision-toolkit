@@ -708,6 +708,7 @@ describe('upstream adapter version facts', () => {
     expect(spawn).toHaveBeenCalledOnce()
     expect(spawn.mock.calls[0]?.[0].env).toMatchObject({
       VISION_API_PROTOCOL: 'anthropic',
+      VISION_ANTHROPIC_THINKING: 'omit',
       VISION_API_KEY: 'test-vision-key',
       VISION_USER_AGENT: expect.stringContaining('Mozilla/5.0'),
     })

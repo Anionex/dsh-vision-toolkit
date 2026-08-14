@@ -36,6 +36,7 @@ const en = {
   credential: 'Credential reference',
   model: 'Model',
   protocol: 'API protocol',
+  anthropicThinking: 'Anthropic thinking',
   userAgent: 'User-Agent',
   language: 'Output language',
   limits: 'Limits',
@@ -100,6 +101,7 @@ const zh: Record<LocaleKey, string> = {
   credential: 'Credential 引用',
   model: '模型',
   protocol: 'API 协议',
+  anthropicThinking: 'Anthropic thinking',
   userAgent: 'User-Agent',
   language: '输出语言',
   limits: '限制',
@@ -207,7 +209,14 @@ interface HealthResult {
 }
 
 interface SettingsValue {
-  provider?: { baseUrl?: string; credential?: string; model?: string; protocol?: 'openai' | 'anthropic'; userAgent?: string }
+  provider?: {
+    baseUrl?: string
+    credential?: string
+    model?: string
+    protocol?: 'openai' | 'anthropic'
+    anthropicThinking?: 'omit' | 'disabled' | 'adaptive'
+    userAgent?: string
+  }
   language?: 'zh' | 'en'
   timeoutMs?: number
   maxImageBytes?: number
@@ -636,6 +645,7 @@ interface Draft {
   credential: string
   model: string
   protocol: 'openai' | 'anthropic'
+  anthropicThinking: 'omit' | 'disabled' | 'adaptive'
   userAgent: string
   language: 'zh' | 'en'
   timeoutMs: string
@@ -654,6 +664,7 @@ function draftOf(value: SettingsValue): Draft {
     credential: value.provider?.credential ?? 'VISION_API_KEY',
     model: value.provider?.model ?? 'gemini-3.6-flash',
     protocol: value.provider?.protocol ?? 'openai',
+    anthropicThinking: value.provider?.anthropicThinking ?? 'omit',
     userAgent: value.provider?.userAgent ?? DEFAULT_USER_AGENT,
     language: value.language ?? 'zh',
     timeoutMs: String(value.timeoutMs ?? 60000),
@@ -680,6 +691,7 @@ function valueOf(draft: Draft): SettingsValue {
       credential: draft.credential.trim(),
       model: draft.model.trim(),
       protocol: draft.protocol,
+      anthropicThinking: draft.anthropicThinking,
       userAgent: draft.userAgent.trim(),
     },
     language: draft.language,
@@ -760,6 +772,7 @@ function LoadedSettings({ controller, t }: SettingsInjected) {
           <Field label={t('baseUrl')}><Input value={draft.baseUrl} onChange={(event) => { update('baseUrl', event.target.value) }} /></Field>
           <Field label={t('model')}><Input value={draft.model} onChange={(event) => { update('model', event.target.value) }} /></Field>
           <Field label={t('protocol')}><select value={draft.protocol} onChange={(event) => { update('protocol', event.target.value as 'openai' | 'anthropic') }}><option value="openai">OpenAI Chat Completions</option><option value="anthropic">Anthropic Messages</option></select></Field>
+          {draft.protocol === 'anthropic' ? <Field label={t('anthropicThinking')}><select value={draft.anthropicThinking} onChange={(event) => { update('anthropicThinking', event.target.value as 'omit' | 'disabled' | 'adaptive') }}><option value="omit">omit (model default)</option><option value="disabled">disabled</option><option value="adaptive">adaptive</option></select></Field> : null}
           <Field label={t('userAgent')}><Input value={draft.userAgent} onChange={(event) => { update('userAgent', event.target.value) }} /></Field>
           <Field label={t('credential')} hint={snapshot.credential.source === undefined ? undefined : `${t('source')}: ${snapshot.credential.source}`}><Input value={draft.credential} onChange={(event) => { update('credential', event.target.value) }} /></Field>
           <Field label={t('language')}><select value={draft.language} onChange={(event) => { update('language', event.target.value as 'zh' | 'en') }}><option value="zh">中文</option><option value="en">English</option></select></Field>

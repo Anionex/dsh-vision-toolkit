@@ -769,6 +769,7 @@ export class VisionToolkitRuntime {
       VISION_BASE_URL: this.config.provider.baseUrl,
       VISION_MODEL: this.config.provider.model,
       VISION_API_PROTOCOL: this.config.provider.protocol === 'anthropic' ? 'anthropic' : 'chat_completions',
+      VISION_ANTHROPIC_THINKING: this.config.provider.anthropicThinking,
       VISION_USER_AGENT: this.config.provider.userAgent,
       LANG: this.config.language,
     }
@@ -835,6 +836,7 @@ export class VisionToolkitRuntime {
         baseUrl: env.VISION_BASE_URL,
         model: env.VISION_MODEL,
         protocol: env.VISION_API_PROTOCOL,
+        anthropicThinking: env.VISION_ANTHROPIC_THINKING,
         userAgent: env.VISION_USER_AGENT,
         language: env.LANG,
         credentialSha256: createHash('sha256').update(env.VISION_API_KEY).digest('hex'),

@@ -29,6 +29,8 @@ export interface VisionToolkitConfig {
     model?: string
     /** Vision request protocol: OpenAI Chat Completions or Anthropic Messages. */
     protocol?: 'openai' | 'anthropic'
+    /** Anthropic thinking field behavior; `omit` leaves model defaults untouched. */
+    anthropicThinking?: 'omit' | 'disabled' | 'adaptive'
     /** Outbound User-Agent for provider requests and connection tests. */
     userAgent?: string
   }
@@ -61,6 +63,7 @@ export const Config: Schema<VisionToolkitConfig> = z.object({
     credential: z.string().default('VISION_API_KEY'),
     model: z.string().default('gemini-3.6-flash'),
     protocol: z.union(['openai', 'anthropic'] as const).default('openai'),
+    anthropicThinking: z.union(['omit', 'disabled', 'adaptive'] as const).default('omit'),
     userAgent: z.string().default(DEFAULT_VISION_USER_AGENT),
   }),
   language: z.union(['zh', 'en'] as const).default('zh'),
@@ -83,6 +86,7 @@ export interface ResolvedVisionToolkitConfig {
     credential: CredentialRef
     model: string
     protocol: 'openai' | 'anthropic'
+    anthropicThinking: 'omit' | 'disabled' | 'adaptive'
     userAgent: string
   }
   language: 'zh' | 'en'
@@ -136,6 +140,10 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
   if (protocol !== 'openai' && protocol !== 'anthropic') {
     throw new VisionToolkitError('config', 'provider.protocol must be "openai" or "anthropic"')
   }
+  const anthropicThinking = provider.anthropicThinking ?? 'omit'
+  if (anthropicThinking !== 'omit' && anthropicThinking !== 'disabled' && anthropicThinking !== 'adaptive') {
+    throw new VisionToolkitError('config', 'provider.anthropicThinking must be "omit", "disabled", or "adaptive"')
+  }
   const userAgent = (provider.userAgent ?? DEFAULT_VISION_USER_AGENT).trim()
   if (userAgent.length === 0) {
     throw new VisionToolkitError('config', 'provider.userAgent must not be empty')
@@ -180,7 +188,7 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
   }
   const allowedDirs = (config.allowedDirs ?? []).map(dir => dir.trim()).filter(dir => dir.length > 0)
   return {
-    provider: { baseUrl, credential, model, protocol, userAgent },
+    provider: { baseUrl, credential, model, protocol, anthropicThinking, userAgent },
     language,
     timeoutMs,
     maxImageBytes,
