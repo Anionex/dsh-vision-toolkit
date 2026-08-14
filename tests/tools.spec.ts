@@ -10,7 +10,7 @@ import ToolRegistry, { defineTool } from '@deepseek-ai/dsh-tools'
 import SkillService from '@deepseek-ai/dsh-skill'
 import * as ToolSkill from '@deepseek-ai/dsh-tool-skill'
 import Settings, { type SettingsNamespace } from '@deepseek-ai/dsh-settings'
-import { SubprocessService } from '@deepseek-ai/dsh-subprocess'
+import { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type { SubprocessHandle, SubprocessOutputRead, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import type { Credentials } from '@deepseek-ai/dsh-credentials'
 import * as VisionToolkit from '../src/index.ts'
@@ -42,7 +42,7 @@ function fakeCredentials(): Credentials {
   } as unknown as Credentials
 }
 
-class ProbeSubprocessService extends SubprocessService {
+class ProbeSubprocessService extends SubprocessRuntime {
   override spawn(spec: SubprocessSpawnSpec): SubprocessHandle {
     const command = spec.argv.join('\n')
     const stdout = command.includes('sys.version_info')

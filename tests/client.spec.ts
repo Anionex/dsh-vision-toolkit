@@ -52,6 +52,9 @@ function fakeClientContext() {
       register: vi.fn(() => () => {}),
       bind: vi.fn(() => (key: string) => key),
     },
+    remote: {
+      $on: vi.fn(() => () => {}),
+    },
     effect: vi.fn((setup: () => void | (() => void)) => {
       const dispose = setup()
       if (typeof dispose === 'function') effects.push(dispose)
@@ -130,9 +133,11 @@ function artifact(
 
 describe('Vision Toolkit client plugin', () => {
   it('registers every dedicated Tool view and the Settings section', () => {
-    expect(inject).toEqual(['slots', 'locale'])
+    expect(inject).toEqual(['slots', 'locale', 'remote'])
     const { ctx, registrations } = fakeClientContext()
     apply(ctx as never)
+    expect(ctx.remote.$on).toHaveBeenCalledWith('settings/document-updated', expect.any(Function))
+    expect(ctx.remote.$on).toHaveBeenCalledWith('credentials/updated', expect.any(Function))
 
     const toolKeys = registrations
       .filter(entry => entry.options.name === 'tool.call.toolview')

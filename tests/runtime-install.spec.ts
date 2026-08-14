@@ -3,12 +3,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { Context } from 'cordis'
-import { SubprocessService } from '@deepseek-ai/dsh-subprocess'
+import { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type { SubprocessHandle, SubprocessOutputRead, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import { resolveConfig } from '../src/config.ts'
 import { bundledUpstreamRoot, prepareUpstreamRuntime } from '../src/runtime-install.ts'
 
-class ProbeSubprocessService extends SubprocessService {
+class ProbeSubprocessService extends SubprocessRuntime {
   readonly spawns: SubprocessSpawnSpec[] = []
 
   override spawn(spec: SubprocessSpawnSpec): SubprocessHandle {

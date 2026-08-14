@@ -6,8 +6,8 @@
  * @module dsh-vision-toolkit/config
  */
 
-import z from 'schemastery'
-import type Schema from 'schemastery'
+import z from '@deepseek-ai/schemastery'
+import type Schema from '@deepseek-ai/schemastery'
 import { credentialRef, type CredentialRef } from '@deepseek-ai/dsh-credentials'
 import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import { VisionToolkitError } from './errors.ts'

@@ -11,6 +11,9 @@ import {
 } from 'react'
 import { Button, Input } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ClientContext, ToolCallBlock } from '@deepseek-ai/dsh-client-runtime/client'
+import type {} from '@deepseek-ai/dsh-api-remotes/client'
+import type {} from '@deepseek-ai/dsh-credentials/types'
+import type {} from '@deepseek-ai/dsh-settings/types'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -791,7 +794,7 @@ function installStyles(): () => void {
 }
 
 /** Required client services. */
-export const inject = ['slots', 'locale']
+export const inject = ['slots', 'locale', 'remote']
 
 /** Register dedicated Tool views and the Vision Settings section. */
 export function apply(ctx: ClientContext): void {
@@ -819,10 +822,10 @@ export function apply(ctx: ClientContext): void {
   const controller = new VisionSettingsController()
   ctx.effect(() => {
     const disposers = [
-      ctx.on('settings/changed', (namespace) => {
+      ctx.remote.$on('settings/document-updated', (namespace) => {
         if (namespace === 'vision-toolkit') controller.refreshIfLoaded()
       }),
-      ctx.on('credentials/changed', (ref) => {
+      ctx.remote.$on('credentials/updated', (ref) => {
         const current = controller.snapshot().snapshot
         if (current?.credential.ref === ref) controller.refreshIfLoaded()
       }),

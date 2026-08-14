@@ -46,6 +46,7 @@ describe('package layout contract', () => {
   it('declares a loader-compatible Web client and its slot dependencies', () => {
     expect(PACKAGE.dsh?.client?.platform).toBe('web')
     expect(PACKAGE.dsh?.client?.inject).toEqual(expect.arrayContaining([
+      '@deepseek-ai/dsh-api-remotes',
       '@deepseek-ai/dsh-client-runtime',
       '@deepseek-ai/dsh-client-ui-tool',
       '@deepseek-ai/dsh-client-ui-settings',
@@ -72,6 +73,8 @@ describe('package layout contract', () => {
 
   it('keeps every dependency specifier portable', () => {
     expect(PACKAGE.peerDependencies).toHaveProperty('@deepseek-ai/dsh-agent')
+    expect(PACKAGE.peerDependencies).toHaveProperty('@deepseek-ai/schemastery')
+    expect(PACKAGE.peerDependencies).not.toHaveProperty('schemastery')
     for (const section of [PACKAGE.dependencies ?? {}, PACKAGE.peerDependencies ?? {}, PACKAGE.devDependencies ?? {}]) {
       for (const [name, spec] of Object.entries(section)) {
         expect(spec, `${name}`).not.toMatch(/^\/|^[A-Za-z]:\\|^file:|^link:|^workspace:/)
@@ -82,6 +85,9 @@ describe('package layout contract', () => {
   it('emits no raw .ts relative imports in built JavaScript', async () => {
     const text = await readFile(join(ROOT, 'lib', 'index.js'), 'utf8')
     expect(text).not.toMatch(/from '\.\/[^']+\.ts'/)
+    const config = await readFile(join(ROOT, 'lib', 'config.js'), 'utf8')
+    expect(config).toContain("from '@deepseek-ai/schemastery'")
+    expect(config).not.toContain("from 'schemastery'")
     const client = await readFile(join(ROOT, 'lib', 'client.js'), 'utf8')
     expect(client).toContain('window.__ModuleLoader__.load({ id: "@dsh-external/dsh-vision-toolkit"')
     expect(client).not.toMatch(/require\("\.\//)

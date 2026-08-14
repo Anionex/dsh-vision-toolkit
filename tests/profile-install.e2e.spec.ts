@@ -55,6 +55,19 @@ function hasDsh(): boolean {
   }
 }
 
+function packPlugin(destination: string): string {
+  const result = execaSync('npm', ['pack', '--ignore-scripts', '--pack-destination', destination, '--json'], {
+    cwd: pluginDir,
+    timeout: 120_000,
+  })
+  const rows = JSON.parse(result.stdout) as Array<{ filename?: unknown }>
+  const filename = rows[0]?.filename
+  if (typeof filename !== 'string' || filename.length === 0) {
+    throw new Error(`npm pack returned no filename: ${result.stdout}`)
+  }
+  return join(destination, filename)
+}
+
 async function runDsh(
   args: readonly string[],
   env: Readonly<Record<string, string>>,
@@ -284,11 +297,14 @@ describe.skipIf(!hasDsh() || !hasPnpm())('dsh-vision-toolkit profile install (ke
   it('installs, boots, calls vision_glance through the real profile, and uninstalls cleanly', async () => {
     const home = mkdtempSync(join(tmpdir(), 'dsh-vt-profile-'))
     homes.push(home)
+    const packageDir = join(home, 'package')
+    mkdirSync(packageDir)
+    const tarball = packPlugin(packageDir)
     const visionServer = await startMockVisionServer()
     const patch = fixturePatch(home, visionServer.baseURL)
 
     try {
-      const add = await runDsh(['plugin', '--profile', 'headless', 'add', pluginDir], { DSH_HOME: home })
+      const add = await runDsh(['plugin', '--profile', 'headless', 'add', tarball], { DSH_HOME: home })
       expect(add.code, add.stderr).toBe(0)
 
       const dump = await runDsh(['--profile', 'headless', '--dump-config'], { DSH_HOME: home })
@@ -302,7 +318,7 @@ describe.skipIf(!hasDsh() || !hasPnpm())('dsh-vision-toolkit profile install (ke
       )
       try {
         const run = await runDsh([
-          'run', '--profile', 'headless', '--patch', patch,
+          '--profile', 'headless', '--patch', patch,
           'use the vision tool on the sample image',
         ], {
           DSH_HOME: home,
@@ -313,6 +329,8 @@ describe.skipIf(!hasDsh() || !hasPnpm())('dsh-vision-toolkit profile install (ke
         })
         expect(run.code, run.stderr).toBe(0)
         expect(run.stdout).toBe('vision done')
+        expect(existsSync(join(home, 'profiles', 'headless', 'node_modules', 'schemastery'))).toBe(false)
+        expect(existsSync(join(home, 'profiles', 'node_modules', '@deepseek-ai', 'schemastery'))).toBe(true)
         expectProgressiveExposure(server.requests)
         const bodies = JSON.stringify(server.requests.map(request => request.body))
         expect(bodies).toContain('vision_glance')
@@ -344,7 +362,7 @@ describe.skipIf(!hasDsh() || !hasPnpm())('dsh-vision-toolkit profile install (ke
       )
       try {
         const ground = await runDsh([
-          'run', '--profile', 'headless', '--patch', patch,
+          '--profile', 'headless', '--patch', patch,
           'locate the send button in the local screenshot',
         ], {
           DSH_HOME: home,
@@ -380,7 +398,7 @@ describe.skipIf(!hasDsh() || !hasPnpm())('dsh-vision-toolkit profile install (ke
       )
       try {
         const detect = await runDsh([
-          'run', '--profile', 'headless', '--patch', patch,
+          '--profile', 'headless', '--patch', patch,
           'inventory buttons in the local screenshot',
         ], {
           DSH_HOME: home,
@@ -415,7 +433,7 @@ describe.skipIf(!hasDsh() || !hasPnpm())('dsh-vision-toolkit profile install (ke
       )
       try {
         const crop = await runDsh([
-          'run', '--profile', 'headless', '--patch', patch,
+          '--profile', 'headless', '--patch', patch,
           'crop the previously grounded region',
         ], {
           DSH_HOME: home,
@@ -449,7 +467,7 @@ describe.skipIf(!hasDsh() || !hasPnpm())('dsh-vision-toolkit profile install (ke
       )
       try {
         const trace = await runDsh([
-          'run', '--profile', 'headless', '--patch', patch,
+          '--profile', 'headless', '--patch', patch,
           'trace the local image into SVG',
         ], {
           DSH_HOME: home,
@@ -483,7 +501,7 @@ describe.skipIf(!hasDsh() || !hasPnpm())('dsh-vision-toolkit profile install (ke
       )
       try {
         const pixel = await runDsh([
-          'run', '--profile', 'headless', '--patch', patch,
+          '--profile', 'headless', '--patch', patch,
           'pixel-diff the local reference and actual screenshots',
         ], {
           DSH_HOME: home,
@@ -517,7 +535,7 @@ describe.skipIf(!hasDsh() || !hasPnpm())('dsh-vision-toolkit profile install (ke
       )
       try {
         const longOcr = await runDsh([
-          'run', '--profile', 'headless', '--patch', patch,
+          '--profile', 'headless', '--patch', patch,
           'OCR the local screenshot through the long-screenshot pipeline',
         ], {
           DSH_HOME: home,
@@ -557,7 +575,7 @@ describe.skipIf(!hasDsh() || !hasPnpm())('dsh-vision-toolkit profile install (ke
       })
       try {
         const disabled = await runDsh([
-          'run', '--profile', 'headless', '--patch', patch, '--patch', disablePatch,
+          '--profile', 'headless', '--patch', patch, '--patch', disablePatch,
           'say ok',
         ], {
           DSH_HOME: home,
@@ -590,7 +608,7 @@ describe.skipIf(!hasDsh() || !hasPnpm())('dsh-vision-toolkit profile install (ke
       )
       try {
         const reenabled = await runDsh([
-          'run', '--profile', 'headless', '--patch', patch,
+          '--profile', 'headless', '--patch', patch,
           '/vision-tools\nconfirm the Vision Toolkit is available again',
         ], {
           DSH_HOME: home,
