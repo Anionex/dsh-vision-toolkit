@@ -74,6 +74,13 @@ describe('package layout contract', () => {
     expect(PACKAGE.scripts.test).toContain('vitest')
   })
 
+  it('pins the dependency install scripts allowed in standalone CI', async () => {
+    const workspace = await readFile(join(ROOT, 'pnpm-workspace.yaml'), 'utf8')
+    expect(workspace).toContain("'@deepseek-ai/dsh-subprocess-local@0.1.0-rc.6': true")
+    expect(workspace).toContain("'node-pty@1.1.0': true")
+    expect(workspace).not.toMatch(/^\s{2}(?:'@deepseek-ai\/dsh-subprocess-local'|node-pty):/mu)
+  })
+
   it('keeps every dependency specifier portable', () => {
     expect(PACKAGE.peerDependencies).toHaveProperty('@deepseek-ai/dsh-agent')
     expect(PACKAGE.peerDependencies).toHaveProperty('@deepseek-ai/cordis')
