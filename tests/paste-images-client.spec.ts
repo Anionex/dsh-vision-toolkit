@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createElement, type ComponentType } from 'react'
 import { fireEvent, render, screen } from '@testing-library/react'
+import { Context, Service } from 'cordis'
 import {
   installPasteImages,
   PASTE_IMAGES_ROUTE as CLIENT_PASTE_IMAGES_ROUTE,
@@ -71,7 +72,9 @@ function inputMachine(initial = '') {
   }
 }
 
-function fakeClient(initial = '') {
+type TriggerService = 'slash' | 'inputTriggers'
+
+function fakeClient(initial = '', triggerServices: readonly TriggerService[] = ['slash'], aliasTriggers = false) {
   const input = inputMachine(initial)
   const effects: Array<() => void> = []
   const registrations: Array<{
@@ -79,18 +82,26 @@ function fakeClient(initial = '') {
     component: ComponentType<Record<string, unknown>>
   }> = []
   let source: ReturnType<PasteImageController['source']> | undefined
-  const ctx = {
+  const createTriggerRegistry = () => {
+    const dispose = vi.fn(() => { source = undefined })
+    return {
+      dispose,
+      registerSource: vi.fn((next: ReturnType<PasteImageController['source']>) => {
+        source = next
+        return dispose
+      }),
+    }
+  }
+  const triggerRegistries = {
+    slash: createTriggerRegistry(),
+    inputTriggers: createTriggerRegistry(),
+  }
+  const ctx: Record<string, unknown> = {
     sessions: {
       list: { getSnapshot: () => ({ current: 'session-1' }) },
       scope: () => ({}),
     },
     conversation: { input: { for: () => input } },
-    slash: {
-      registerSource: vi.fn((next) => {
-        source = next
-        return () => { source = undefined }
-      }),
-    },
     slots: {
       inject: vi.fn((_name: string, callback: () => unknown) => { callback() }),
       register: vi.fn((options: Record<string, unknown>, component: ComponentType<Record<string, unknown>>) => {
@@ -103,8 +114,27 @@ function fakeClient(initial = '') {
       if (typeof dispose === 'function') effects.push(dispose)
     }),
   }
+  for (const service of triggerServices) {
+    ctx[service] = aliasTriggers ? triggerRegistries.slash : triggerRegistries[service]
+  }
+  ctx.inject = vi.fn((services: string[], callback: (scope: typeof ctx) => void) => {
+    if (services.every(service => ctx[service] !== undefined)) callback(ctx)
+  })
   installPasteImages(ctx as never)
-  return { ctx, input, registrations, source: () => source, dispose: () => effects.reverse().forEach(fn => { fn() }) }
+  return {
+    ctx,
+    input,
+    registrations,
+    source: () => source,
+    triggerRegistries,
+    disposeEffect: (index: number) => {
+      const dispose = effects[index]
+      if (dispose === undefined) return
+      effects[index] = () => {}
+      dispose()
+    },
+    dispose: () => effects.reverse().forEach(fn => { fn() }),
+  }
 }
 
 function file(name: string, type: string, bytes: number[]): File {
@@ -142,6 +172,91 @@ afterEach(() => {
 describe('clipboard image client', () => {
   it('uses the exact Web route registered by the server', () => {
     expect(CLIENT_PASTE_IMAGES_ROUTE).toBe(SERVER_PASTE_IMAGES_ROUTE)
+  })
+
+  it('registers the reference codec through the legacy inputTriggers service', () => {
+    const bench = fakeClient('', ['inputTriggers'])
+    expect(bench.source()?.name).toBe('vision-toolkit-pasted-image')
+    expect(bench.ctx.inject).toHaveBeenCalledWith(['slash'], expect.any(Function))
+    expect(bench.ctx.inject).toHaveBeenCalledWith(['inputTriggers'], expect.any(Function))
+    bench.dispose()
+  })
+
+  it('registers both distinct trigger-service generations in a transitional runtime', () => {
+    const bench = fakeClient('', ['slash', 'inputTriggers'])
+    expect(bench.triggerRegistries.slash.registerSource).toHaveBeenCalledTimes(1)
+    expect(bench.triggerRegistries.inputTriggers.registerSource).toHaveBeenCalledTimes(1)
+    bench.dispose()
+  })
+
+  it('registers once when a compatibility adapter aliases both service names', () => {
+    const bench = fakeClient('', ['slash', 'inputTriggers'], true)
+    expect(bench.triggerRegistries.slash.registerSource).toHaveBeenCalledTimes(1)
+    expect(bench.triggerRegistries.inputTriggers.registerSource).not.toHaveBeenCalled()
+    bench.disposeEffect(0)
+    expect(bench.source()?.name).toBe('vision-toolkit-pasted-image')
+    expect(bench.triggerRegistries.slash.dispose).not.toHaveBeenCalled()
+    bench.disposeEffect(1)
+    expect(bench.source()).toBeUndefined()
+    expect(bench.triggerRegistries.slash.dispose).toHaveBeenCalledTimes(1)
+    bench.dispose()
+  })
+
+  it('keeps an aliased registry live across real Cordis service removal and re-provision', async () => {
+    const ctx = new Context()
+    const unregister = vi.fn()
+    const registerSource = vi.fn(() => unregister)
+    class TriggerRegistryService extends Service {
+      constructor(serviceCtx: Context) {
+        super(serviceCtx, 'inputTriggers')
+      }
+
+      registerSource(): () => void {
+        return registerSource()
+      }
+    }
+    const mountAdapter = async () => {
+      const fiber = ctx.plugin({
+        inject: ['inputTriggers'],
+        apply(scope: Context) {
+          scope.provide('slash', (scope as Context & { inputTriggers: TriggerRegistryService }).inputTriggers)
+        },
+      })
+      await fiber.await()
+      return fiber
+    }
+    ctx.provide('sessions', {
+      list: { getSnapshot: () => ({ current: 'session-1' }) },
+      scope: () => ({}),
+    })
+    ctx.provide('conversation', { input: { for: () => inputMachine() } })
+    ctx.provide('slots', {
+      inject: (_name: string, callback: () => unknown) => { callback() },
+      register: () => () => {},
+    })
+    let providerFiber = ctx.plugin(TriggerRegistryService)
+    await providerFiber.await()
+    let adapterFiber = await mountAdapter()
+    const pasteFiber = ctx.plugin({ apply: scope => { installPasteImages(scope as never) } })
+    await pasteFiber.await()
+    await vi.waitFor(() => { expect(registerSource).toHaveBeenCalledTimes(1) })
+
+    await adapterFiber.dispose()
+    expect(unregister).not.toHaveBeenCalled()
+    adapterFiber = await mountAdapter()
+    expect(registerSource).toHaveBeenCalledTimes(1)
+
+    await providerFiber.dispose()
+    await vi.waitFor(() => { expect(unregister).toHaveBeenCalledTimes(1) })
+
+    providerFiber = ctx.plugin(TriggerRegistryService)
+    await providerFiber.await()
+    await vi.waitFor(() => { expect(registerSource).toHaveBeenCalledTimes(2) })
+    await adapterFiber.dispose()
+    expect(unregister).toHaveBeenCalledTimes(1)
+    await providerFiber.dispose()
+    await vi.waitFor(() => { expect(unregister).toHaveBeenCalledTimes(2) })
+    await pasteFiber.dispose()
   })
 
   it('preserves pasted text, inserts every image as a text reference, and blocks the native ImageBlock path', async () => {

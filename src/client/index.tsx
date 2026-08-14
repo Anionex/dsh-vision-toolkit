@@ -828,8 +828,8 @@ function installStyles(): () => void {
   return () => { style.remove() }
 }
 
-/** Required client services. */
-export const inject = ['slots', 'locale', 'remote', 'conversation', 'sessions', 'slash']
+/** Required client services. The pasted-image codec attaches to either trigger-service generation after load. */
+export const inject = ['slots', 'locale', 'remote', 'conversation', 'sessions']
 
 /** Register dedicated Tool views and the Vision Settings section. */
 export function apply(ctx: ClientContext): void {
@@ -857,16 +857,30 @@ export function apply(ctx: ClientContext): void {
 
   const controller = new VisionSettingsController()
   ctx.effect(() => {
-    const disposers = [
-      ctx.remote.$on('settings/document-updated', (namespace) => {
-        if (namespace === 'vision-toolkit') controller.refreshIfLoaded()
-      }),
-      ctx.remote.$on('credentials/updated', (ref) => {
-        const current = controller.snapshot().snapshot
-        if (current?.credential.ref === ref) controller.refreshIfLoaded()
-      }),
-      ctx.on('connection/reset', () => { controller.refreshIfLoaded() }),
-    ]
+    const refreshSettings = (namespace: string): void => {
+      if (namespace === 'vision-toolkit') controller.refreshIfLoaded()
+    }
+    const refreshCredential = (ref: string): void => {
+      const current = controller.snapshot().snapshot
+      if (current?.credential.ref === ref) controller.refreshIfLoaded()
+    }
+    const legacyRemote = ctx.remote as typeof ctx.remote & {
+      $on?: (event: string, listener: (value: string) => void) => () => void
+    }
+    const disposers = typeof legacyRemote.$on === 'function'
+      ? [
+        legacyRemote.$on('settings/document-updated', refreshSettings),
+        legacyRemote.$on('credentials/updated', refreshCredential),
+      ]
+      : [
+        ctx.on('settings/changed', (namespace) => {
+          refreshSettings(namespace)
+        }),
+        ctx.on('credentials/changed', (ref) => {
+          refreshCredential(ref)
+        }),
+      ]
+    disposers.push(ctx.on('connection/reset', () => { controller.refreshIfLoaded() }))
     return () => { for (const dispose of disposers) dispose() }
   }, 'dsh-vision-toolkit: Settings invalidations')
   ctx.slots.inject('settings.section', () => ctx.slots.register({

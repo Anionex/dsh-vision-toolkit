@@ -30,7 +30,7 @@ function settled(meta: unknown, isError = false, toolName = 'vision_ground'): To
   } as unknown as ToolCallBlock
 }
 
-function fakeClientContext() {
+function fakeClientContext(legacyRemote = true) {
   const registrations: Array<{ options: Record<string, unknown>; component: ComponentType<Record<string, unknown>> }> = []
   const effects: Array<() => void> = []
   const slots = {
@@ -59,14 +59,15 @@ function fakeClientContext() {
       register: vi.fn(() => () => {}),
       bind: vi.fn(() => (key: string) => key),
     },
-    remote: {
-      $on: vi.fn(() => () => {}),
-    },
+    remote: legacyRemote ? { $on: vi.fn(() => () => {}) } : {},
     effect: vi.fn((setup: () => void | (() => void)) => {
       const dispose = setup()
       if (typeof dispose === 'function') effects.push(dispose)
     }),
     on: vi.fn(() => () => {}),
+    inject: vi.fn((services: string[], callback: (scope: unknown) => void) => {
+      if (services.every(service => service in ctx)) callback(ctx)
+    }),
   }
   return { ctx, slots, registrations, effects }
 }
@@ -147,11 +148,12 @@ function artifact(
 
 describe('Vision Toolkit client plugin', () => {
   it('registers every dedicated Tool view and the Settings section', () => {
-    expect(inject).toEqual(['slots', 'locale', 'remote', 'conversation', 'sessions', 'slash'])
+    expect(inject).toEqual(['slots', 'locale', 'remote', 'conversation', 'sessions'])
     const { ctx, registrations } = fakeClientContext()
     apply(ctx as never)
-    expect(ctx.remote.$on).toHaveBeenCalledWith('settings/document-updated', expect.any(Function))
-    expect(ctx.remote.$on).toHaveBeenCalledWith('credentials/updated', expect.any(Function))
+    const remote = ctx.remote as { $on: ReturnType<typeof vi.fn> }
+    expect(remote.$on).toHaveBeenCalledWith('settings/document-updated', expect.any(Function))
+    expect(remote.$on).toHaveBeenCalledWith('credentials/updated', expect.any(Function))
 
     const toolKeys = registrations
       .filter(entry => entry.options.name === 'tool.call.toolview')
@@ -170,6 +172,14 @@ describe('Vision Toolkit client plugin', () => {
     expect(registrations.find(entry => entry.options.name === 'settings.section')?.options).toMatchObject({
       id: 'vision-toolkit', order: 30,
     })
+  })
+
+  it('uses current client runtime invalidation events when remote.$on is unavailable', () => {
+    const { ctx } = fakeClientContext(false)
+    apply(ctx as never)
+    expect(ctx.on).toHaveBeenCalledWith('settings/changed', expect.any(Function))
+    expect(ctx.on).toHaveBeenCalledWith('credentials/changed', expect.any(Function))
+    expect(ctx.on).toHaveBeenCalledWith('connection/reset', expect.any(Function))
   })
 
   it('uses the Harness theme tokens for dark-mode text and borders', () => {
