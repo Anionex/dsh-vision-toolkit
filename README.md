@@ -257,13 +257,9 @@ The bundle defaults to the managed runtime. A profile patch can override the pro
 
 ### Credentials
 
-Create or replace the referenced secret through DSH Credentials:
+The Web Settings page accepts the actual value in its write-only **API key** field. Leave that field blank to retain an existing key; saving a non-empty value writes it under the advanced **Credential name** reference, which defaults to `VISION_API_KEY`. Headless deployments can pre-provision the same reference in `$DSH_HOME/.credentials.yaml`.
 
-```sh
-dsh credentials set VISION_API_KEY
-```
-
-The reference is stored in Settings; the value is not. Remote operations resolve it once per call and inject it only into that subprocess environment. The plugin excludes user `.env` files, checkout `.env` files, `PYTHONPATH`, `PYTHONHOME`, `VIRTUAL_ENV`, and user site-packages so ambient Python or upstream configuration cannot override the selected DSH provider. Logs, errors, tool results, Artifact metadata, and Settings responses never contain the secret.
+Settings store only the reference, never the value. The browser does not receive a stored value, and a successful save clears the field instead of echoing it. Remote operations resolve the reference once per call and inject the value only into that subprocess environment. The plugin excludes user `.env` files, checkout `.env` files, `PYTHONPATH`, `PYTHONHOME`, `VIRTUAL_ENV`, and user site-packages so ambient Python or upstream configuration cannot override the selected DSH provider. Logs, errors, tool results, Artifact metadata, and Settings responses never contain the secret.
 
 ### Managed and external runtimes
 
@@ -346,7 +342,7 @@ The committed evidence records an initial `6.04%` difference across six non-zero
 | Symptom | Resolution |
 |---|---|
 | `Model "..." does not support image input. (attachment-error)` | The image used DSH's native model-attachment channel, so a text-only model rejected the turn before the Skill or Vision Toolkit could run. Use DSH Paste Input's attachment button, paste, or drop flow so the file is copied into the session workspace and represented by a path, then invoke `/vision-tools`. Restart the Web profile and reload the page after installing or upgrading either browser plugin. |
-| Credential reported missing | Run `dsh credentials set <REF>`, ensure `provider.credential` names that reference, then rerun health. Local-only tools do not need it. |
+| Credential reported missing | Paste the key into Web Settings **API key**, keep the advanced **Credential name** aligned with `provider.credential`, save, then rerun health. Headless deployments can provision the same reference in `$DSH_HOME/.credentials.yaml`. Local-only tools do not need it. |
 | Runtime preparation fails | Read the Settings runtime error, verify Python 3.11+, package-cache/network access, disk permissions, and the exact external pin. Save only after correcting the candidate; the active generation remains intact. |
 | Chrome is not found | Install Chrome, Chromium, or Edge or configure an environment where one is discoverable. Only `vision_html_screenshot` is unavailable. |
 | macOS displays a keychain dialog | Confirm the current built adapter is installed and no stale external `html_shot`/headless Chrome process is running. Current launches use a mock keychain and disposable profile; cancel the dialog rather than resetting the login keychain. |

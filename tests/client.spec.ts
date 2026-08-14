@@ -327,6 +327,7 @@ describe('Vision Toolkit client plugin', () => {
     }))
 
     await screen.findByText('0.1.0')
+    expect(screen.getByLabelText('apiKey')).toBeTruthy()
     const root = view.container.querySelector('.dvt-settings')
     const essential = view.container.querySelector('.dvt-essential')
     const advanced = view.container.querySelector('.dvt-advanced')
@@ -335,7 +336,69 @@ describe('Vision Toolkit client plugin', () => {
     expect(root?.querySelector('.dvt-essential')).toBe(essential)
     expect(root?.lastElementChild).toBe(footer)
     expect(advanced).not.toBeNull()
+    expect(advanced?.contains(screen.getByLabelText('credential'))).toBe(true)
     expect(view.container.querySelector('.dvt-settings-header')).toBeNull()
+  })
+
+  it('saves Settings first, then stores the typed API key without sending it in Settings', async () => {
+    const initial = settingsSnapshot()
+    const savedSettings = {
+      ...initial,
+      settings: { ...initial.settings, revision: 2 },
+    }
+    const savedCredential = {
+      ...savedSettings,
+      credential: { ...savedSettings.credential, configured: true, source: 'file' },
+    }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ ok: true, value: initial }))
+      .mockResolvedValueOnce(jsonResponse({ ok: true, value: savedSettings }))
+      .mockResolvedValueOnce(jsonResponse({ ok: true, value: savedCredential }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { ctx, registrations } = fakeClientContext()
+    apply(ctx as never)
+    const settings = registrations.find(entry => entry.options.name === 'settings.section')
+    if (settings === undefined) throw new Error('Settings component was not registered')
+    render(createElement(settings.component, {
+      controller: new VisionSettingsController(),
+      t: (key: string) => key,
+    }))
+
+    const keyInput = await screen.findByLabelText('apiKey') as HTMLInputElement
+    fireEvent.change(keyInput, { target: { value: 'sk-browser-entry' } })
+    fireEvent.click(screen.getByRole('button', { name: 'save' }))
+
+    await screen.findByText('saved')
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    const settingsBody = JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit | undefined)?.body)) as Record<string, unknown>
+    const credentialBody = JSON.parse(String((fetchMock.mock.calls[2]?.[1] as RequestInit | undefined)?.body)) as Record<string, unknown>
+    expect(settingsBody.action).toBe('save')
+    expect(JSON.stringify(settingsBody)).not.toContain('sk-browser-entry')
+    expect(credentialBody).toEqual({
+      action: 'credential', expectedRevision: 2, ref: 'VISION_API_KEY', value: 'sk-browser-entry',
+    })
+    expect(keyInput.value).toBe('')
+  })
+
+  it('clears a key validation message as soon as the user edits the field', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ ok: true, value: settingsSnapshot() })))
+    const { ctx, registrations } = fakeClientContext()
+    apply(ctx as never)
+    const settings = registrations.find(entry => entry.options.name === 'settings.section')
+    if (settings === undefined) throw new Error('Settings component was not registered')
+    render(createElement(settings.component, {
+      controller: new VisionSettingsController(),
+      t: (key: string) => key,
+    }))
+
+    const keyInput = await screen.findByLabelText('apiKey')
+    fireEvent.change(keyInput, { target: { value: '   ' } })
+    fireEvent.click(screen.getByRole('button', { name: 'save' }))
+    expect(screen.getByText('apiKeyBlank')).toBeTruthy()
+
+    fireEvent.change(keyInput, { target: { value: '' } })
+    expect(screen.queryByText('apiKeyBlank')).toBeNull()
   })
 
   it('reloads the authoritative same-revision settings after a runtime candidate is rejected', async () => {
