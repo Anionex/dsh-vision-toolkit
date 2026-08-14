@@ -8,7 +8,7 @@
  * global and Agent-scoped contribution the plugin mounted.
  * @module @dsh-external/dsh-vision-toolkit
  */
-import type { Context } from 'cordis';
+import type { Context } from '@deepseek-ai/cordis';
 import { Config, type VisionToolkitConfig } from './config.ts';
 export declare const name = "@dsh-external/dsh-vision-toolkit";
 export { Config };

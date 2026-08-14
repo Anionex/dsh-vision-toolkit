@@ -1,4 +1,4 @@
-import { Context } from 'cordis'
+import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { ResolvedVisionToolkitConfig } from '../src/config.ts'
 import type { VisionToolkitRuntime } from '../src/runtime.ts'

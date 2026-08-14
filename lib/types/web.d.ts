@@ -5,7 +5,7 @@
  * @module dsh-vision-toolkit/web
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { Context } from 'cordis';
+import type { Context } from '@deepseek-ai/cordis';
 import { ArtifactAccessController } from './artifact-access.ts';
 import { PastedImageBackend } from './paste-images.ts';
 import { type VisionToolkitConfig } from './config.ts';

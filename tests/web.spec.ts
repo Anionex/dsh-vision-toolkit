@@ -1,5 +1,5 @@
 import { createServer, type Server } from 'node:http'
-import { Context } from 'cordis'
+import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Credentials } from '@deepseek-ai/dsh-credentials'
 import Settings, { type SettingsNamespace } from '@deepseek-ai/dsh-settings'

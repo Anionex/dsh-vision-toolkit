@@ -4,7 +4,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { lstat, mkdir, open, realpath, rename, rm } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { basename, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
-import type { Context } from 'cordis'
+import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-session'
 import { sameOriginPost } from './web-request.ts'
 

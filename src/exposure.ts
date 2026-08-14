@@ -9,7 +9,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { Session } from '@deepseek-ai/dsh-session'
 import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
-import type { Context } from 'cordis'
+import type { Context } from '@deepseek-ai/cordis'
 import { VISION_TOOLS_SKILL_CONTENT, VISION_TOOLS_SKILL_NAME } from './skill.ts'
 
 /** Small bootstrap tool retained only until the current Agent gains visual tools. */

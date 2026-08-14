@@ -3,7 +3,7 @@
 import { useSyncExternalStore, type ReactNode } from 'react'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { SlashSource } from '@deepseek-ai/dsh-client-ui-slash/client'
+import type { InputTriggerSource } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 
 const SOURCE = 'vision-toolkit-pasted-image'
@@ -48,7 +48,7 @@ type PasteDockProps = PropsRuntime<'conversation.input.dock'> & {
 }
 
 interface ReferenceSourceRegistry {
-  registerSource: (source: SlashSource) => () => void
+  registerSource: (source: InputTriggerSource) => () => void
 }
 
 interface ReferenceSourceRegistration {
@@ -143,7 +143,7 @@ export class PasteImageController {
     for (const listener of this.listeners) listener()
   }
 
-  source(): SlashSource {
+  source(): InputTriggerSource {
     return {
       trigger: '@',
       name: SOURCE,
