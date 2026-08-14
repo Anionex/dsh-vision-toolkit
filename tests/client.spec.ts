@@ -82,6 +82,7 @@ function settingsSnapshot(runtime: { ready: boolean; lastError?: string } = { re
           credential: 'VISION_API_KEY',
           model: 'gemini-3.6-flash',
           protocol: 'openai',
+          userAgent: 'fixture-agent/1.0',
         },
         language: 'zh',
         timeoutMs: 61000,
@@ -330,6 +331,7 @@ describe('Vision Toolkit client plugin', () => {
     const runtimeMode = await screen.findByLabelText('runtimeMode')
     const protocol = screen.getByLabelText('protocol')
     fireEvent.change(protocol, { target: { value: 'anthropic' } })
+    fireEvent.change(screen.getByLabelText('userAgent'), { target: { value: 'custom-agent/2.0' } })
     fireEvent.change(runtimeMode, { target: { value: 'external' } })
     const toolkitPath = await screen.findByLabelText('toolkitPath')
     fireEvent.change(toolkitPath, { target: { value: '/nonexistent/dsh-vision-toolkit' } })
@@ -337,7 +339,7 @@ describe('Vision Toolkit client plugin', () => {
     await screen.findByText('agent-vision-toolkit path does not exist')
     const saveRequest = fetchMock.mock.calls[1]?.[1] as RequestInit
     expect(JSON.parse(String(saveRequest.body))).toMatchObject({
-      value: { provider: { protocol: 'anthropic' } },
+      value: { provider: { protocol: 'anthropic', userAgent: 'custom-agent/2.0' } },
     })
 
     fireEvent.click(screen.getByRole('button', { name: 'reload' }))

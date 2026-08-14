@@ -15,6 +15,9 @@ import { VisionToolkitError } from './errors.ts'
 /** Settings document namespace owned by this plugin. */
 export const VISION_TOOLKIT_SETTINGS_NAMESPACE = settingsNamespace('vision-toolkit')
 
+/** Browser-compatible default shared with the vendored Python client. */
+export const DEFAULT_VISION_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
+
 /** Full user-facing configuration; every field defaults at the schema boundary. */
 export interface VisionToolkitConfig {
   provider?: {
@@ -26,6 +29,8 @@ export interface VisionToolkitConfig {
     model?: string
     /** Vision request protocol: OpenAI Chat Completions or Anthropic Messages. */
     protocol?: 'openai' | 'anthropic'
+    /** Outbound User-Agent for provider requests and connection tests. */
+    userAgent?: string
   }
   /** Vision output language (`zh` or `en`). */
   language?: 'zh' | 'en'
@@ -56,6 +61,7 @@ export const Config: Schema<VisionToolkitConfig> = z.object({
     credential: z.string().default('VISION_API_KEY'),
     model: z.string().default('gemini-3.6-flash'),
     protocol: z.union(['openai', 'anthropic'] as const).default('openai'),
+    userAgent: z.string().default(DEFAULT_VISION_USER_AGENT),
   }),
   language: z.union(['zh', 'en'] as const).default('zh'),
   timeoutMs: z.number().default(60000),
@@ -77,6 +83,7 @@ export interface ResolvedVisionToolkitConfig {
     credential: CredentialRef
     model: string
     protocol: 'openai' | 'anthropic'
+    userAgent: string
   }
   language: 'zh' | 'en'
   timeoutMs: number
@@ -129,6 +136,10 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
   if (protocol !== 'openai' && protocol !== 'anthropic') {
     throw new VisionToolkitError('config', 'provider.protocol must be "openai" or "anthropic"')
   }
+  const userAgent = (provider.userAgent ?? DEFAULT_VISION_USER_AGENT).trim()
+  if (userAgent.length === 0) {
+    throw new VisionToolkitError('config', 'provider.userAgent must not be empty')
+  }
   const language = config.language ?? 'zh'
   if (language !== 'zh' && language !== 'en') {
     throw new VisionToolkitError('config', 'language must be "zh" or "en"')
@@ -169,7 +180,7 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
   }
   const allowedDirs = (config.allowedDirs ?? []).map(dir => dir.trim()).filter(dir => dir.length > 0)
   return {
-    provider: { baseUrl, credential, model, protocol },
+    provider: { baseUrl, credential, model, protocol, userAgent },
     language,
     timeoutMs,
     maxImageBytes,

@@ -486,6 +486,7 @@ describe('VisionToolkitRuntime', () => {
     const server = createServer((request, response) => {
       expect(request.url).toBe('/v1/models')
       expect(request.headers.authorization).toBe('Bearer test-vision-key')
+      expect(request.headers['user-agent']).toContain('Mozilla/5.0')
       response.writeHead(200, { 'content-type': 'application/json' })
       response.end('{"data":[]}')
     })
@@ -508,6 +509,37 @@ describe('VisionToolkitRuntime', () => {
       })
       const active = await runtime.health(true, { signal, workspace })
       expect(active).toMatchObject({ connectionTested: true, checks: { service: { status: 'ok' } } })
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close(error => error === undefined ? resolve() : reject(error)))
+    }
+  })
+
+  it('uses Anthropic authentication for an explicit connection test', async () => {
+    const server = createServer((request, response) => {
+      expect(request.url).toBe('/v1/models')
+      expect(request.headers.authorization).toBeUndefined()
+      expect(request.headers['x-api-key']).toBe('test-vision-key')
+      expect(request.headers['anthropic-version']).toBe('2023-06-01')
+      expect(request.headers['user-agent']).toBe('fixture-agent/1.0')
+      response.writeHead(200, { 'content-type': 'application/json' })
+      response.end('{"data":[]}')
+    })
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+    try {
+      const address = server.address()
+      if (address === null || typeof address === 'string') throw new Error('fixture server did not bind')
+      const { runtime } = await setup({
+        provider: {
+          baseUrl: `http://127.0.0.1:${address.port}/v1`,
+          credential: 'VISION_API_KEY',
+          model: 'fixture-model',
+          protocol: 'anthropic',
+          userAgent: 'fixture-agent/1.0',
+        },
+      })
+      const workspace = await tempWorkspace()
+      await expect(runtime.health(true, { signal, workspace }))
+        .resolves.toMatchObject({ connectionTested: true, checks: { service: { status: 'ok' } } })
     } finally {
       await new Promise<void>((resolve, reject) => server.close(error => error === undefined ? resolve() : reject(error)))
     }
@@ -677,6 +709,7 @@ describe('upstream adapter version facts', () => {
     expect(spawn.mock.calls[0]?.[0].env).toMatchObject({
       VISION_API_PROTOCOL: 'anthropic',
       VISION_API_KEY: 'test-vision-key',
+      VISION_USER_AGENT: expect.stringContaining('Mozilla/5.0'),
     })
   })
 

@@ -39,6 +39,7 @@ export interface UpstreamEnvironment {
   VISION_BASE_URL: string
   VISION_MODEL: string
   VISION_API_PROTOCOL: 'chat_completions' | 'anthropic'
+  VISION_USER_AGENT: string
   LANG: 'zh' | 'en'
 }
 
@@ -614,6 +615,7 @@ export class UpstreamAdapter {
           VISION_BASE_URL: options.env.VISION_BASE_URL,
           VISION_MODEL: options.env.VISION_MODEL,
           VISION_API_PROTOCOL: options.env.VISION_API_PROTOCOL,
+          VISION_USER_AGENT: options.env.VISION_USER_AGENT,
           LANG: options.env.LANG,
           VISION_ENV_FILE: join(prepared.cleanHome, 'vision.env'),
         }),

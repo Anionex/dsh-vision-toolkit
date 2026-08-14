@@ -24,6 +24,7 @@ import { installPasteImages } from './paste-images.tsx'
 const NS = 'vision-toolkit'
 const SETTINGS_ROUTE = '/_dsh/vision-toolkit/settings'
 const PRESENTATION_META_KEY = '$dshVisionToolkit'
+const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
 
 const en = {
   nav: 'Vision',
@@ -35,6 +36,7 @@ const en = {
   credential: 'Credential reference',
   model: 'Model',
   protocol: 'API protocol',
+  userAgent: 'User-Agent',
   language: 'Output language',
   limits: 'Limits',
   timeout: 'Request timeout (ms)',
@@ -98,6 +100,7 @@ const zh: Record<LocaleKey, string> = {
   credential: 'Credential 引用',
   model: '模型',
   protocol: 'API 协议',
+  userAgent: 'User-Agent',
   language: '输出语言',
   limits: '限制',
   timeout: '请求超时（毫秒）',
@@ -204,7 +207,7 @@ interface HealthResult {
 }
 
 interface SettingsValue {
-  provider?: { baseUrl?: string; credential?: string; model?: string; protocol?: 'openai' | 'anthropic' }
+  provider?: { baseUrl?: string; credential?: string; model?: string; protocol?: 'openai' | 'anthropic'; userAgent?: string }
   language?: 'zh' | 'en'
   timeoutMs?: number
   maxImageBytes?: number
@@ -633,6 +636,7 @@ interface Draft {
   credential: string
   model: string
   protocol: 'openai' | 'anthropic'
+  userAgent: string
   language: 'zh' | 'en'
   timeoutMs: string
   maxImageBytes: string
@@ -650,6 +654,7 @@ function draftOf(value: SettingsValue): Draft {
     credential: value.provider?.credential ?? 'VISION_API_KEY',
     model: value.provider?.model ?? 'gemini-3.6-flash',
     protocol: value.provider?.protocol ?? 'openai',
+    userAgent: value.provider?.userAgent ?? DEFAULT_USER_AGENT,
     language: value.language ?? 'zh',
     timeoutMs: String(value.timeoutMs ?? 60000),
     maxImageBytes: String(value.maxImageBytes ?? 10485760),
@@ -675,6 +680,7 @@ function valueOf(draft: Draft): SettingsValue {
       credential: draft.credential.trim(),
       model: draft.model.trim(),
       protocol: draft.protocol,
+      userAgent: draft.userAgent.trim(),
     },
     language: draft.language,
     timeoutMs: positiveInteger(draft.timeoutMs, 'timeoutMs'),
@@ -754,6 +760,7 @@ function LoadedSettings({ controller, t }: SettingsInjected) {
           <Field label={t('baseUrl')}><Input value={draft.baseUrl} onChange={(event) => { update('baseUrl', event.target.value) }} /></Field>
           <Field label={t('model')}><Input value={draft.model} onChange={(event) => { update('model', event.target.value) }} /></Field>
           <Field label={t('protocol')}><select value={draft.protocol} onChange={(event) => { update('protocol', event.target.value as 'openai' | 'anthropic') }}><option value="openai">OpenAI Chat Completions</option><option value="anthropic">Anthropic Messages</option></select></Field>
+          <Field label={t('userAgent')}><Input value={draft.userAgent} onChange={(event) => { update('userAgent', event.target.value) }} /></Field>
           <Field label={t('credential')} hint={snapshot.credential.source === undefined ? undefined : `${t('source')}: ${snapshot.credential.source}`}><Input value={draft.credential} onChange={(event) => { update('credential', event.target.value) }} /></Field>
           <Field label={t('language')}><select value={draft.language} onChange={(event) => { update('language', event.target.value as 'zh' | 'en') }}><option value="zh">中文</option><option value="en">English</option></select></Field>
         </div>

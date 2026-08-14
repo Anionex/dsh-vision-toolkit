@@ -769,6 +769,7 @@ export class VisionToolkitRuntime {
       VISION_BASE_URL: this.config.provider.baseUrl,
       VISION_MODEL: this.config.provider.model,
       VISION_API_PROTOCOL: this.config.provider.protocol === 'anthropic' ? 'anthropic' : 'chat_completions',
+      VISION_USER_AGENT: this.config.provider.userAgent,
       LANG: this.config.language,
     }
   }
@@ -834,6 +835,7 @@ export class VisionToolkitRuntime {
         baseUrl: env.VISION_BASE_URL,
         model: env.VISION_MODEL,
         protocol: env.VISION_API_PROTOCOL,
+        userAgent: env.VISION_USER_AGENT,
         language: env.LANG,
         credentialSha256: createHash('sha256').update(env.VISION_API_KEY).digest('hex'),
       },
@@ -1737,9 +1739,19 @@ export class VisionToolkitRuntime {
           const endpoint = `${this.config.provider.baseUrl}/models`
           try {
             const started = Date.now()
+            const headers: Record<string, string> = {
+              Accept: 'application/json',
+              'User-Agent': this.config.provider.userAgent,
+            }
+            if (this.config.provider.protocol === 'anthropic') {
+              headers['x-api-key'] = resolvedCredential.value
+              headers['anthropic-version'] = '2023-06-01'
+            } else {
+              headers.Authorization = `Bearer ${resolvedCredential.value}`
+            }
             const response = await fetch(endpoint, {
               method: 'GET',
-              headers: { Authorization: `Bearer ${resolvedCredential.value}`, Accept: 'application/json' },
+              headers,
               signal: operation.signal,
             })
             operation.metrics.upstreamMs += Date.now() - started
