@@ -3,8 +3,8 @@
 # DSH Vision Toolkit
 
 [![X (Twitter)](https://img.shields.io/badge/-@anion__ex-000000?style=flat-square&logo=x&logoColor=white)](https://x.com/anion_ex)
-[![Release v0.1.6](https://img.shields.io/badge/release-v0.1.6-5B4CF0?style=flat-square)](https://github.com/Anionex/dsh-vision-toolkit/releases/tag/v0.1.6)
-[![Verified: 162 tests](https://img.shields.io/badge/verified-162%20tests-2EA44F?style=flat-square)](tests)
+[![Release v0.1.7](https://img.shields.io/badge/release-v0.1.7-5B4CF0?style=flat-square)](https://github.com/Anionex/dsh-vision-toolkit/releases/tag/v0.1.7)
+[![Verified: 168 tests](https://img.shields.io/badge/verified-168%20tests-2EA44F?style=flat-square)](tests)
 [![License: MIT](https://img.shields.io/badge/license-MIT-0B7285?style=flat-square)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-%5E22.19%20%7C%20%3E%3D24-339933?style=flat-square&logo=nodedotjs&logoColor=white)](package.json)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)](runtime/requirements.lock)
@@ -191,7 +191,7 @@ dsh plugin --profile web remove @dsh-external/dsh-vision-toolkit
 dsh plugin --profile web add @anionex/dsh-vision-toolkit
 ```
 
-重启后，Settings → 视觉工具 应显示插件版本 **0.1.6**。
+重启后，Settings → 视觉工具 应显示插件版本 **0.1.7**。
 
 通过注册表安装时，使用 Profile 的包管理命令更新依赖：
 
