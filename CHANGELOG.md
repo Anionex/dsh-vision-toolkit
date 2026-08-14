@@ -4,9 +4,16 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-08-14
+
 ### Added
 
 - Added native Anthropic Messages transport with configurable thinking behavior, provider-compatible User-Agent overrides, and matching Web Settings controls.
+
+### Changed
+
+- Restored the user-first Web Settings hierarchy: required provider fields appear first, advanced compatibility and runtime controls are collapsed, and plugin identity, versions, and runtime generation are shown in the footer.
+- Replaced internal-facing Settings, health, tool-card, and artifact labels with concise English and Simplified Chinese user copy.
 
 ### Fixed
 
@@ -93,7 +100,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 - Runtime teardown cancels in-flight operations before removing Agent-scoped tools, the activation bootstrap, and the Skill.
 - The Web client is published through the current nested `dsh.client` manifest and loader-compatible built artifact required by DSH snapshot0810.
 
-[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.2...v0.1.3
