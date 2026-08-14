@@ -373,6 +373,8 @@ pnpm pack --dry-run
 
 [`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit) 由 [Anionex](https://anionex.me/) 创建。本仓库维护它面向 DeepSeek Harness 的原生集成：DSH 侧负责生命周期、安全、结构化 schema、Credentials、产物和 Web 展示；视觉算法与可复用 playbook 继续由上游项目维护。
 
+如果你想了解我后续的更多工作，欢迎在 [X](https://x.com/anion_ex) 或 [GitHub](https://github.com/Anionex) 关注我。
+
 ## 许可证
 
 插件采用 MIT 许可。打包的 `agent-vision-toolkit` 快照在 `vendor/agent-vision-toolkit/LICENSE` 保留上游 MIT 许可证，并继续作为视觉算法的唯一实现。

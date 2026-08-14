@@ -373,6 +373,8 @@ Version `0.1.2` is the current private GitHub release. P0 and P1 are product com
 
 [`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit) was created by [Anionex](https://anionex.me/). This repository maintains its native DeepSeek Harness integration: DSH owns lifecycle, security, structured schemas, Credentials, Artifacts, and Web presentation, while the upstream project remains the home of the visual algorithms and reusable playbooks.
 
+If you would like to follow my future work, [follow me on X](https://x.com/anion_ex) or [GitHub](https://github.com/Anionex).
+
 ## License
 
 The plugin is MIT-licensed. The packaged `agent-vision-toolkit` snapshot retains its upstream MIT license in `vendor/agent-vision-toolkit/LICENSE` and remains the sole implementation of its visual algorithms.
