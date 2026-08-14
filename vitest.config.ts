@@ -12,6 +12,9 @@ export default defineConfig({
   plugins: [tsconfigPaths({ projects: ['../tsconfig.base.json'] })],
   resolve: {
     alias: [
+      // cwd keeps the junction form (import.meta.url realpaths to the target
+      // drive), so the harness-relative path stays inside the E: checkout.
+      { find: /^cordis$/, replacement: resolve(process.cwd(), '../vendor/cordis/src/index.ts') },
       { find: /^react$/, replacement: resolve(ROOT, '../packages/client/ui-primitives/node_modules/react/index.js') },
       { find: /^react\/jsx-runtime$/, replacement: resolve(ROOT, '../packages/client/ui-primitives/node_modules/react/jsx-runtime.js') },
       { find: /^react\/jsx-dev-runtime$/, replacement: resolve(ROOT, '../packages/client/ui-primitives/node_modules/react/jsx-dev-runtime.js') },

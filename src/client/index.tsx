@@ -13,6 +13,10 @@ import { Button, Input } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ClientContext, ToolCallBlock } from '@deepseek-ai/dsh-client-runtime/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
+// Side-effect type imports: activate the `settings/updated` and
+// `credentials/updated` event declarations used by the Settings invalidations.
+import type {} from '@deepseek-ai/dsh-settings/types'
+import type {} from '@deepseek-ai/dsh-credentials/types'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 
 const NS = 'vision-toolkit'
@@ -29,6 +33,8 @@ const en = {
   credential: 'Credential reference',
   model: 'Model',
   language: 'Output language',
+  degradePaste: 'Degrade pasted images',
+  degradePasteHint: 'When the session model cannot accept images, pasted images are saved into the workspace and handed to the model as file paths, so the agent reads them through the visual tools. Native vision models are always preferred.',
   limits: 'Limits',
   timeout: 'Request timeout (ms)',
   maxBytes: 'Maximum image bytes',
@@ -91,6 +97,8 @@ const zh: Record<LocaleKey, string> = {
   credential: 'Credential 引用',
   model: '模型',
   language: '输出语言',
+  degradePaste: '粘贴图片自动降级',
+  degradePasteHint: '当会话模型不支持图片输入时，粘贴的图片自动保存到工作区并以文件路径交给模型，由模型使用视觉工具查看。原生支持图片的模型始终优先。',
   limits: '限制',
   timeout: '请求超时（毫秒）',
   maxBytes: '最大图片字节数',
@@ -198,6 +206,7 @@ interface HealthResult {
 interface SettingsValue {
   provider?: { baseUrl?: string; credential?: string; model?: string }
   language?: 'zh' | 'en'
+  degradePastedImages?: boolean
   timeoutMs?: number
   maxImageBytes?: number
   maxImagePixels?: number
@@ -625,6 +634,7 @@ interface Draft {
   credential: string
   model: string
   language: 'zh' | 'en'
+  degradePastedImages: boolean
   timeoutMs: string
   maxImageBytes: string
   maxImagePixels: string
@@ -641,6 +651,7 @@ function draftOf(value: SettingsValue): Draft {
     credential: value.provider?.credential ?? 'VISION_API_KEY',
     model: value.provider?.model ?? 'gemini-3.6-flash',
     language: value.language ?? 'zh',
+    degradePastedImages: value.degradePastedImages ?? false,
     timeoutMs: String(value.timeoutMs ?? 60000),
     maxImageBytes: String(value.maxImageBytes ?? 10485760),
     maxImagePixels: String(value.maxImagePixels ?? 40000000),
@@ -662,6 +673,7 @@ function valueOf(draft: Draft): SettingsValue {
   return {
     provider: { baseUrl: draft.baseUrl.trim(), credential: draft.credential.trim(), model: draft.model.trim() },
     language: draft.language,
+    degradePastedImages: draft.degradePastedImages,
     timeoutMs: positiveInteger(draft.timeoutMs, 'timeoutMs'),
     maxImageBytes: positiveInteger(draft.maxImageBytes, 'maxImageBytes'),
     maxImagePixels: positiveInteger(draft.maxImagePixels, 'maxImagePixels'),
@@ -741,6 +753,7 @@ function LoadedSettings({ controller, t }: SettingsInjected) {
           <Field label={t('credential')} hint={snapshot.credential.source === undefined ? undefined : `${t('source')}: ${snapshot.credential.source}`}><Input value={draft.credential} onChange={(event) => { update('credential', event.target.value) }} /></Field>
           <Field label={t('language')}><select value={draft.language} onChange={(event) => { update('language', event.target.value as 'zh' | 'en') }}><option value="zh">中文</option><option value="en">English</option></select></Field>
         </div>
+        <label className="dvt-checkbox"><input type="checkbox" checked={draft.degradePastedImages} onChange={(event) => { update('degradePastedImages', event.target.checked) }} /><span>{t('degradePaste')}</span><small>{t('degradePasteHint')}</small></label>
       </section>
 
       <section className="dvt-panel"><div className="dvt-panel-title"><h3>{t('limits')}</h3></div><div className="dvt-form-grid">
@@ -773,7 +786,7 @@ const CSS = `
 .dvt-tool-head{width:100%;min-height:38px;display:flex;align-items:center;gap:7px;padding:8px 10px;border:0;background:transparent;color:inherit;text-align:left;cursor:pointer;font:inherit}.dvt-tool-head:focus-visible{outline:2px solid #7c6ff0;outline-offset:-2px}.dvt-tool-icon{width:20px;height:20px;display:grid;place-items:center;border-radius:6px;color:#6659c7;background:rgba(111,94,219,.1);flex:none}.dvt-tool-title{font-size:12px;font-weight:650;white-space:nowrap}.dvt-tool-sep{opacity:.35}.dvt-tool-summary{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--dsw-alias-fg-muted,#77736d)}.dvt-tool-status{margin-left:auto;font-size:11px;color:var(--dsw-alias-fg-muted,#77736d);max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dvt-tool[data-state=error] .dvt-tool-status{color:#c34f4f}.dvt-chevron{margin-left:auto;transition:transform .16s ease;opacity:.55}.dvt-chevron[data-open=true]{transform:rotate(180deg)}.dvt-tool-body{padding:0 10px 10px}.dvt-stack{display:grid;gap:10px}.dvt-muted{margin:0;color:var(--dsw-alias-fg-muted,#77736d);font-size:12px;line-height:1.5}
 .dvt-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.dvt-metrics>div,.dvt-diff-score{padding:10px;border-radius:9px;background:var(--dsw-alias-bg-layer-2,#f7f5f1);display:grid;gap:4px}.dvt-metrics span,.dvt-diff-score span{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--dsw-alias-fg-muted,#77736d)}.dvt-metrics strong,.dvt-diff-score strong{font-size:13px}.dvt-list{list-style:none;margin:0;padding:0;display:grid;gap:4px;max-height:160px;overflow:auto}.dvt-list li{display:flex;justify-content:space-between;gap:12px;padding:6px 8px;border-radius:7px;background:var(--dsw-alias-bg-layer-2,#f7f5f1);font-size:11px}.dvt-list code{color:#6659c7}.dvt-table-wrap{max-height:220px;overflow:auto;border:1px solid var(--dsw-alias-border-subtle,#dedbd5);border-radius:9px}.dvt-table{width:100%;border-collapse:collapse;font-size:11px}.dvt-table th,.dvt-table td{padding:7px 8px;text-align:left;border-bottom:1px solid var(--dsw-alias-border-subtle,#e8e5df)}.dvt-table th{position:sticky;top:0;background:var(--dsw-alias-bg-layer-2,#f7f5f1);font-size:10px;text-transform:uppercase;letter-spacing:.05em}.dvt-table tr:last-child td{border-bottom:0}
 .dvt-artifact{border:1px solid var(--dsw-alias-border-subtle,#dedbd5);border-radius:10px;overflow:hidden;background:var(--dsw-alias-bg-layer-1,#fff)}.dvt-preview{display:block;width:100%;max-height:360px;object-fit:contain;background:repeating-conic-gradient(#eee 0 25%,#fafafa 0 50%) 50%/18px 18px;border:0}.dvt-svg{height:280px}.dvt-artifact-meta{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 10px}.dvt-artifact-meta>div:first-child{min-width:0;display:grid;gap:2px}.dvt-artifact-meta strong{font-size:12px;overflow:hidden;text-overflow:ellipsis}.dvt-artifact-meta span,.dvt-artifact-meta small{font-size:10px;color:var(--dsw-alias-fg-muted,#77736d)}.dvt-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.dvt-download{display:inline-flex;align-items:center;height:28px;padding:0 12px;border-radius:999px;background:#6758d4;color:#fff;text-decoration:none;font-size:12px;font-weight:600}.dvt-artifact>.dvt-muted{padding:0 10px 10px}.dvt-diff-score>div{height:5px;border-radius:99px;background:rgba(120,110,100,.13);overflow:hidden}.dvt-diff-score i{display:block;height:100%;min-width:2px;background:linear-gradient(90deg,#edb34d,#df5d5d);border-radius:99px}.dvt-tool h4{font-size:11px;margin:0 0 6px}.dvt-palette{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:7px}.dvt-palette>div{display:flex;align-items:center;gap:8px;padding:7px;border:1px solid var(--dsw-alias-border-subtle,#dedbd5);border-radius:9px}.dvt-palette i{width:28px;height:28px;border-radius:7px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}.dvt-palette span{display:grid}.dvt-palette strong{font-size:11px}.dvt-palette small{font-size:10px;color:var(--dsw-alias-fg-muted,#77736d)}
-.dvt-settings{display:grid;gap:14px;max-width:900px;padding:8px 2px 32px;color:var(--dsw-alias-fg-primary,#26231f)}.dvt-settings-header{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;padding:8px 2px}.dvt-settings-header h2{font-size:25px;letter-spacing:-.025em;margin:3px 0 6px}.dvt-settings-header p{max-width:620px;margin:0;color:var(--dsw-alias-fg-muted,#77736d);font-size:13px;line-height:1.55}.dvt-kicker{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:#6758d4;font-weight:700}.dvt-release{display:grid;gap:4px;min-width:170px;padding:9px 11px;border-radius:10px;background:var(--dsw-alias-bg-layer-2,#f7f5f1);font-size:10px;color:var(--dsw-alias-fg-muted,#77736d)}.dvt-release span{display:flex;justify-content:space-between;gap:12px}.dvt-release strong{color:var(--dsw-alias-fg-primary,#26231f)}.dvt-alert{padding:10px 12px;border-radius:10px;font-size:12px;line-height:1.5;display:grid;gap:3px}.dvt-alert.notice{background:rgba(92,108,213,.09);color:#5149a6}.dvt-alert.warning{background:rgba(224,162,55,.12);color:#986818}.dvt-alert.error{background:rgba(205,72,72,.1);color:#aa3939}.dvt-alert.success{background:rgba(48,154,100,.1);color:#267d52}.dvt-panel{display:grid;gap:12px;padding:15px;border:1px solid var(--dsw-alias-border-subtle,#dedbd5);border-radius:14px;background:var(--dsw-alias-bg-layer-1,#fff);box-shadow:0 1px 1px rgba(0,0,0,.02)}.dvt-panel-title{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.dvt-panel-title h3{font-size:14px;margin:0}.dvt-panel-title p{font-size:11px;line-height:1.45;color:var(--dsw-alias-fg-muted,#77736d);margin:4px 0 0;max-width:620px}.dvt-badge{font-size:10px;padding:3px 7px;border-radius:999px;font-weight:650}.dvt-badge.ok{background:rgba(48,154,100,.12);color:#267d52}.dvt-badge.error{background:rgba(205,72,72,.1);color:#aa3939}.dvt-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.dvt-field{display:grid;gap:6px;align-content:start}.dvt-field>span{font-size:11px;font-weight:600}.dvt-field>small{font-size:10px;color:var(--dsw-alias-fg-muted,#77736d);line-height:1.4}.dvt-field select,.dvt-field textarea{width:100%;box-sizing:border-box;border:1px solid var(--dsw-alias-border-subtle,#d9d5ce);border-radius:9px;background:var(--dsw-alias-bg-layer-1,#fff);color:inherit;font:inherit;font-size:12px;padding:8px 10px}.dvt-field select{height:36px}.dvt-field textarea{resize:vertical;min-height:76px}.dvt-runtime-facts{display:grid;gap:4px;padding:9px 10px;border-radius:9px;background:var(--dsw-alias-bg-layer-2,#f7f5f1);overflow:auto}.dvt-runtime-facts code{font-size:10px;white-space:nowrap;color:var(--dsw-alias-fg-muted,#77736d)}.dvt-save-row{display:flex;gap:8px;padding:2px 0}
+.dvt-settings{display:grid;gap:14px;max-width:900px;padding:8px 2px 32px;color:var(--dsw-alias-fg-primary,#26231f)}.dvt-settings-header{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;padding:8px 2px}.dvt-settings-header h2{font-size:25px;letter-spacing:-.025em;margin:3px 0 6px}.dvt-settings-header p{max-width:620px;margin:0;color:var(--dsw-alias-fg-muted,#77736d);font-size:13px;line-height:1.55}.dvt-kicker{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:#6758d4;font-weight:700}.dvt-release{display:grid;gap:4px;min-width:170px;padding:9px 11px;border-radius:10px;background:var(--dsw-alias-bg-layer-2,#f7f5f1);font-size:10px;color:var(--dsw-alias-fg-muted,#77736d)}.dvt-release span{display:flex;justify-content:space-between;gap:12px}.dvt-release strong{color:var(--dsw-alias-fg-primary,#26231f)}.dvt-alert{padding:10px 12px;border-radius:10px;font-size:12px;line-height:1.5;display:grid;gap:3px}.dvt-alert.notice{background:rgba(92,108,213,.09);color:#5149a6}.dvt-alert.warning{background:rgba(224,162,55,.12);color:#986818}.dvt-alert.error{background:rgba(205,72,72,.1);color:#aa3939}.dvt-alert.success{background:rgba(48,154,100,.1);color:#267d52}.dvt-panel{display:grid;gap:12px;padding:15px;border:1px solid var(--dsw-alias-border-subtle,#dedbd5);border-radius:14px;background:var(--dsw-alias-bg-layer-1,#fff);box-shadow:0 1px 1px rgba(0,0,0,.02)}.dvt-panel-title{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.dvt-panel-title h3{font-size:14px;margin:0}.dvt-panel-title p{font-size:11px;line-height:1.45;color:var(--dsw-alias-fg-muted,#77736d);margin:4px 0 0;max-width:620px}.dvt-badge{font-size:10px;padding:3px 7px;border-radius:999px;font-weight:650}.dvt-badge.ok{background:rgba(48,154,100,.12);color:#267d52}.dvt-badge.error{background:rgba(205,72,72,.1);color:#aa3939}.dvt-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.dvt-field{display:grid;gap:6px;align-content:start}.dvt-checkbox{display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--dsw-alias-border-subtle,#dedbd5);border-radius:10px;background:var(--dsw-alias-bg-layer-1,#fff);font-size:13px;cursor:pointer}.dvt-checkbox input{accent-color:#6758d4}.dvt-checkbox small{font-size:11px;color:var(--dsw-alias-fg-muted,#77736d);margin-left:auto;max-width:56%;line-height:1.45}.dvt-field>span{font-size:11px;font-weight:600}.dvt-field>small{font-size:10px;color:var(--dsw-alias-fg-muted,#77736d);line-height:1.4}.dvt-field select,.dvt-field textarea{width:100%;box-sizing:border-box;border:1px solid var(--dsw-alias-border-subtle,#d9d5ce);border-radius:9px;background:var(--dsw-alias-bg-layer-1,#fff);color:inherit;font:inherit;font-size:12px;padding:8px 10px}.dvt-field select{height:36px}.dvt-field textarea{resize:vertical;min-height:76px}.dvt-runtime-facts{display:grid;gap:4px;padding:9px 10px;border-radius:9px;background:var(--dsw-alias-bg-layer-2,#f7f5f1);overflow:auto}.dvt-runtime-facts code{font-size:10px;white-space:nowrap;color:var(--dsw-alias-fg-muted,#77736d)}.dvt-save-row{display:flex;gap:8px;padding:2px 0}
 .dvt-health-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px}.dvt-health-grid>div{padding:9px 10px;border-radius:9px;background:var(--dsw-alias-bg-layer-2,#f7f5f1);border-left:3px solid #aaa}.dvt-health-grid>div[data-status=ok]{border-left-color:#39a66b}.dvt-health-grid>div[data-status=warning],.dvt-health-grid>div[data-status=not_tested]{border-left-color:#d49a37}.dvt-health-grid>div[data-status=error]{border-left-color:#cf5050}.dvt-health-grid span{font-size:10px;text-transform:capitalize}.dvt-health-grid strong{float:right;font-size:9px;text-transform:uppercase;color:var(--dsw-alias-fg-muted,#77736d)}.dvt-health-grid p{clear:both;margin:5px 0 0;font-size:10px;line-height:1.4;color:var(--dsw-alias-fg-muted,#77736d)}.dvt-loading{padding:24px;border-radius:12px;background:var(--dsw-alias-bg-layer-2,#f7f5f1);font-size:12px;color:var(--dsw-alias-fg-muted,#77736d)}
 @media(max-width:720px){.dvt-settings-header{display:grid}.dvt-release{width:auto}.dvt-form-grid{grid-template-columns:1fr}.dvt-metrics{grid-template-columns:1fr}.dvt-artifact-meta{align-items:flex-start;flex-direction:column}.dvt-panel-title{flex-direction:column}}
 `
@@ -819,10 +832,10 @@ export function apply(ctx: ClientContext): void {
   const controller = new VisionSettingsController()
   ctx.effect(() => {
     const disposers = [
-      ctx.on('settings/changed', (namespace) => {
-        if (namespace === 'vision-toolkit') controller.refreshIfLoaded()
+      ctx.on('settings/updated', (namespace) => {
+        if (String(namespace) === NS) controller.refreshIfLoaded()
       }),
-      ctx.on('credentials/changed', (ref) => {
+      ctx.on('credentials/updated', (ref) => {
         const current = controller.snapshot().snapshot
         if (current?.credential.ref === ref) controller.refreshIfLoaded()
       }),

@@ -9,10 +9,15 @@
  * @module @dsh-external/dsh-vision-toolkit
  */
 
-import type { Context } from 'cordis'
+import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-settings'
+// Side-effect type imports: activate the `prompt/image-fallback` and
+// `llm/request-content` waterfall declarations without runtime dependencies.
+import type {} from '@deepseek-ai/dsh-host-apiproxy'
+import type {} from '@deepseek-ai/dsh-llm'
 import { ArtifactAccessController, prepareArtifactAccessKey } from './artifact-access.ts'
+import { messagesContainImage, savePastedImages, stripImageBlocks } from './degrade.ts'
 import {
   Config,
   VISION_TOOLKIT_SETTINGS_NAMESPACE,
@@ -30,7 +35,7 @@ export const name = '@dsh-external/dsh-vision-toolkit'
 
 export { Config }
 
-export const inject = ['tools', 'credentials', 'skills', 'subprocess', 'settings', 'agents']
+export const inject = ['tools', 'credentials', 'skills', 'subprocess', 'settings', 'agents', 'llm']
 
 /** Plugin entry: validate configuration synchronously, then mount asynchronously. */
 export async function apply(ctx: Context, config: VisionToolkitConfig = {}): Promise<() => void> {
@@ -94,6 +99,56 @@ export async function apply(ctx: Context, config: VisionToolkitConfig = {}): Pro
 
   const backend = new VisionToolkitWebBackend(ctx, manager, artifacts, ensureOperational)
   installVisionToolkitWeb(ctx, backend, artifacts)
+
+  // Pasted-image degradation (Web profiles only). The host asks plugins to
+  // admit image content as text when the session model is text-only; we save
+  // each pasted image into the session workspace and name the file in the
+  // message, so the agent reads it through the visual tools (vision_glance &
+  // co.) with a fully visible tool workflow — no hidden describe step. The
+  // companion `llm/request-content` hook below strips image blocks from model
+  // requests so a text-only adapter never serializes them. Native vision
+  // models never reach either hook.
+  ctx.on('prompt/image-fallback', async (payload, next) => {
+    if (settings.get().degradePastedImages !== true) return next()
+    try {
+      const workspace = payload.agent.session.header.cwd
+      if (workspace === undefined) {
+        ctx.logger.warn('dsh-vision-toolkit: pasted image degrade skipped; session has no project cwd')
+        return next()
+      }
+      const degraded = await savePastedImages(payload.content, workspace, {
+        stamp: () => new Date().toISOString().replace(/[:.]/gu, '-'),
+      })
+      return { content: degraded.content }
+    } catch (error) {
+      ctx.logger.warn(
+        'dsh-vision-toolkit: pasted image save failed; refusing the prompt: %s',
+        error instanceof Error ? error.message : String(error),
+      )
+      return next()
+    }
+  })
+
+  // Strip image blocks from model requests only when the resolved target
+  // model cannot accept images; the descriptions written by the degrade hook
+  // (or the image blocks themselves on native models) pass through untouched.
+  ctx.on('llm/request-content', async (payload, next) => {
+    try {
+      const info = await ctx.llm.resolveModelInfo(payload.options.provider, payload.options.model)
+      if (info.inputModalities !== undefined && info.inputModalities.includes('image')) return next()
+      if (!messagesContainImage(payload.options.messages)) return next()
+      const messages = stripImageBlocks(payload.options.messages)
+      if (messages === undefined) return next()
+      return { options: { ...payload.options, messages } }
+    } catch (error) {
+      ctx.logger.warn(
+        'dsh-vision-toolkit: llm/request-content modality check failed; forwarding unchanged: %s',
+        error instanceof Error ? error.message : String(error),
+      )
+      return next()
+    }
+  })
+
   disposers.push(settings.watch(async (next) => {
     try {
       await manager.reconfigure(next)

@@ -53,6 +53,12 @@ describe('resolveConfig', () => {
     expect(() => resolveConfig({ concurrency: 0 })).toThrowError(/concurrency/)
   })
 
+  it('defaults degradePastedImages to false and accepts an explicit value', () => {
+    expect(resolveConfig({}).degradePastedImages).toBe(false)
+    expect(resolveConfig({ degradePastedImages: true }).degradePastedImages).toBe(true)
+    expect(resolveConfig({ degradePastedImages: false }).degradePastedImages).toBe(false)
+  })
+
   it('accepts managed runtime without a local checkout path', () => {
     expect(resolveConfig({ runtime: { mode: 'managed' } }).runtime).toEqual({ mode: 'managed' })
   })

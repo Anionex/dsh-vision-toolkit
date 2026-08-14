@@ -121,7 +121,8 @@ def describe_image(image_url: str | list[str], prompt: str | None = None, max_to
     request = urllib.request.Request(
         base_url + "/chat/completions",
         data=json.dumps(payload).encode(),
-        headers={"Content-Type": "application/json", "Authorization": "Bearer " + api_key},
+        headers={"Content-Type": "application/json", "Authorization": "Bearer " + api_key,
+                 "User-Agent": "agent-vision-toolkit/1.0"},
     )
     retries = 2
     timeout = 180

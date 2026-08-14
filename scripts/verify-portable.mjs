@@ -63,9 +63,9 @@ const packagePath = join(root, 'package.json')
 const pkg = JSON.parse(await readFile(packagePath, 'utf8'))
 
 check(pkg.name === '@dsh-external/dsh-vision-toolkit', 'package name must stay @dsh-external/dsh-vision-toolkit')
-check(pkg.version === '0.1.2', 'package version and the latest release notes must stay aligned')
-check(pkg.repository?.url === 'git+https://github.com/dsh-external/dsh-vision-toolkit.git', 'repository URL is missing or mismatched')
-check(pkg.bugs?.url === 'https://github.com/dsh-external/dsh-vision-toolkit/issues', 'issue tracker URL is missing or mismatched')
+check(pkg.version === '0.1.4', 'package version and the latest release notes must stay aligned')
+check(pkg.repository?.url === 'git+https://github.com/Anionex/dsh-vision-toolkit.git', 'repository URL is missing or mismatched')
+check(pkg.bugs?.url === 'https://github.com/Anionex/dsh-vision-toolkit/issues', 'issue tracker URL is missing or mismatched')
 check(pkg.homepage === 'https://agent-vision.anionex.me', 'homepage URL is missing or mismatched')
 check(pkg.funding === 'https://ifdian.net/a/anionex', 'funding metadata is missing or mismatched')
 check(pkg.engines?.node === '^22.19.0 || >=24.0.0', 'Node.js engine range must match DeepSeek Harness')
@@ -173,6 +173,9 @@ const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 const pack = spawnSync(npm, ['pack', '--dry-run', '--ignore-scripts', '--json'], {
   cwd: root,
   encoding: 'utf8',
+  // Windows resolves npm through its .cmd shim, which spawn() refuses
+  // without a shell since the CVE-2024-27980 hardening.
+  shell: process.platform === 'win32',
 })
 if (pack.status !== 0) {
   failures.push(`npm pack --dry-run failed: ${(pack.stderr || pack.stdout).trim()}`)

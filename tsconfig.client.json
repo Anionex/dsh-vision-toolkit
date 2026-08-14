@@ -29,13 +29,17 @@
     ],
     "noEmitOnError": true,
     "paths": {
-      "cordis": ["../vendor/cordis/lib/types/index.d.ts"],
+      "@deepseek-ai/cordis": ["../vendor/cordis/lib/types/index.d.ts"],
       "@deepseek-ai/dsh-client-runtime/client": ["../packages/client/runtime/lib/types/client/index.d.ts"],
       "@deepseek-ai/dsh-client-ui-settings/client": ["../packages/client/ui-settings/lib/types/client/index.d.ts"],
       "@deepseek-ai/dsh-client-ui-conversation/client": ["../packages/client/ui-conversation/lib/types/client/index.d.ts"],
       "@deepseek-ai/dsh-client-locale/client": ["../packages/client/locale/lib/types/client/index.d.ts"],
       "@deepseek-ai/dsh-client-ui-slots": ["../packages/client/ui-slots/lib/types/index.d.ts"],
-      "@deepseek-ai/dsh-client-ui-primitives": ["../packages/client/ui-primitives/lib/types/index.d.ts"]
+      "@deepseek-ai/dsh-client-ui-primitives": ["../packages/client/ui-primitives/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-settings": ["../packages/settings/settings/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-settings/types": ["../packages/settings/settings/lib/types/types.d.ts"],
+      "@deepseek-ai/dsh-credentials": ["../packages/credentials/credentials/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-credentials/types": ["../packages/credentials/credentials/lib/types/types.d.ts"]
     }
   },
   "include": ["src/client/**/*.ts", "src/client/**/*.tsx"],

@@ -5,7 +5,7 @@
  * operation through `ctx.credentials`.
  * @module dsh-vision-toolkit/config
  */
-import type Schema from 'schemastery';
+import type Schema from '@deepseek-ai/schemastery';
 import { type CredentialRef } from '@deepseek-ai/dsh-credentials';
 /** Settings document namespace owned by this plugin. */
 export declare const VISION_TOOLKIT_SETTINGS_NAMESPACE: import("@deepseek-ai/dsh-settings").SettingsNamespace;
@@ -21,6 +21,13 @@ export interface VisionToolkitConfig {
     };
     /** Vision output language (`zh` or `en`). */
     language?: 'zh' | 'en';
+    /**
+     * When enabled, pasted images in Web prompts are described by the vision
+     * service when the session model does not accept image input; the image
+     * stays in the session for the UI and the description reaches the model.
+     * Native vision models are always preferred and never see this path.
+     */
+    degradePastedImages?: boolean;
     /** Single remote/upstream call budget in milliseconds. */
     timeoutMs?: number;
     /** Maximum accepted input image size in bytes. */
@@ -50,6 +57,7 @@ export interface ResolvedVisionToolkitConfig {
         model: string;
     };
     language: 'zh' | 'en';
+    degradePastedImages: boolean;
     timeoutMs: number;
     maxImageBytes: number;
     maxImagePixels: number;

@@ -5,7 +5,7 @@
  * exact exported copy of the packaged snapshot.
  * @module dsh-vision-toolkit/runtime-install
  */
-import type { Context } from 'cordis';
+import type { Context } from '@deepseek-ai/cordis';
 import type { ResolvedVisionToolkitConfig } from './config.ts';
 /** One executable plus fixed prefix arguments (for example Windows `py -3`). */
 export interface RuntimeCommand {

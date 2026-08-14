@@ -23,7 +23,7 @@ import {
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { Context } from 'cordis'
+import type { Context } from '@deepseek-ai/cordis'
 import type { ResolvedVisionToolkitConfig } from './config.ts'
 import { VisionToolkitError } from './errors.ts'
 import { UPSTREAM_COMMIT, UPSTREAM_REPOSITORY, UPSTREAM_VERSION } from './version.ts'
@@ -509,7 +509,12 @@ async function prepareManaged(
       try {
         const uv = await runCollected(ctx, ['uv', '--version'], stateRoot, { env: installEnv })
         if (uv.exitCode === 0 && !uv.timedOut) {
-          const interpreter = await ctx.subprocess.resolveExecutable(bootstrap.command.program, installEnv)
+          // The subprocess env contract wants string values; installEnv keeps
+          // the NodeJS.ProcessEnv shape because runCollected accepts it.
+          const interpreter = await ctx.subprocess.resolveExecutable(
+            bootstrap.command.program,
+            installEnv as Readonly<Record<string, string>>,
+          )
           const create = await runCollected(
             ctx,
             ['uv', 'venv', '--python', interpreter, staging],

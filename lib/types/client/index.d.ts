@@ -13,6 +13,8 @@ declare const en: {
     readonly credential: "Credential reference";
     readonly model: "Model";
     readonly language: "Output language";
+    readonly degradePaste: "Degrade pasted images";
+    readonly degradePasteHint: "When the session model cannot accept images, pasted images are saved into the workspace and handed to the model as file paths, so the agent reads them through the visual tools. Native vision models are always preferred.";
     readonly limits: "Limits";
     readonly timeout: "Request timeout (ms)";
     readonly maxBytes: "Maximum image bytes";
@@ -102,6 +104,7 @@ interface SettingsValue {
         model?: string;
     };
     language?: 'zh' | 'en';
+    degradePastedImages?: boolean;
     timeoutMs?: number;
     maxImageBytes?: number;
     maxImagePixels?: number;

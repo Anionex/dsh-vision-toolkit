@@ -1,8 +1,25 @@
-# Changelog
+﻿# Changelog
 
 All notable user-facing changes to DSH Vision Toolkit are documented in this file. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and uses semantic version tags.
 
 ## [Unreleased]
+
+## [0.1.4] - 2026-08-14
+
+### Changed
+
+- Package metadata (`repository`, `bugs`) now points at the public `applex250/dsh-vision-toolkit` repository; the portable verification gate tracks the current version.
+
+## [0.1.3] - 2026-08-14
+
+### Added
+
+- Web pasted-image degradation (`degradePastedImages`, default off): when the session model cannot accept images, pasted images are saved into the session workspace (`.dsh-vision-toolkit/pastes/`) and handed to the model as file paths, so the agent reads them through the visual tools with a fully visible tool workflow. Native vision models are always preferred and never take this path. Built on two new DSH extension points: the `prompt/image-fallback` waterfall (host prompt admission) and the `llm/request-content` waterfall (model-request content transformation).
+
+### Fixed
+
+- Upstream `vision_client.py` now sends a stable `User-Agent`, avoiding HTTP 403 (Cloudflare error 1010) from gateways that reject the urllib default agent; the vendored manifest hash was regenerated for the patched file.
+- Peer dependency ranges widened to match the published `@deepseek-ai/*` prerelease versions (`>=0.0.1-rc.1 <0.2.0`), so registry installs resolve instead of failing with `ERR_PNPM_NO_MATCHING_VERSION`.
 
 ## [0.1.2] - 2026-08-11
 
@@ -48,7 +65,9 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 - Runtime teardown cancels in-flight operations before removing Agent-scoped tools, the activation bootstrap, and the Skill.
 - The Web client is published through the current nested `dsh.client` manifest and loader-compatible built artifact required by DSH snapshot0810.
 
-[Unreleased]: https://github.com/dsh-external/dsh-vision-toolkit/compare/v0.1.2...HEAD
-[0.1.2]: https://github.com/dsh-external/dsh-vision-toolkit/compare/v0.1.1...v0.1.2
-[0.1.1]: https://github.com/dsh-external/dsh-vision-toolkit/compare/v0.1.0...v0.1.1
-[0.1.0]: https://github.com/dsh-external/dsh-vision-toolkit/releases/tag/v0.1.0
+[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.3...v0.1.4
+[0.1.3]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.2...v0.1.3
+[0.1.2]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.1...v0.1.2
+[0.1.1]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/Anionex/dsh-vision-toolkit/releases/tag/v0.1.0

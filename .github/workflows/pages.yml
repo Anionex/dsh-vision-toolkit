@@ -34,6 +34,11 @@ jobs:
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
+        with:
+          # Self-heal: enable Pages when a fresh repository/fork has it off
+          # (the API-level enablement above is the first fix; this keeps the
+          # workflow working for anyone who copies the repository).
+          enablement: true
 
       - name: Assemble static site
         run: |

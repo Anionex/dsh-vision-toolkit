@@ -1,8 +1,8 @@
-![DSH Vision Toolkit — native visual engineering for text-only DeepSeek Harness agents](assets/hero.png)
+﻿![DSH Vision Toolkit 鈥?native visual engineering for text-only DeepSeek Harness agents](assets/hero.png)
 
 # DSH Vision Toolkit
 
-[![Release v0.1.2](https://img.shields.io/badge/release-v0.1.2-5B4CF0?style=flat-square)](https://github.com/dsh-external/dsh-vision-toolkit/releases/tag/v0.1.2)
+[![Release v0.1.4](https://img.shields.io/badge/release-v0.1.4-5B4CF0?style=flat-square)](https://github.com/Anionex/dsh-vision-toolkit/releases/tag/v0.1.4)
 [![Verified: 134 tests](https://img.shields.io/badge/verified-134%20tests-2EA44F?style=flat-square)](tests)
 [![License: MIT](https://img.shields.io/badge/license-MIT-0B7285?style=flat-square)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-%5E22.19%20%7C%20%3E%3D24-339933?style=flat-square&logo=nodedotjs&logoColor=white)](package.json)
@@ -11,11 +11,11 @@
 
 **DSH Vision Toolkit brings [`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit) into DeepSeek Harness as a native Profile Bundle.**
 
-Give text-only DSH agents eyes—and keep vision in the harness—with intent-aware image Q&A, OCR, original-pixel grounding, UI restoration, pixel verification, managed Artifacts, and Web Settings. Ten independent tools replace shell glue with structured schemas and Agent-scoped progressive exposure.
+Give text-only DSH agents eyes鈥攁nd keep vision in the harness鈥攚ith intent-aware image Q&A, OCR, original-pixel grounding, UI restoration, pixel verification, managed Artifacts, and Web Settings. Ten independent tools replace shell glue with structured schemas and Agent-scoped progressive exposure.
 
-**Upstream toolkit:** [Anionex/agent-vision-toolkit](https://github.com/Anionex/agent-vision-toolkit) · **Project website:** [agent-vision.anionex.me](https://agent-vision.anionex.me)
+**Upstream toolkit:** [Anionex/agent-vision-toolkit](https://github.com/Anionex/agent-vision-toolkit) 路 **Project website:** [agent-vision.anionex.me](https://agent-vision.anionex.me)
 
-English | [中文](README.zh.md)
+English | [涓枃](README.zh.md)
 
 ## Why this exists
 
@@ -60,7 +60,7 @@ DSH Vision Toolkit adds native tool schemas, versioned lifecycle, Credentials, s
 
 ## DSH-native proof: reference-to-pixel verification
 
-The checked-in UI-restoration workflow renders an intentionally inaccurate HTML implementation, measures a `6.04%` pixel difference across six non-zero regions, iterates, and reaches an exact `0%` difference against the reference at `1200 × 720`.
+The checked-in UI-restoration workflow renders an intentionally inaccurate HTML implementation, measures a `6.04%` pixel difference across six non-zero regions, iterates, and reaches an exact `0%` difference against the reference at `1200 脳 720`.
 
 <p>
   <img src="examples/ui-restoration/assets/initial.png" width="49%" alt="Initial UI restoration candidate before Vision Toolkit iteration, with measurable layout and styling differences from the reference." />
@@ -72,7 +72,7 @@ The checked-in UI-restoration workflow renders an intentionally inaccurate HTML 
 | Product scope | 10 independent visual tools, matching `vision-tools` Skill, Artifacts, dedicated Web cards, and live Settings |
 | Automated coverage | 17 Vitest files / 134 passing tests, plus a dependency-free portable package check |
 | Real profiles | Clean temporary Web and Headless installation, activation, disable, re-enable, and uninstall |
-| Visual acceptance | Reproducible HTML screenshot → pixel diff example with a final `0%` difference |
+| Visual acceptance | Reproducible HTML screenshot 鈫?pixel diff example with a final `0%` difference |
 
 ## Highlights
 
@@ -80,23 +80,25 @@ The checked-in UI-restoration workflow renders an intentionally inaccurate HTML 
 - **Act on coordinates instead of parsing prose:** grounding and detection return original-image pixel boxes, while every model-visible result remains structured text or JSON.
 - **Deliver files, not temporary output:** crop, trace, OCR, pixel diff, foreground extraction, and HTML rendering produce described Artifacts that the Web client can preview, download, or open locally.
 - **Keep runtime and credentials controlled:** DSH Credentials hold API keys, managed mode prepares an exact isolated Python environment, and a failed Settings candidate cannot replace the serving generation.
-- **Close the visual verification loop:** local HTML rendering and pixel-diff ranking support reference → implementation → screenshot → measured iteration without a model-native image channel.
+- **Close the visual verification loop:** local HTML rendering and pixel-diff ranking support reference 鈫?implementation 鈫?screenshot 鈫?measured iteration without a model-native image channel.
 - **Use the same bundle in Web and Headless profiles:** Web adds cards, previews, Settings, and health actions; Headless receives the same tool semantics and complete structured results.
 
 ## Quick start
 
-Prerequisites: access to this private repository, DeepSeek Harness, Python 3.11+, and `pnpm` available to `dsh plugin`. Clone the release checkout with your authenticated GitHub credentials, add it to the profiles you use, and confirm the bundle row:
+Prerequisites: DeepSeek Harness, Python 3.11+, and `pnpm` available to `dsh plugin`. Install the published bundle from the npm registry, add it to the profiles you use, and confirm the bundle row:
 
 ```sh
-git clone https://github.com/dsh-external/dsh-vision-toolkit.git
-PLUGIN="$PWD/dsh-vision-toolkit"
-dsh plugin --profile web add "$PLUGIN"
-dsh plugin --profile headless add "$PLUGIN"
+dsh plugin --profile web add @dsh-external/dsh-vision-toolkit
+dsh plugin --profile headless add @dsh-external/dsh-vision-toolkit
 dsh --profile web --dump-config | grep vision-toolkit
 dsh --profile headless --dump-config | grep vision-toolkit
 ```
 
-Restart a running Web profile, open **Settings → Vision Toolkit**, select a DSH Credential for remote tools, and explicitly run **Test connection**. In a conversation, make an image available as a workspace path, invoke `/vision-tools`, and ask the Agent to call a specific `vision_*` tool. Local crop, trace, pixel, color, foreground, and HTML operations do not require a visual API credential.
+If your npm registry mirror has not synchronized yet (404), point pnpm at the official registry for the install: `dsh plugin --profile web add @dsh-external/dsh-vision-toolkit --registry=https://registry.npmjs.org`.
+
+Restart a running Web profile, open **Settings 鈫?Vision Toolkit**, select a DSH Credential for remote tools, and explicitly run **Test connection**. In a conversation, make an image available as a workspace path, invoke `/vision-tools`, and ask the Agent to call a specific `vision_*` tool. Local crop, trace, pixel, color, foreground, and HTML operations do not require a visual API credential.
+
+Optional: enable **Degrade pasted images** in Settings. When the session model cannot accept image input, pasted images are saved into the session workspace (`.dsh-vision-toolkit/pastes/`) and handed to the model as file paths, so a text-only Agent reads them through the visual tools with a fully visible tool workflow. Native vision models are always preferred and never take this path.
 
 ## How it works
 
@@ -228,6 +230,7 @@ The bundle defaults to the managed runtime. A profile patch can override the pro
 | `provider.credential` | `VISION_API_KEY` | DSH Credential reference, never a secret value |
 | `provider.model` | `gemini-3.6-flash` | Multimodal model name sent to remote tools |
 | `language` | `zh` | Vision output language: `zh` or `en` |
+| `degradePastedImages` | `false` | When enabled, pasted images in Web sessions are described by the vision service when the current model cannot accept image input (the session still shows the original image); native vision models are always preferred and never take this path |
 | `timeoutMs` | `60000` | Whole-operation deadline, 1000-600000 ms; each tool may request a narrower override |
 | `maxImageBytes` | `10485760` | Encoded-byte limit per input image |
 | `maxImagePixels` | `40000000` | Decoded-pixel limit per input image |
@@ -297,7 +300,7 @@ vision_dominant_colors image="screen.png" region="0,0,600,300" top=8
 vision_html_screenshot source="implementation.html" width=1200 height=720
 ```
 
-Common workflows are `vision_ground` → `vision_crop` → `vision_glance`, `vision_ground` → `vision_crop` → `vision_trace`, and reference image → `vision_html_screenshot` → `vision_pixel_diff`. Grounding and detection boxes always use original-image pixels (`x1/y1/x2/y2`).
+Common workflows are `vision_ground` 鈫?`vision_crop` 鈫?`vision_glance`, `vision_ground` 鈫?`vision_crop` 鈫?`vision_trace`, and reference image 鈫?`vision_html_screenshot` 鈫?`vision_pixel_diff`. Grounding and detection boxes always use original-image pixels (`x1/y1/x2/y2`).
 
 ### UI restoration example
 
@@ -363,7 +366,7 @@ Version `0.1.2` is the current private GitHub release. P0 and P1 are product com
 ## Community and About
 
 - Read [CONTRIBUTING.md](CONTRIBUTING.md) before proposing code, protocol, or upstream-snapshot changes.
-- Use [GitHub Issues](https://github.com/dsh-external/dsh-vision-toolkit/issues) for reproducible bugs, focused feature requests, and usage questions; use [SUPPORT.md](SUPPORT.md) to choose the right channel.
+- Use [GitHub Issues](https://github.com/Anionex/dsh-vision-toolkit/issues) for reproducible bugs, focused feature requests, and usage questions; use [SUPPORT.md](SUPPORT.md) to choose the right channel.
 - Report vulnerabilities privately through the process in [SECURITY.md](SECURITY.md), never in a public issue.
 - Follow releases and compatibility notes in [CHANGELOG.md](CHANGELOG.md).
 - Optional sponsorship is described transparently in [FUNDING.md](FUNDING.md); support does not purchase roadmap priority or private support.

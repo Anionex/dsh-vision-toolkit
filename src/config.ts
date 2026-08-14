@@ -6,8 +6,8 @@
  * @module dsh-vision-toolkit/config
  */
 
-import z from 'schemastery'
-import type Schema from 'schemastery'
+import z from '@deepseek-ai/schemastery'
+import type Schema from '@deepseek-ai/schemastery'
 import { credentialRef, type CredentialRef } from '@deepseek-ai/dsh-credentials'
 import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import { VisionToolkitError } from './errors.ts'
@@ -27,6 +27,13 @@ export interface VisionToolkitConfig {
   }
   /** Vision output language (`zh` or `en`). */
   language?: 'zh' | 'en'
+  /**
+   * When enabled, pasted images in Web prompts are described by the vision
+   * service when the session model does not accept image input; the image
+   * stays in the session for the UI and the description reaches the model.
+   * Native vision models are always preferred and never see this path.
+   */
+  degradePastedImages?: boolean
   /** Single remote/upstream call budget in milliseconds. */
   timeoutMs?: number
   /** Maximum accepted input image size in bytes. */
@@ -55,6 +62,7 @@ export const Config: Schema<VisionToolkitConfig> = z.object({
     model: z.string().default('gemini-3.6-flash'),
   }),
   language: z.union(['zh', 'en'] as const).default('zh'),
+  degradePastedImages: z.boolean().default(false),
   timeoutMs: z.number().default(60000),
   maxImageBytes: z.number().default(10485760),
   maxImagePixels: z.number().default(40000000),
@@ -75,6 +83,7 @@ export interface ResolvedVisionToolkitConfig {
     model: string
   }
   language: 'zh' | 'en'
+  degradePastedImages: boolean
   timeoutMs: number
   maxImageBytes: number
   maxImagePixels: number
@@ -125,6 +134,7 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
   if (language !== 'zh' && language !== 'en') {
     throw new VisionToolkitError('config', 'language must be "zh" or "en"')
   }
+  const degradePastedImages = config.degradePastedImages === true
   const timeoutMs = config.timeoutMs ?? 60000
   if (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > MAX_TIMEOUT_MS) {
     throw new VisionToolkitError('config', `timeoutMs must be an integer between 1000 and ${MAX_TIMEOUT_MS}`)
@@ -163,6 +173,7 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
   return {
     provider: { baseUrl, credential, model },
     language,
+    degradePastedImages,
     timeoutMs,
     maxImageBytes,
     maxImagePixels,

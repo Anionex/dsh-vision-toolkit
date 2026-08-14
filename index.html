@@ -1,13 +1,13 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>DSH Vision Toolkit — agent-vision-toolkit for DeepSeek Harness</title>
+    <title>DSH Vision Toolkit 鈥?agent-vision-toolkit for DeepSeek Harness</title>
     <meta name="description" content="The DeepSeek Harness-native integration for agent-vision-toolkit: intent-aware image Q&amp;A, OCR, grounding, UI restoration, pixel verification, Artifacts, and Web UI." />
-    <meta property="og:title" content="DSH Vision Toolkit — agent-vision-toolkit for DeepSeek Harness" />
+    <meta property="og:title" content="DSH Vision Toolkit 鈥?agent-vision-toolkit for DeepSeek Harness" />
     <meta property="og:description" content="Give text-only DSH agents eyes, with vision mounted in the harness instead of built into the base model." />
-    <meta property="og:image" content="https://github.com/dsh-external/dsh-vision-toolkit/raw/main/assets/social-preview.png" />
+    <meta property="og:image" content="https://github.com/Anionex/dsh-vision-toolkit/raw/main/assets/social-preview.png" />
     <meta name="theme-color" content="#5b4cf0" />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%235b4cf0'/%3E%3Cpath d='M13 46 25 34l11-16M25 34h20M45 34l7 12' fill='none' stroke='white' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E" />
     <style>
@@ -531,8 +531,8 @@
           <a href="#capabilities">Capabilities</a>
           <a href="#install">Install</a>
           <a href="https://agent-vision.anionex.me">Upstream</a>
-          <a href="https://github.com/dsh-external/dsh-vision-toolkit/blob/main/README.zh.md">中文</a>
-          <a href="https://github.com/dsh-external/dsh-vision-toolkit">GitHub</a>
+          <a href="https://github.com/Anionex/dsh-vision-toolkit/blob/main/README.zh.md">涓枃</a>
+          <a href="https://github.com/Anionex/dsh-vision-toolkit">GitHub</a>
         </div>
       </nav>
 
@@ -540,7 +540,7 @@
         <div>
           <div class="eyebrow"><span class="dot"></span> DeepSeek Harness &times; agent-vision-toolkit</div>
           <h1>Bring agent-vision-toolkit into DSH.</h1>
-          <p class="lede">Give text-only DeepSeek Harness agents eyes—and keep vision in the harness. The native bundle preserves the upstream intent-aware method while adding structured schemas, progressive exposure, Credentials, Artifacts, dedicated Web cards, and Settings.</p>
+          <p class="lede">Give text-only DeepSeek Harness agents eyes鈥攁nd keep vision in the harness. The native bundle preserves the upstream intent-aware method while adding structured schemas, progressive exposure, Credentials, Artifacts, dedicated Web cards, and Settings.</p>
           <div class="actions">
             <a class="button primary" href="#install">Install the bundle</a>
             <a class="button" href="https://github.com/Anionex/agent-vision-toolkit">Upstream GitHub</a>
@@ -563,10 +563,10 @@
           <div class="use-cases">
             <article class="use-case">
               <div>
-                <span class="case-kicker">01 · Infographic restoration</span>
+                <span class="case-kicker">01 路 Infographic restoration</span>
                 <h3>Screenshot to editable HTML/CSS</h3>
                 <p>Recover layout, typography, icons, and hierarchy as maintainable browser code instead of flattening the result into another image.</p>
-                <a href="https://github.com/Anionex/agent-vision-toolkit/blob/c27d1a300962b553c0884993c575cd3e819465ce/examples/infographic-restoration/how-is-the-model-trained.html">Open upstream source →</a>
+                <a href="https://github.com/Anionex/agent-vision-toolkit/blob/c27d1a300962b553c0884993c575cd3e819465ce/examples/infographic-restoration/how-is-the-model-trained.html">Open upstream source 鈫?/a>
               </div>
               <div class="use-case-images">
                 <img src="assets/upstream/infographic-reference.webp" alt="Official upstream reference screenshot of a model-training infographic." />
@@ -576,10 +576,10 @@
 
             <article class="use-case">
               <div>
-                <span class="case-kicker">02 · UI restoration</span>
+                <span class="case-kicker">02 路 UI restoration</span>
                 <h3>Sketch to working interface</h3>
                 <p>Read the visual hierarchy, reuse real components and assets, render the implementation, and iterate from observed differences.</p>
-                <a href="https://github.com/Anionex/agent-vision-toolkit/blob/c27d1a300962b553c0884993c575cd3e819465ce/skills/vision-tools/references/restore-ui.md">Read the upstream playbook →</a>
+                <a href="https://github.com/Anionex/agent-vision-toolkit/blob/c27d1a300962b553c0884993c575cd3e819465ce/skills/vision-tools/references/restore-ui.md">Read the upstream playbook 鈫?/a>
               </div>
               <div class="use-case-images">
                 <img src="assets/upstream/ui-sketch.webp" alt="Official upstream hand-drawn JupyterLab workspace used as a UI restoration reference." />
@@ -589,10 +589,10 @@
 
             <article class="use-case">
               <div>
-                <span class="case-kicker">03 · Intent-aware inspection</span>
+                <span class="case-kicker">03 路 Intent-aware inspection</span>
                 <h3>Image Q&amp;A to code diagnosis</h3>
                 <p>Carry the current task into the visual request, answer the detail that matters, then use the screenshot as evidence for the next coding action.</p>
-                <a href="assets/dsh-conversation-image-qa.png">Open full DSH screenshot →</a>
+                <a href="assets/dsh-conversation-image-qa.png">Open full DSH screenshot 鈫?/a>
               </div>
               <div class="use-case-images">
                 <img src="assets/dsh-conversation-image-qa.png" alt="DeepSeek Harness Web session answering a focused question about a UI reference image." />
@@ -652,9 +652,9 @@
             <div class="section-label">Quick start</div>
             <h2>Install one checkout into the profiles you use.</h2>
             <p>Requires DeepSeek Harness, Python 3.11+, and <code>pnpm</code> available to <code>dsh plugin</code>. Restart a running Web profile, then configure the visual endpoint and DSH Credential in Settings.</p>
-            <a class="button" href="https://github.com/dsh-external/dsh-vision-toolkit#quick-start">Full installation and security guide</a>
+            <a class="button" href="https://github.com/Anionex/dsh-vision-toolkit#quick-start">Full installation and security guide</a>
           </div>
-          <pre><code>git clone https://github.com/dsh-external/dsh-vision-toolkit.git
+          <pre><code>git clone https://github.com/Anionex/dsh-vision-toolkit.git
 PLUGIN="$PWD/dsh-vision-toolkit"
 
 dsh plugin --profile web add "$PLUGIN"
@@ -666,8 +666,8 @@ dsh --profile web --dump-config | grep vision-toolkit</code></pre>
     </main>
 
     <footer class="shell">
-      <span>DeepSeek Harness integration for agent-vision-toolkit · MIT · Anionex</span>
-      <span><a href="https://agent-vision.anionex.me">Website</a> · <a href="https://github.com/Anionex/agent-vision-toolkit">Upstream</a> · <a href="https://github.com/dsh-external/dsh-vision-toolkit">DSH repository</a></span>
+      <span>DeepSeek Harness integration for agent-vision-toolkit 路 MIT 路 Anionex</span>
+      <span><a href="https://agent-vision.anionex.me">Website</a> 路 <a href="https://github.com/Anionex/agent-vision-toolkit">Upstream</a> 路 <a href="https://github.com/Anionex/dsh-vision-toolkit">DSH repository</a></span>
     </footer>
   </body>
 </html>

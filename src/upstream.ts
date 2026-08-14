@@ -8,7 +8,7 @@
 
 import { readFile, realpath, stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { Context } from 'cordis'
+import type { Context } from '@deepseek-ai/cordis'
 import type { SubprocessHandle, SubprocessOutcome } from '@deepseek-ai/dsh-subprocess'
 import type { ResolvedVisionToolkitConfig } from './config.ts'
 import { VisionToolkitError, upstreamFailureMessage } from './errors.ts'
