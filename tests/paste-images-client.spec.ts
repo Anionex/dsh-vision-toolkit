@@ -223,6 +223,123 @@ describe('clipboard image client', () => {
     bench.dispose()
   })
 
+  it('removes references through insertText so later occurrence offsets stay current', () => {
+    const bench = fakeClient('')
+    const textarea = composer()
+    textarea.dispatchEvent(clipboardEvent('', [
+      file('one.png', 'image/png', [1]),
+      file('two.png', 'image/png', [2]),
+      file('three.png', 'image/png', [3]),
+    ]))
+    const dock = bench.registrations.find(row => row.options.id === 'vision-toolkit-pasted-images')
+    if (dock === undefined) throw new Error('paste dock was not registered')
+    const injected = (dock.options.inject as ((sessionId: string) => {
+      controller: PasteImageController
+      remove: (row: Occurrence) => void
+    }))('session-1')
+    const original = bench.input.state.getSnapshot().occurrences
+    const first = original[0]
+    if (first === undefined) throw new Error('first occurrence was not inserted')
+    const firstRev = bench.input.state.getSnapshot().draftRev
+
+    injected.remove(first)
+
+    expect(bench.input.insertText).toHaveBeenLastCalledWith('', {
+      start: first.offset,
+      end: first.offset + 1,
+      draftRev: firstRev,
+    })
+    const afterFirst = bench.input.state.getSnapshot().occurrences
+    expect(afterFirst.map(row => row.ref)).toEqual(original.slice(1).map(row => row.ref))
+    expect(afterFirst.map(row => row.offset)).toEqual([1, 3])
+
+    const later = afterFirst[1]
+    if (later === undefined) throw new Error('later occurrence was not retained')
+    const laterRev = bench.input.state.getSnapshot().draftRev
+    injected.remove(later)
+
+    expect(bench.input.insertText).toHaveBeenLastCalledWith('', {
+      start: later.offset,
+      end: later.offset + 1,
+      draftRev: laterRev,
+    })
+    expect(bench.input.state.getSnapshot().occurrences.map(row => row.ref)).toEqual([original[1]?.ref])
+    expect(injected.controller.recordsFor(original)).toHaveLength(1)
+    bench.dispose()
+  })
+
+  it('retains a pasted image record when the occurrence-aware removal is rejected', () => {
+    const bench = fakeClient('')
+    const textarea = composer()
+    textarea.dispatchEvent(clipboardEvent('', [file('one.png', 'image/png', [1])]))
+    const dock = bench.registrations.find(row => row.options.id === 'vision-toolkit-pasted-images')
+    if (dock === undefined) throw new Error('paste dock was not registered')
+    const injected = (dock.options.inject as ((sessionId: string) => {
+      controller: PasteImageController
+      remove: (row: Occurrence) => void
+    }))('session-1')
+    const occurrence = bench.input.state.getSnapshot().occurrences[0]
+    if (occurrence === undefined) throw new Error('paste occurrence was not inserted')
+    bench.input.insertText.mockReturnValueOnce(false)
+
+    injected.remove(occurrence)
+
+    expect(bench.input.state.getSnapshot().occurrences).toEqual([occurrence])
+    expect(injected.controller.recordsFor([occurrence])).toHaveLength(1)
+    bench.dispose()
+  })
+
+  it('reuses successful workspace paths and retries only records still missing a path', async () => {
+    const bench = fakeClient('')
+    const textarea = composer()
+    let secondAttempts = 0
+    const request = vi.fn(async (url: string) => {
+      const name = new URL(String(url), 'http://localhost').searchParams.get('name')
+      if (name === 'one.png') {
+        return new Response(JSON.stringify({
+          ok: true,
+          value: { absolutePath: '/workspace/.dsh-vision-toolkit/tmp/pasted-images/a/stable-one.png' },
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      }
+      secondAttempts += 1
+      if (secondAttempts === 1) {
+        return new Response(JSON.stringify({
+          ok: false,
+          error: { message: 'second copy failed' },
+        }), { status: 409, headers: { 'Content-Type': 'application/json' } })
+      }
+      return new Response(JSON.stringify({
+        ok: true,
+        value: { absolutePath: '/workspace/.dsh-vision-toolkit/tmp/pasted-images/a/retried-two.png' },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    })
+    vi.stubGlobal('fetch', request)
+    textarea.dispatchEvent(clipboardEvent('', [
+      file('one.png', 'image/png', [1]),
+      file('two.png', 'image/png', [2]),
+    ]))
+    const occurrences = bench.input.state.getSnapshot().occurrences
+    const first = occurrences[0]
+    const second = occurrences[1]
+    if (first === undefined || second === undefined) throw new Error('paste occurrences were not inserted')
+    const codec = bench.source()?.codec
+    if (codec === undefined) throw new Error('paste source was not registered')
+
+    await expect(codec.serialize(first.ref, new AbortController().signal)).rejects.toThrow('second copy failed')
+    expect(request).toHaveBeenCalledTimes(2)
+
+    const secondText = await codec.serialize(second.ref, new AbortController().signal)
+    expect(request).toHaveBeenCalledTimes(3)
+    const names = request.mock.calls.map(([url]) => new URL(String(url), 'http://localhost').searchParams.get('name'))
+    expect(names).toEqual(['one.png', 'two.png', 'two.png'])
+    expect(secondText).toBe('[Pasted image available at absolute path: "/workspace/.dsh-vision-toolkit/tmp/pasted-images/a/retried-two.png"]')
+
+    const firstText = await codec.serialize(first.ref, new AbortController().signal)
+    expect(request).toHaveBeenCalledTimes(3)
+    expect(firstText).toBe('[Pasted image available at absolute path: "/workspace/.dsh-vision-toolkit/tmp/pasted-images/a/stable-one.png"]')
+    bench.dispose()
+  })
+
   it('keeps failed serialization out of the model send and exposes retry/removal feedback', async () => {
     const bench = fakeClient('')
     const textarea = composer()

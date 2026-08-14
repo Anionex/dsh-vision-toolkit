@@ -9,10 +9,16 @@ const compiledFiles = (await readdir(compiledRoot))
   .filter(path => path.endsWith('.js'))
   .sort((a, b) => a.localeCompare(b))
 
-const lines = [
-  'window.__ModuleLoader__.load({ id: "@dsh-external/dsh-vision-toolkit", factory: (require) => {',
-  'var __modules = Object.create(null); var __cache = Object.create(null);',
-]
+const lines = []
+let outputLine = 0
+function push(chunk) {
+  if (lines.length > 0) outputLine += 1
+  lines.push(chunk)
+  outputLine += chunk.split('\n').length - 1
+}
+
+push('window.__ModuleLoader__.load({ id: "@dsh-external/dsh-vision-toolkit", factory: (require) => {')
+push('var __modules = Object.create(null); var __cache = Object.create(null);')
 const sections = []
 for (const filename of compiledFiles) {
   const moduleId = `./${filename}`
@@ -23,14 +29,15 @@ for (const filename of compiledFiles) {
     // CommonJS imports through the private module table. `__load_` has the
     // same width as `require`, so the sectioned source maps remain aligned.
     .replace(/\brequire(?=\(["']\.\.?\/)/gu, '__load_')
-  lines.push(`__modules[${JSON.stringify(moduleId)}] = function(module, exports, require, __load_) {`)
+  push(`__modules[${JSON.stringify(moduleId)}] = function(module, exports, require, __load_) {`)
   sections.push({
-    offset: { line: lines.length, column: 0 },
+    offset: { line: outputLine + 1, column: 0 },
     map: JSON.parse(await readFile(`${compiledPath}.map`, 'utf8')),
   })
-  lines.push(source, '};')
+  push(source)
+  push('};')
 }
-lines.push(
+for (const line of [
   'function __resolve(from, request) {',
   '  if (!request.startsWith(".")) return request;',
   '  var parts = from.slice(2).split("/"); parts.pop();',
@@ -47,7 +54,7 @@ lines.push(
   'return __load("./index.js"); } });',
   '//# sourceMappingURL=client.js.map',
   '',
-)
+]) push(line)
 const wrapped = lines.join('\n')
 
 await mkdir(dirname(outputPath), { recursive: true })
@@ -55,7 +62,6 @@ await writeFile(outputPath, wrapped)
 
 for (const section of sections) {
   section.map.file = 'client.js'
-  section.map.sources = section.map.sources.map(sourcePath => `../src/client/${sourcePath.replace(/^\.\.\//u, '')}`)
 }
 await writeFile(`${outputPath}.map`, `${JSON.stringify({ version: 3, file: 'client.js', sections })}\n`)
 await rm(compiledRoot, { recursive: true, force: true })

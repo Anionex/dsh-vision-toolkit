@@ -1,5 +1,5 @@
 import { readFile, stat } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
@@ -91,5 +91,27 @@ describe('package layout contract', () => {
     const client = await readFile(join(ROOT, 'lib', 'client.js'), 'utf8')
     expect(client).toContain('window.__ModuleLoader__.load({ id: "@dsh-external/dsh-vision-toolkit"')
     expect(client).not.toMatch(/require\("\.\//)
+  })
+
+  it('indexes each client source map section at the generated module source line', async () => {
+    const client = await readFile(join(ROOT, 'lib', 'client.js'), 'utf8')
+    const indexedMap = JSON.parse(await readFile(join(ROOT, 'lib', 'client.js.map'), 'utf8')) as {
+      sections: Array<{
+        offset: { line: number; column: number }
+        map: { sources: string[] }
+      }>
+    }
+    const outputLines = client.split('\n')
+    expect(indexedMap.sections.length).toBeGreaterThan(1)
+    for (const section of indexedMap.sections) {
+      const source = section.map.sources[0]
+      if (source === undefined) throw new Error('client source map section has no source')
+      await expect(stat(resolve(ROOT, 'lib', source)), source).resolves.toBeDefined()
+      const leaf = source.slice(source.lastIndexOf('/') + 1).replace(/\.[^.]+$/u, '.js')
+      const wrapper = `__modules["./${leaf}"] = function(module, exports, require, __load_) {`
+      const wrapperLine = outputLines.indexOf(wrapper)
+      expect(wrapperLine, source).toBeGreaterThanOrEqual(0)
+      expect(section.offset).toEqual({ line: wrapperLine + 1, column: 0 })
+    }
   })
 })

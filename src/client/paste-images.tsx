@@ -243,7 +243,14 @@ export class PasteImageController {
     const input = this.inputFor(sessionId)
     const snapshot = input.state.getSnapshot()
     if (snapshot.phase !== 'plain') return
-    input.setDraft(snapshot.draft.slice(0, occurrence.offset) + snapshot.draft.slice(occurrence.offset + 1))
+    const accepted = (input as typeof input & {
+      insertText: (text: string, span: { start: number; end: number; draftRev: number }) => boolean
+    }).insertText('', {
+      start: occurrence.offset,
+      end: occurrence.offset + 1,
+      draftRev: snapshot.draftRev,
+    })
+    if (!accepted) return
     this.records.delete(occurrence.ref)
     this.changed()
   }
@@ -252,47 +259,50 @@ export class PasteImageController {
     if (batch.inflight !== undefined) return batch.inflight
     const active = batch.records.filter(record => this.records.get(record.ref) === record)
     if (active.length === 0) throw new Error('Pasted images were removed before sending')
+    const pending = active.filter(record => record.absolutePath === undefined)
+    if (pending.length === 0) return
     const task = (async () => {
-      for (const record of active) {
+      for (const record of pending) {
         record.status = 'copying'
         record.error = undefined
       }
       this.changed()
       try {
-        const copied = await Promise.all(active.map(async (record) => {
-          if (signal.aborted) throw signal.reason ?? new DOMException('Aborted', 'AbortError')
-          const query = new URLSearchParams({
-            sessionId: batch.sessionId,
-            name: record.file.name || 'clipboard-image',
-            size: String(record.file.size),
-          })
-          const body = await responseJson(await fetch(`${PASTE_IMAGES_ROUTE}?${query.toString()}`, {
-            method: 'POST',
-            headers: { 'Content-Type': record.file.type },
-            body: record.file,
-            signal,
-          }))
-          const absolutePath = body.value?.absolutePath
-          if (typeof absolutePath !== 'string' || absolutePath === '') {
-            throw new Error('Image copy response contained an invalid path')
+        const failures = await Promise.all(pending.map(async (record) => {
+          try {
+            if (signal.aborted) throw signal.reason ?? new DOMException('Aborted', 'AbortError')
+            const query = new URLSearchParams({
+              sessionId: batch.sessionId,
+              name: record.file.name || 'clipboard-image',
+              size: String(record.file.size),
+            })
+            const body = await responseJson(await fetch(`${PASTE_IMAGES_ROUTE}?${query.toString()}`, {
+              method: 'POST',
+              headers: { 'Content-Type': record.file.type },
+              body: record.file,
+              signal,
+            }))
+            const absolutePath = body.value?.absolutePath
+            if (typeof absolutePath !== 'string' || absolutePath === '') {
+              throw new Error('Image copy response contained an invalid path')
+            }
+            record.absolutePath = absolutePath
+            record.status = 'copied'
+            record.error = undefined
+            return undefined
+          } catch (error) {
+            const failure = error instanceof Error ? error : new Error(message(error))
+            record.status = 'error'
+            record.error = failure.message
+            return failure
           }
-          return absolutePath
         }))
-        for (const [index, record] of active.entries()) {
-          record.absolutePath = copied[index]
-          record.status = 'copied'
-        }
         this.changed()
-      } catch (error) {
-        for (const record of active) {
-          record.status = 'error'
-          record.error = message(error)
-          record.absolutePath = undefined
-        }
-        this.changed()
-        throw error
+        const failure = failures.find((error): error is Error => error !== undefined)
+        if (failure !== undefined) throw failure
       } finally {
         batch.inflight = undefined
+        this.changed()
       }
     })()
     batch.inflight = task
