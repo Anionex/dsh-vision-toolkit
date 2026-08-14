@@ -1,3 +1,3 @@
 allowBuilds:
-  '@deepseek-ai/dsh-subprocess-local': true
-  node-pty: true
+  '@deepseek-ai/dsh-subprocess-local@0.1.0-rc.6': true
+  'node-pty@1.1.0': true
