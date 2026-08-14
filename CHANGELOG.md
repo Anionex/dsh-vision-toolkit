@@ -4,9 +4,15 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+### Added
+
+- Added native Anthropic Messages transport with configurable thinking behavior, provider-compatible User-Agent overrides, and matching Web Settings controls.
+
 ### Fixed
 
 - Accept low-share `vision_dominant_colors` palette and candidate rows whose histogram bar is empty.
+- Keep the DSH Credential, endpoint, protocol, thinking mode, and User-Agent authoritative when the pinned upstream runs beside ignored `.env` files.
+- Use Anthropic authentication headers for explicit `/models` connection tests and retry overloaded Anthropic responses with bounded `Retry-After` handling.
 
 ## [0.1.2] - 2026-08-11
 

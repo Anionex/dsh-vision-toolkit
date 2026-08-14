@@ -211,6 +211,9 @@ The bundle defaults to the managed runtime. A profile patch can override the pro
       baseUrl: https://api.inferera.com/v1
       credential: VISION_API_KEY
       model: gemini-3.6-flash
+      protocol: openai
+      anthropicThinking: omit
+      userAgent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36
     language: zh
     timeoutMs: 60000
     maxImageBytes: 10485760
@@ -225,9 +228,12 @@ The bundle defaults to the managed runtime. A profile patch can override the pro
 
 | Field | Default | Contract |
 |---|---|---|
-| `provider.baseUrl` | `https://api.inferera.com/v1` | OpenAI-compatible base URL; normalized without trailing slashes |
+| `provider.baseUrl` | `https://api.inferera.com/v1` | Provider API base URL, normalized without trailing slashes; for Anthropic use a base ending in `/v1`, not the full `/messages` URL |
 | `provider.credential` | `VISION_API_KEY` | DSH Credential reference, never a secret value |
 | `provider.model` | `gemini-3.6-flash` | Multimodal model name sent to remote tools |
+| `provider.protocol` | `openai` | `openai` sends Chat Completions requests; `anthropic` sends native Messages requests |
+| `provider.anthropicThinking` | `omit` | Anthropic thinking field: `omit` preserves model defaults, `disabled` requests no thinking, and `adaptive` requests provider-managed thinking |
+| `provider.userAgent` | browser-compatible default | User-Agent sent by vision requests and explicit connection tests; override it for provider or proxy compatibility |
 | `language` | `zh` | Vision output language: `zh` or `en` |
 | `timeoutMs` | `60000` | Whole-operation deadline, 1000-600000 ms; each tool may request a narrower override |
 | `maxImageBytes` | `10485760` | Encoded-byte limit per input image |
@@ -263,15 +269,15 @@ External mode is intended for development or controlled deployments:
       python: python3.12
 ```
 
-The path must be an exported copy matching the packaged manifest or the root of a clean Git checkout at `c27d1a300962b553c0884993c575cd3e819465ce`. Modified tracked files and untracked files are rejected because they can change or shadow the pinned Python behavior.
+The path must be an exported copy matching the packaged manifest or the root of a clean Git checkout at `4b3dbfe9fdd13061989c449bfe3ef3477835cb4d`. Modified tracked files and untracked files are rejected because they can change or shadow the pinned Python behavior.
 
 ## Web Settings
 
-The Web profile registers a Vision Toolkit Settings section for the provider URL, Credential reference, model, language, timeout, byte/pixel limits, concurrency, runtime mode, Python override, external source path, and allowed directories. It also shows plugin/upstream versions, the active runtime generation, non-secret Credential configured/source/writable facts, runtime paths, health results, and Artifact-route availability.
+The Web profile registers a Vision Toolkit Settings section for the provider URL, Credential reference, model, OpenAI/Anthropic protocol, Anthropic thinking mode, User-Agent, language, timeout, byte/pixel limits, concurrency, runtime mode, Python override, external source path, and allowed directories. It also shows plugin/upstream versions, the active runtime generation, non-secret Credential configured/source/writable facts, runtime paths, health results, and Artifact-route availability.
 
 `Save and apply` validates the complete value, prepares the candidate Python/upstream runtime, commits the Settings revision, and only then atomically switches generations. A rejected candidate leaves the previous generation serving and is reported separately from a genuinely unavailable runtime. `Reload` always restores the authoritative saved value, even when its revision did not change, so a rejected browser draft is discarded. If initial startup cannot prepare a runtime, the Settings route remains available so a valid configuration can make the first generation operational. A stale browser revision receives a conflict instead of overwriting a newer save; reload before retrying. A read-only Settings provider allows inspection and health checks but disables saves.
 
-`Run health check` performs local checks only. `Test connection` is an explicit action that sends the configured Credential to `GET /models`; it uploads no image and creates no completion. Plugin load and ordinary Settings reads never make that request.
+`Run health check` performs local checks only. `Test connection` is an explicit action that sends the configured Credential to `GET /models`; OpenAI uses Bearer authentication, while Anthropic uses `x-api-key` and `anthropic-version`. The check uploads no image and creates no completion. Plugin load and ordinary Settings reads never make that request.
 
 Health, connection testing, and plugin/upstream version inspection are administrative Web Settings capabilities rather than model-facing tools, so their schemas never occupy an agent request.
 

@@ -68,6 +68,11 @@ describe('resolveConfig', () => {
       .toThrowError(/provider\.anthropicThinking/)
   })
 
+  it('rejects an unsupported provider protocol', () => {
+    expect(() => resolveConfig({ provider: { protocol: 'responses' as 'openai' } }))
+      .toThrowError(/provider\.protocol/)
+  })
+
   it('rejects unsupported language and limits', () => {
     expect(() => resolveConfig({ language: 'fr' as 'zh' })).toThrowError(/language/)
     expect(() => resolveConfig({ timeoutMs: 500 })).toThrowError(/timeoutMs/)

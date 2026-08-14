@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawn } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -44,18 +44,24 @@ const roots = [
   'detect.py',
   'bin',
   'skills/vision-tools/scripts',
+  'tests/test_vision_client.py',
 ]
 
 try {
   await mkdir(extracted)
-  const listed = await capture('git', ['-C', repository, 'ls-tree', '-r', '--name-only', commit, '--', ...roots])
-  const files = listed.toString('utf8').split(/\r?\n/).filter(Boolean)
+  const listed = await capture('git', ['-C', repository, 'ls-tree', '-r', commit, '--', ...roots])
+  const files = listed.toString('utf8').split(/\r?\n/).filter(Boolean).map((line) => {
+    const match = /^(\d+)\s+blob\s+[0-9a-f]+\t(.+)$/.exec(line)
+    if (match === null) throw new Error(`cannot parse upstream tree entry: ${line}`)
+    return { executable: match[1] === '100755', path: match[2] }
+  })
   if (files.length === 0) throw new Error(`upstream commit ${commit} contains none of the required files`)
   for (const file of files) {
-    const bytes = await capture('git', ['-C', repository, 'show', `${commit}:${file}`])
-    const output = join(extracted, ...file.split('/'))
+    const bytes = await capture('git', ['-C', repository, 'show', `${commit}:${file.path}`])
+    const output = join(extracted, ...file.path.split('/'))
     await mkdir(dirname(output), { recursive: true })
     await writeFile(output, bytes)
+    if (file.executable) await chmod(output, 0o755)
   }
   await rm(target, { recursive: true, force: true })
   await rename(extracted, target)
