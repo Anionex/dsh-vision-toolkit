@@ -3,8 +3,15 @@
 import { useSyncExternalStore, type ReactNode } from 'react'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { SlashSource } from '@deepseek-ai/dsh-client-ui-slash/client'
+import type { SlashServiceContract, SlashSource } from '@deepseek-ai/dsh-client-ui-slash/client'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    /** Slash source registry supplied by the injected Web client plugin. */
+    slash: SlashServiceContract
+  }
+}
 
 const SOURCE = 'vision-toolkit-pasted-image'
 export const PASTE_IMAGES_ROUTE = '/_dsh/vision-toolkit/paste-images'
