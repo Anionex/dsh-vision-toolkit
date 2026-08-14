@@ -60,6 +60,10 @@ interface LegacyTriggerContext {
   inputTriggers: ReferenceSourceRegistry
 }
 
+interface LegacySlashContext {
+  slash: ReferenceSourceRegistry
+}
+
 const CORDIS_ORIGINAL = Symbol.for('cordis.original')
 
 function registryIdentity(registry: ReferenceSourceRegistry): object {
@@ -399,7 +403,9 @@ export function installPasteImages(ctx: ClientContext): void {
       }
     }, 'dsh-vision-toolkit: pasted image reference codec')
   }
-  ctx.inject(['slash'], (scope: ClientContext) => { register(scope, scope.slash) })
+  ctx.inject(['slash'], (scope: ClientContext) => {
+    register(scope, (scope as unknown as LegacySlashContext).slash)
+  })
   ctx.inject(['inputTriggers'], (scope: ClientContext) => {
     register(scope, (scope as unknown as LegacyTriggerContext).inputTriggers)
   })

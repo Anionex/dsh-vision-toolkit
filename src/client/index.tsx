@@ -836,16 +836,20 @@ export function apply(ctx: ClientContext): void {
     const legacyRemote = ctx.remote as typeof ctx.remote & {
       $on?: (event: string, listener: (value: string) => void) => () => void
     }
+    const currentEvents = ctx as unknown as {
+      on(event: 'settings/changed', listener: (namespace: string) => void): () => void
+      on(event: 'credentials/changed', listener: (ref: string) => void): () => void
+    }
     const disposers = typeof legacyRemote.$on === 'function'
       ? [
         legacyRemote.$on('settings/document-updated', refreshSettings),
         legacyRemote.$on('credentials/updated', refreshCredential),
       ]
       : [
-        ctx.on('settings/changed', (namespace) => {
+        currentEvents.on('settings/changed', (namespace) => {
           refreshSettings(namespace)
         }),
-        ctx.on('credentials/changed', (ref) => {
+        currentEvents.on('credentials/changed', (ref) => {
           refreshCredential(ref)
         }),
       ]
