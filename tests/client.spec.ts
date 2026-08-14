@@ -49,6 +49,12 @@ function fakeClientContext() {
   }
   const ctx = {
     slots,
+    slash: { registerSource: vi.fn(() => () => {}) },
+    sessions: {
+      list: { getSnapshot: () => ({ current: undefined }) },
+      scope: vi.fn(() => undefined),
+    },
+    conversation: { input: { for: vi.fn() } },
     locale: {
       register: vi.fn(() => () => {}),
       bind: vi.fn(() => (key: string) => key),
@@ -134,7 +140,7 @@ function artifact(
 
 describe('Vision Toolkit client plugin', () => {
   it('registers every dedicated Tool view and the Settings section', () => {
-    expect(inject).toEqual(['slots', 'locale', 'remote'])
+    expect(inject).toEqual(['slots', 'locale', 'remote', 'conversation', 'sessions', 'slash'])
     const { ctx, registrations } = fakeClientContext()
     apply(ctx as never)
     expect(ctx.remote.$on).toHaveBeenCalledWith('settings/document-updated', expect.any(Function))
