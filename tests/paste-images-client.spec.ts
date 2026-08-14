@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createElement, type ComponentType } from 'react'
 import { fireEvent, render, screen } from '@testing-library/react'
-import { Context } from 'cordis'
+import { Context, Service } from 'cordis'
 import {
   installPasteImages,
   PASTE_IMAGES_ROUTE as CLIENT_PASTE_IMAGES_ROUTE,
@@ -205,7 +205,26 @@ describe('clipboard image client', () => {
   it('keeps an aliased registry live across real Cordis service removal and re-provision', async () => {
     const ctx = new Context()
     const unregister = vi.fn()
-    const registry = { registerSource: vi.fn(() => unregister) }
+    const registerSource = vi.fn(() => unregister)
+    class TriggerRegistryService extends Service {
+      constructor(serviceCtx: Context) {
+        super(serviceCtx, 'inputTriggers')
+      }
+
+      registerSource(): () => void {
+        return registerSource()
+      }
+    }
+    const mountAdapter = async () => {
+      const fiber = ctx.plugin({
+        inject: ['inputTriggers'],
+        apply(scope: Context) {
+          scope.provide('slash', (scope as Context & { inputTriggers: TriggerRegistryService }).inputTriggers)
+        },
+      })
+      await fiber.await()
+      return fiber
+    }
     ctx.provide('sessions', {
       list: { getSnapshot: () => ({ current: 'session-1' }) },
       scope: () => ({}),
@@ -215,22 +234,29 @@ describe('clipboard image client', () => {
       inject: (_name: string, callback: () => unknown) => { callback() },
       register: () => () => {},
     })
-    const removeSlash = ctx.provide('slash', registry)
-    const removeLegacy = ctx.provide('inputTriggers', registry)
+    let providerFiber = ctx.plugin(TriggerRegistryService)
+    await providerFiber.await()
+    let adapterFiber = await mountAdapter()
+    const pasteFiber = ctx.plugin({ apply: scope => { installPasteImages(scope as never) } })
+    await pasteFiber.await()
+    await vi.waitFor(() => { expect(registerSource).toHaveBeenCalledTimes(1) })
 
-    installPasteImages(ctx as never)
-    await vi.waitFor(() => { expect(registry.registerSource).toHaveBeenCalledTimes(1) })
-
-    await removeSlash()
+    await adapterFiber.dispose()
     expect(unregister).not.toHaveBeenCalled()
-    await removeLegacy()
+    adapterFiber = await mountAdapter()
+    expect(registerSource).toHaveBeenCalledTimes(1)
+
+    await providerFiber.dispose()
     await vi.waitFor(() => { expect(unregister).toHaveBeenCalledTimes(1) })
 
-    const removeAgain = ctx.provide('inputTriggers', registry)
-    await vi.waitFor(() => { expect(registry.registerSource).toHaveBeenCalledTimes(2) })
-    await removeAgain()
+    providerFiber = ctx.plugin(TriggerRegistryService)
+    await providerFiber.await()
+    await vi.waitFor(() => { expect(registerSource).toHaveBeenCalledTimes(2) })
+    await adapterFiber.dispose()
+    expect(unregister).toHaveBeenCalledTimes(1)
+    await providerFiber.dispose()
     await vi.waitFor(() => { expect(unregister).toHaveBeenCalledTimes(2) })
-    await ctx.fiber.dispose()
+    await pasteFiber.dispose()
   })
 
   it('preserves pasted text, inserts every image as a text reference, and blocks the native ImageBlock path', async () => {
