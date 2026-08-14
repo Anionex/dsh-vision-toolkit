@@ -58,7 +58,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "node scripts/upstream-manifest.mjs && tsc -p tsconfig.json && tsc -p tsconfig.client.json && node scripts/build-client.mjs",
+    "build": "node scripts/upstream-manifest.mjs && tsc -p tsconfig.json && tsc -p tsconfig.client.json && tsc -p tsconfig.client.public.json && node scripts/build-client.mjs",
     "prepack": "npm run build",
     "test": "vitest run tests",
     "verify:portable": "node scripts/upstream-manifest.mjs && node scripts/verify-portable.mjs",

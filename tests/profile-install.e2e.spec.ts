@@ -286,7 +286,12 @@ function fixturePatch(home: string, visionBaseUrl: string): string {
   return path
 }
 
-describe.skipIf(!hasDsh() || !hasPnpm())('dsh-vision-toolkit profile install (keyless e2e)', () => {
+const profileE2eAvailable = hasDsh() && hasPnpm()
+if (process.env.DSH_VISION_REQUIRE_PROFILE_E2E === '1' && !profileE2eAvailable) {
+  throw new Error('DSH_VISION_REQUIRE_PROFILE_E2E=1 requires dsh and pnpm on PATH')
+}
+
+describe.skipIf(!profileE2eAvailable)('dsh-vision-toolkit profile install (keyless e2e)', () => {
   const homes: string[] = []
 
   afterEach(() => {

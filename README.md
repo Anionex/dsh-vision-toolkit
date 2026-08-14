@@ -346,14 +346,15 @@ The committed evidence records an initial `6.04%` difference across six non-zero
 ## Development and verification
 
 ```sh
-npm run verify:portable
+pnpm install --frozen-lockfile --trust-lockfile
+pnpm run verify:portable
 pnpm run build
 pnpm test
 pnpm run example:ui-restoration
 pnpm pack --dry-run
 ```
 
-`npm run verify:portable` is the dependency-free portable verification gate: it validates the vendored snapshot, package metadata and exports, committed JavaScript syntax, README links and images, required facade files, social-preview dimensions, and the dry-run tarball. The full TypeScript build and 136-test suite intentionally run with this checkout at `dsh-vision-toolkit/` inside a DeepSeek Harness source tree, where the peer API types and real profile fixtures live.
+`pnpm run verify:portable` is the dependency-free portable verification gate: it validates the vendored snapshot, package metadata and exports, committed JavaScript syntax, README links and images, required facade files, social-preview dimensions, and the dry-run tarball. The full TypeScript build and test suite run from this standalone checkout against the locked DSH `0.1.0-rc.6` registry packages; the client build also has a separate compiler face that resolves the packages' public exports without internal path aliases. The real Profile acceptance runs when compatible `dsh` and `pnpm` commands are on PATH, and CI requires that path instead of silently skipping it.
 
 `pnpm run build` verifies the vendored manifest before emitting JavaScript, declarations, and the loader-compatible Web client. The package commits `lib/`, so installation from a checkout does not require a consumer-side build. The keyless real-profile test installs into a clean `DSH_HOME`, boots Headless, executes all five P0 tools plus representative P1 local/remote tools through real tool calls, verifies disable and re-enable behavior, and uninstalls the bundle. See the [requirements traceability reference](docs/requirements-traceability/README.md) for the implementation and verification home of every P0/P1 requirement.
 
