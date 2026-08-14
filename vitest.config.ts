@@ -1,24 +1,15 @@
 import { defineConfig } from 'vitest/config'
-import tsconfigPaths from 'vite-tsconfig-paths'
-import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const ROOT = dirname(fileURLToPath(import.meta.url))
-
-// The plugin is an out-of-tree bundle: tests reuse the harness monorepo's
-// source-resolution facade so `@deepseek-ai/*` imports resolve to src, while
-// the published package keeps bare package-name imports resolved by the host.
+// Exercise the published DSH prerelease packages rather than a neighboring
+// Harness checkout, because this bundle is installed from its own repository.
 export default defineConfig({
-  plugins: [tsconfigPaths({ projects: ['../tsconfig.base.json'] })],
   resolve: {
-    alias: [
-      { find: /^react$/, replacement: resolve(ROOT, '../packages/client/ui-primitives/node_modules/react/index.js') },
-      { find: /^react\/jsx-runtime$/, replacement: resolve(ROOT, '../packages/client/ui-primitives/node_modules/react/jsx-runtime.js') },
-      { find: /^react\/jsx-dev-runtime$/, replacement: resolve(ROOT, '../packages/client/ui-primitives/node_modules/react/jsx-dev-runtime.js') },
-      { find: /^react-dom$/, replacement: resolve(ROOT, '../packages/client/ui-primitives/node_modules/react-dom/index.js') },
-      { find: /^react-dom\/client$/, replacement: resolve(ROOT, '../packages/client/ui-primitives/node_modules/react-dom/client.js') },
-      { find: /^@testing-library\/react$/, replacement: resolve(ROOT, '../packages/client/ui-tool/node_modules/@testing-library/react/dist/index.js') },
-    ],
+    alias: {
+      '@deepseek-ai/dsh-client-ui-primitives': fileURLToPath(
+        new URL('./tests/client-ui-primitives-stub.tsx', import.meta.url),
+      ),
+    },
   },
   test: {
     include: ['tests/**/*.spec.ts'],

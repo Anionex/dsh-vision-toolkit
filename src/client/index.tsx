@@ -16,7 +16,7 @@ import type {} from '@deepseek-ai/dsh-credentials/types'
 import type {} from '@deepseek-ai/dsh-settings/types'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
-import type {} from '@deepseek-ai/dsh-client-ui-slash/client'
+import type {} from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { installPasteImages } from './paste-images.tsx'
@@ -837,16 +837,19 @@ export function apply(ctx: ClientContext): void {
     const legacyRemote = ctx.remote as typeof ctx.remote & {
       $on?: (event: string, listener: (value: string) => void) => () => void
     }
+    const currentEvents = ctx as unknown as {
+      on: (event: string, listener: (value: string) => void) => () => void
+    }
     const disposers = typeof legacyRemote.$on === 'function'
       ? [
         legacyRemote.$on('settings/document-updated', refreshSettings),
         legacyRemote.$on('credentials/updated', refreshCredential),
       ]
       : [
-        ctx.on('settings/changed', (namespace) => {
+        currentEvents.on('settings/changed', (namespace) => {
           refreshSettings(namespace)
         }),
-        ctx.on('credentials/changed', (ref) => {
+        currentEvents.on('credentials/changed', (ref) => {
           refreshCredential(ref)
         }),
       ]

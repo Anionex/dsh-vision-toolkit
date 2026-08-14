@@ -5,7 +5,7 @@
  * @module dsh-vision-toolkit/exposure
  */
 import { type ToolDefinition } from '@deepseek-ai/dsh-tools';
-import type { Context } from 'cordis';
+import type { Context } from '@deepseek-ai/cordis';
 /** Small bootstrap tool retained only until the current Agent gains visual tools. */
 export declare const VISION_TOOLKIT_ACTIVATE = "vision_toolkit_activate";
 /** Result returned by the one-shot activation transport. */

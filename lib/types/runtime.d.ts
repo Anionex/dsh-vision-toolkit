@@ -5,7 +5,7 @@
  * output staging, and diagnostic logging stay below the model-facing tools.
  * @module dsh-vision-toolkit/runtime
  */
-import type { Context } from 'cordis';
+import type { Context } from '@deepseek-ai/cordis';
 import { type ArtifactDescriptor } from './artifacts.ts';
 import type { ResolvedVisionToolkitConfig } from './config.ts';
 import { UpstreamAdapter, type DominantColorsOutput, type UpstreamEnvironment, type UpstreamVersionInfo } from './upstream.ts';

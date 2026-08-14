@@ -5,7 +5,7 @@
  * @module dsh-vision-toolkit/runtime-manager
  */
 
-import type { Context } from 'cordis'
+import type { Context } from '@deepseek-ai/cordis'
 import { resolveConfig, type ResolvedVisionToolkitConfig, type VisionToolkitConfig } from './config.ts'
 import { VisionToolkitRuntime } from './runtime.ts'
 import { UpstreamAdapter, type UpstreamVersionInfo } from './upstream.ts'

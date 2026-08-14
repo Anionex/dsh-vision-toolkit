@@ -49,7 +49,7 @@ function fakeClientContext(legacyRemote = true) {
   }
   const ctx = {
     slots,
-    slash: { registerSource: vi.fn(() => () => {}) },
+    inputTriggers: { registerSource: vi.fn(() => () => {}) },
     sessions: {
       list: { getSnapshot: () => ({ current: undefined }) },
       scope: vi.fn(() => undefined),
