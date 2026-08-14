@@ -224,8 +224,8 @@ export class PasteImageController {
     const end = Math.max(start, Math.min(target.selectionEnd ?? start, snapshot.draft.length))
     const text = (event.clipboardData?.getData('text/plain') ?? '').replaceAll('\uFFFC', '')
     try {
-      validateImages(files)
       let cursor = this.insertText(input, text, start, end)
+      validateImages(files)
       cursor = this.insertRecords(String(sessionId), input, files, cursor)
       requestAnimationFrame(() => {
         target.focus({ preventScroll: true })

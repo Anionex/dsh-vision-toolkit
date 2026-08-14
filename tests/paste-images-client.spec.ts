@@ -206,6 +206,23 @@ describe('clipboard image client', () => {
     bench.dispose()
   })
 
+  it('preserves same-paste text when image admission fails', () => {
+    const bench = fakeClient('before ')
+    const textarea = composer()
+    textarea.value = 'before '
+    textarea.setSelectionRange(7, 7)
+    const images = Array.from({ length: 21 }, (_, index) => file(`${index}.png`, 'image/png', [index]))
+    const event = clipboardEvent('caption', images)
+
+    textarea.dispatchEvent(event)
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(bench.input.state.getSnapshot().draft).toBe('before caption')
+    expect(bench.input.state.getSnapshot().occurrences).toEqual([])
+    expect(bench.input.notify).toHaveBeenCalledWith('error', 'Paste at most 20 images at a time')
+    bench.dispose()
+  })
+
   it('keeps failed serialization out of the model send and exposes retry/removal feedback', async () => {
     const bench = fakeClient('')
     const textarea = composer()
