@@ -3,8 +3,8 @@
 # DSH Vision Toolkit
 
 [![X (Twitter)](https://img.shields.io/badge/-@anion__ex-000000?style=flat-square&logo=x&logoColor=white)](https://x.com/anion_ex)
-[![Release v0.1.4](https://img.shields.io/badge/release-v0.1.4-5B4CF0?style=flat-square)](https://github.com/Anionex/dsh-vision-toolkit/releases/tag/v0.1.4)
-[![Verified: 136 tests](https://img.shields.io/badge/verified-136%20tests-2EA44F?style=flat-square)](tests)
+[![Release v0.1.5](https://img.shields.io/badge/release-v0.1.5-5B4CF0?style=flat-square)](https://github.com/Anionex/dsh-vision-toolkit/releases/tag/v0.1.5)
+[![Verified: 156 tests](https://img.shields.io/badge/verified-156%20tests-2EA44F?style=flat-square)](tests)
 [![License: MIT](https://img.shields.io/badge/license-MIT-0B7285?style=flat-square)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-%5E22.19%20%7C%20%3E%3D24-339933?style=flat-square&logo=nodedotjs&logoColor=white)](package.json)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)](runtime/requirements.lock)
@@ -183,6 +183,15 @@ Set the bundle row to `disabled: true` in a profile patch or overlay:
 Remove the flag or set it to `false` to re-enable the plugin. Disposal first cancels plugin-owned visual operations, then removes every Agent-scoped tool, the bootstrap, and the Skill; reactivation prepares the configured runtime before any model capability becomes visible. User configuration and completed Artifacts remain intact.
 
 ### Upgrade
+
+**Migrating from the retired `@dsh-external/dsh-vision-toolkit`:** the npm package now lives under the `@anionex` scope. If you installed the retired package, do **not** run `update` on it — that account cannot publish this release. Migrate to the new package name and restart the Web profile:
+
+```sh
+dsh plugin --profile web remove @dsh-external/dsh-vision-toolkit
+dsh plugin --profile web add @anionex/dsh-vision-toolkit
+```
+
+After restarting, Settings → Vision should report plugin version **0.1.5**.
 
 For a registry installation, update the dependency through the profile package manager:
 

@@ -3,8 +3,8 @@
 # DSH Vision Toolkit
 
 [![X (Twitter)](https://img.shields.io/badge/-@anion__ex-000000?style=flat-square&logo=x&logoColor=white)](https://x.com/anion_ex)
-[![Release v0.1.4](https://img.shields.io/badge/release-v0.1.4-5B4CF0?style=flat-square)](https://github.com/Anionex/dsh-vision-toolkit/releases/tag/v0.1.4)
-[![Verified: 136 tests](https://img.shields.io/badge/verified-136%20tests-2EA44F?style=flat-square)](tests)
+[![Release v0.1.5](https://img.shields.io/badge/release-v0.1.5-5B4CF0?style=flat-square)](https://github.com/Anionex/dsh-vision-toolkit/releases/tag/v0.1.5)
+[![Verified: 156 tests](https://img.shields.io/badge/verified-156%20tests-2EA44F?style=flat-square)](tests)
 [![License: MIT](https://img.shields.io/badge/license-MIT-0B7285?style=flat-square)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-%5E22.19%20%7C%20%3E%3D24-339933?style=flat-square&logo=nodedotjs&logoColor=white)](package.json)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)](runtime/requirements.lock)
@@ -183,6 +183,15 @@ dsh --profile headless --dump-config | grep vision-toolkit
 删除该字段或设为 `false` 即可重新启用。资源释放会先取消插件拥有的视觉操作，再移除全部 Agent 级工具、引导工具和 skill；重新启用时，配置的运行时准备完成后才会暴露任何模型能力。用户配置和已完成的产物会保留。
 
 ### 升级
+
+**从已停用的 `@dsh-external/dsh-vision-toolkit` 迁移：** npm 包现在位于 `@anionex` 作用域。如果你安装的是已停用的旧包，**不要**对它执行 `update`——该账号无法发布本版本。请迁移到新包名并重启 Web Profile：
+
+```sh
+dsh plugin --profile web remove @dsh-external/dsh-vision-toolkit
+dsh plugin --profile web add @anionex/dsh-vision-toolkit
+```
+
+重启后，Settings → 视觉工具 应显示插件版本 **0.1.5**。
 
 通过注册表安装时，使用 Profile 的包管理命令更新依赖：
 
