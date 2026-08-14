@@ -13,6 +13,7 @@ import { SettingsConflictError, type SettingsDescriptor } from '@deepseek-ai/dsh
 // Type-only import activates the optional webServer Context declaration.
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import { ArtifactAccessController, ARTIFACT_ROUTE_PREFIX } from './artifact-access.ts'
+import { PastedImageBackend, PASTE_IMAGES_ROUTE } from './paste-images.ts'
 import {
   resolveConfig,
   VISION_TOOLKIT_SETTINGS_NAMESPACE,
@@ -26,6 +27,7 @@ import {
   type RuntimeManagerStatus,
 } from './runtime-manager.ts'
 import { PLUGIN_VERSION, UPSTREAM_COMMIT, UPSTREAM_REPOSITORY, UPSTREAM_VERSION } from './version.ts'
+import { sameOriginPost } from './web-request.ts'
 
 /** Exact route used by the browser Settings page. */
 export const SETTINGS_ROUTE = '/_dsh/vision-toolkit/settings'
@@ -118,21 +120,6 @@ function responseJson<T>(res: ServerResponse, status: number, body: JsonResponse
 
 function requestError(res: ServerResponse, status: number, code: string, message: string): void {
   responseJson(res, status, { ok: false, error: { code, message } })
-}
-
-function sameOriginPost(req: IncomingMessage): boolean {
-  const fetchSite = req.headers['sec-fetch-site']
-  if (fetchSite === 'cross-site') return false
-  const origin = req.headers.origin
-  if (origin === undefined) return fetchSite === 'same-origin' || fetchSite === 'same-site' || fetchSite === 'none'
-  const host = req.headers.host
-  if (host === undefined) return false
-  try {
-    const parsed = new URL(origin)
-    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') && parsed.host === host
-  } catch {
-    return false
-  }
 }
 
 async function readJson(req: IncomingMessage, maxBytes = 64 * 1024): Promise<unknown> {
@@ -311,6 +298,7 @@ export function installVisionToolkitWeb(
   ctx: Context,
   backend: VisionToolkitWebBackend,
   artifacts: ArtifactAccessController,
+  pastedImages: PastedImageBackend,
 ): void {
   ctx.inject(['webServer'], (webCtx) => {
     webCtx.effect(() => {
@@ -325,7 +313,13 @@ export function installVisionToolkitWeb(
         path: SETTINGS_ROUTE,
         handler: (req, res) => backend.handle(req, res),
       })
+      const disposePasteImages = webCtx.webServer.register({
+        kind: 'exact',
+        path: PASTE_IMAGES_ROUTE,
+        handler: (req, res) => pastedImages.handle(req, res),
+      })
       return () => {
+        disposePasteImages()
         disposeSettings()
         disposeArtifact()
         detach()

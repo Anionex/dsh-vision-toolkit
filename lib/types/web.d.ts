@@ -7,6 +7,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Context } from 'cordis';
 import { ArtifactAccessController } from './artifact-access.ts';
+import { PastedImageBackend } from './paste-images.ts';
 import { type VisionToolkitConfig } from './config.ts';
 import { VisionToolkitRuntimeManager, type PreparedRuntimeGeneration, type RuntimeManagerStatus } from './runtime-manager.ts';
 /** Exact route used by the browser Settings page. */
@@ -69,5 +70,5 @@ export declare class VisionToolkitWebBackend {
  * @param backend - Settings handler.
  * @param artifacts - signed Artifact handler.
  */
-export declare function installVisionToolkitWeb(ctx: Context, backend: VisionToolkitWebBackend, artifacts: ArtifactAccessController): void;
+export declare function installVisionToolkitWeb(ctx: Context, backend: VisionToolkitWebBackend, artifacts: ArtifactAccessController, pastedImages: PastedImageBackend): void;
 //# sourceMappingURL=web.d.ts.map

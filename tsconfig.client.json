@@ -20,6 +20,8 @@
     "noUnusedParameters": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
     "verbatimModuleSyntax": false,
     "types": ["react", "react-dom"],
     "typeRoots": [
@@ -36,6 +38,7 @@
       "@deepseek-ai/dsh-settings/types": ["../packages/settings/settings/lib/types/types.d.ts"],
       "@deepseek-ai/dsh-client-ui-settings/client": ["../packages/client/ui-settings/lib/types/client/index.d.ts"],
       "@deepseek-ai/dsh-client-ui-conversation/client": ["../packages/client/ui-conversation/lib/types/client/index.d.ts"],
+      "@deepseek-ai/dsh-client-ui-slash/client": ["../packages/client/ui-slash/lib/types/client/index.d.ts"],
       "@deepseek-ai/dsh-client-locale/client": ["../packages/client/locale/lib/types/client/index.d.ts"],
       "@deepseek-ai/dsh-client-ui-slots": ["../packages/client/ui-slots/lib/types/index.d.ts"],
       "@deepseek-ai/dsh-client-ui-primitives": ["../packages/client/ui-primitives/lib/types/index.d.ts"]
