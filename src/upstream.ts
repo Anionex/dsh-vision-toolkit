@@ -14,25 +14,11 @@ import type { ResolvedVisionToolkitConfig } from './config.ts'
 import { VisionToolkitError, upstreamFailureMessage } from './errors.ts'
 import {
   displayCommand,
+  isolatedPythonEnvironment,
   prepareUpstreamRuntime,
   type PreparedUpstreamRuntime,
 } from './runtime-install.ts'
 import { UPSTREAM_COMMIT, UPSTREAM_REPOSITORY, UPSTREAM_VERSION } from './version.ts'
-
-function pythonEnvironment(cleanHome: string): NodeJS.ProcessEnv {
-  return {
-    HOME: cleanHome,
-    USERPROFILE: cleanHome,
-    LOCALAPPDATA: cleanHome,
-    PYTHONHOME: undefined,
-    PYTHONPATH: undefined,
-    VIRTUAL_ENV: undefined,
-    PYTHONDONTWRITEBYTECODE: '1',
-    PYTHONIOENCODING: 'utf-8',
-    PYTHONNOUSERSITE: '1',
-    PYTHONUTF8: '1',
-  }
-}
 
 /** One pinned upstream CLI/script exposed by the runtime. */
 export type UpstreamTool =
@@ -619,7 +605,7 @@ export class UpstreamAdapter {
     const prepared = this.requirePrepared()
     const script = join(prepared.root, ...TOOL_PATHS[tool])
     const env: NodeJS.ProcessEnv = {
-      ...pythonEnvironment(prepared.cleanHome),
+      ...isolatedPythonEnvironment(prepared.cleanHome),
       ...(options.env === undefined
         ? {}
         : {
@@ -685,7 +671,7 @@ export class UpstreamAdapter {
         },
         graceMs: 2000,
         signal: options.signal,
-        env: pythonEnvironment(prepared.cleanHome),
+        env: isolatedPythonEnvironment(prepared.cleanHome),
       })
     } catch (error) {
       throw new VisionToolkitError('runtime', `cannot start ${displayCommand(prepared.python)} to inspect the image`, { cause: error })
@@ -731,7 +717,7 @@ export class UpstreamAdapter {
         },
         graceMs: 2000,
         signal: options.signal,
-        env: pythonEnvironment(prepared.cleanHome),
+        env: isolatedPythonEnvironment(prepared.cleanHome),
       })
     } catch (error) {
       throw new VisionToolkitError('runtime', `cannot start ${displayCommand(prepared.python)} helper`, { cause: error })

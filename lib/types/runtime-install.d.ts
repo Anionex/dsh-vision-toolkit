@@ -38,6 +38,7 @@ interface UpstreamManifest {
 export declare function bundledUpstreamRoot(): string;
 /** Convert one command into a user-facing executable string. */
 export declare function displayCommand(command: RuntimeCommand): string;
+export declare function isolatedPythonEnvironment(home: string): NodeJS.ProcessEnv;
 /** Verify every packaged upstream file against the committed content manifest. */
 export declare function verifyBundledUpstream(): Promise<UpstreamManifest>;
 /** Persistent per-DSH-home cache root shared by runtime and Web support files. */

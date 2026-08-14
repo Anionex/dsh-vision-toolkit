@@ -16,6 +16,7 @@ if out is None:
     sys.exit(2)
 os.makedirs(os.path.dirname(os.path.abspath(out)) or '.', exist_ok=True)
 svg = '<?xml version="1.0" encoding="UTF-8"?>\n<!-- fixture vtracer output -->\n<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><path d="M 118 128 A 10 10 0 1 0 138 128 A 10 10 0 1 0 118 128 Z"/></svg>\n'
-with open(out, 'w', encoding='utf-8') as handle:
-    handle.write(svg)
-print(f'wrote {out} ({len(svg)} bytes, 1 paths, traced at {scale}x)')
+payload = svg.encode('utf-8')
+with open(out, 'wb') as handle:
+    handle.write(payload)
+print(f'wrote {out} ({len(payload)} bytes, 1 paths, traced at {scale}x)')

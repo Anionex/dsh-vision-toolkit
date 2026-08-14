@@ -33,6 +33,7 @@ async function tempWorkspace(): Promise<string> {
 }
 
 afterEach(async () => {
+  vi.unstubAllEnvs()
   await Promise.all(contexts.splice(0).map(ctx => ctx.fiber.dispose()))
   await Promise.all(tempDirs.splice(0).map(dir => rm(dir, { recursive: true, force: true })))
 })
@@ -270,16 +271,14 @@ describe('VisionToolkitRuntime', () => {
     await expect(readFile(result.outputPath, 'utf8')).resolves.toBe(svg)
   })
 
-  it('accepts the trace character count when Windows expands SVG newlines to CRLF', async () => {
+  it('rejects a trace character count when the generated SVG contains expanded CRLF bytes', async () => {
     const { adapter, runtime } = await setup({}, null)
     const workspace = await tempWorkspace()
     const svg = '<svg xmlns="http://www.w3.org/2000/svg">\r\n<path/>\r\n</svg>\r\n'
     mockTraceDocument(adapter, svg, 1, Buffer.byteLength(svg) - 3)
 
-    const result = await runtime.trace({ image: 'sample.png' }, { signal, workspace })
-
-    expect(result.geometry).toMatchObject({ status: 'generated', pathCount: 1, bytes: Buffer.byteLength(svg) - 3 })
-    await expect(readFile(result.outputPath, 'utf8')).resolves.toBe(svg)
+    await expect(runtime.trace({ image: 'sample.png' }, { signal, workspace }))
+      .rejects.toMatchObject({ code: 'output', message: 'trace: reported byte count does not match the generated SVG' })
   })
 
   it.each([
@@ -425,9 +424,12 @@ describe('VisionToolkitRuntime', () => {
     expect(await readFile(resumed.output?.path ?? '', 'utf8')).toContain('Fixture merged OCR')
   })
 
-  it('extracts transparent foregrounds and returns component metrics', async () => {
-    const { runtime } = await setup({}, null)
+  it('extracts transparent foregrounds from UTF-8 Chinese subprocess output', async () => {
+    vi.stubEnv('PYTHONIOENCODING', 'cp936')
+    vi.stubEnv('PYTHONUTF8', '0')
+    const { ctx, runtime } = await setup({}, null)
     const workspace = await tempWorkspace()
+    const spawn = vi.spyOn(ctx.subprocess, 'spawn')
     const result = await runtime.extractForeground(
       { image: 'sample.png', region: '0,0,128,128' },
       { signal, workspace },
@@ -440,6 +442,8 @@ describe('VisionToolkitRuntime', () => {
       largestComponentPct: 88,
       artifact: { mimeType: 'image/png', kind: 'image', sourceTool: 'vision_extract_foreground' },
     })
+    const extractSpawn = spawn.mock.calls.find(([spec]) => spec.argv.some(arg => arg.endsWith('extract_fg.py')))
+    expect(extractSpawn?.[0].env).toMatchObject({ PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' })
   })
 
   it('parses palette extraction and candidate scoring into structure', async () => {
