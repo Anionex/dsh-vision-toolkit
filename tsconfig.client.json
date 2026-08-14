@@ -31,7 +31,7 @@
     ],
     "noEmitOnError": true,
     "paths": {
-      "cordis": ["../vendor/cordis/lib/types/index.d.ts"],
+      "@deepseek-ai/cordis": ["../vendor/cordis/lib/types/index.d.ts"],
       "@deepseek-ai/dsh-api-remotes/client": ["../packages/api/remotes/lib/types/client/index.d.ts"],
       "@deepseek-ai/dsh-client-runtime/client": ["../packages/client/runtime/lib/types/client/index.d.ts"],
       "@deepseek-ai/dsh-credentials/types": ["../packages/credentials/credentials/lib/types/types.d.ts"],

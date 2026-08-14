@@ -73,6 +73,8 @@ describe('package layout contract', () => {
 
   it('keeps every dependency specifier portable', () => {
     expect(PACKAGE.peerDependencies).toHaveProperty('@deepseek-ai/dsh-agent')
+    expect(PACKAGE.peerDependencies).toHaveProperty('@deepseek-ai/cordis')
+    expect(PACKAGE.peerDependencies).not.toHaveProperty('cordis')
     expect(PACKAGE.peerDependencies).toHaveProperty('@deepseek-ai/schemastery')
     expect(PACKAGE.peerDependencies).not.toHaveProperty('schemastery')
     for (const section of [PACKAGE.dependencies ?? {}, PACKAGE.peerDependencies ?? {}, PACKAGE.devDependencies ?? {}]) {

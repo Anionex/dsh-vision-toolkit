@@ -9,7 +9,7 @@ import { copyFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { Context } from 'cordis'
+import { Context } from '@deepseek-ai/cordis'
 import LocalSubprocessService from '@deepseek-ai/dsh-subprocess-local'
 import { resolveConfig } from '../src/config.ts'
 import type { PreparedUpstreamRuntime, RuntimeCommand } from '../src/runtime-install.ts'

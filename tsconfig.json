@@ -27,7 +27,7 @@
     "noEmitOnError": true,
     "tsBuildInfoFile": "lib/.tsbuildinfo",
     "paths": {
-      "cordis": ["../vendor/cordis/lib/types/index.d.ts"],
+      "@deepseek-ai/cordis": ["../vendor/cordis/lib/types/index.d.ts"],
       "@deepseek-ai/schemastery": ["../vendor/schemastery/lib/types/index.d.ts"],
       "@deepseek-ai/dsh-agent": ["../packages/core/agent/lib/types/index.d.ts"],
       "@deepseek-ai/dsh-tools": ["../packages/core/tools/lib/types/index.d.ts"],
