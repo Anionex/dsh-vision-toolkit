@@ -17,8 +17,9 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 ### Fixed
 
 - Accept low-share `vision_dominant_colors` palette and candidate rows whose histogram bar is empty.
+- Use Harness design tokens for every Vision Toolkit surface color, including preview checkerboards, download actions, status indicators, alerts, fields, and pasted-image chips, so light and dark themes remain readable without light-only fallback colors.
 - Require the compatible DSH `0.1.0-rc.6` release line so package managers cannot select the broken `dsh-client-runtime@0.0.1-rc.1` release through the `latest` dist-tag.
-- Use `@deepseek-ai/dsh-client-ui-input-trigger` and `ctx.inputTriggers`, replacing the retired `dsh-client-ui-slash` package and `ctx.slash` API.
+- Use the published `@deepseek-ai/dsh-client-ui-input-trigger` package while retaining runtime registration compatibility with the earlier `ctx.slash` service alias.
 - Publish only rescoped `@deepseek-ai/cordis` imports and declare every directly consumed DSH host/client peer.
 
 ## [0.1.4] - 2026-08-14
