@@ -818,11 +818,11 @@ const CSS = `
 `
 
 function installStyles(): () => void {
-  const id = '@dsh-external/dsh-vision-toolkit/client'
+  const id = '@anionex/dsh-vision-toolkit/client'
   const existing = document.querySelector<HTMLStyleElement>(`style[data-plugin-css="${id}"]`)
   if (existing !== null) return () => {}
   const style = document.createElement('style')
-  style.dataset.plugin = '@dsh-external/dsh-vision-toolkit'
+  style.dataset.plugin = '@anionex/dsh-vision-toolkit'
   style.dataset.pluginCss = id
   style.textContent = CSS
   document.head.appendChild(style)

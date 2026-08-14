@@ -115,7 +115,7 @@ const pkg = JSON.parse(await readFile(packagePath, 'utf8'))
 const changelog = await readFile(join(root, 'CHANGELOG.md'), 'utf8')
 const latestRelease = changelog.match(/^## \[(\d+\.\d+\.\d+)\]/mu)?.[1]
 
-check(pkg.name === '@dsh-external/dsh-vision-toolkit', 'package name must stay @dsh-external/dsh-vision-toolkit')
+check(pkg.name === '@anionex/dsh-vision-toolkit', 'package name must stay @anionex/dsh-vision-toolkit')
 check(pkg.version === latestRelease, 'package version and the latest release notes must stay aligned')
 check(pkg.repository?.url === 'git+https://github.com/Anionex/dsh-vision-toolkit.git', 'repository URL is missing or mismatched')
 check(pkg.bugs?.url === 'https://github.com/Anionex/dsh-vision-toolkit/issues', 'issue tracker URL is missing or mismatched')

@@ -10,7 +10,7 @@
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)](runtime/requirements.lock)
 [![DSH profiles](https://img.shields.io/badge/DSH-Web%20%2B%20Headless-5B4CF0?style=flat-square)](cordis.patch.yml)
 
-**Install:** `dsh plugin --profile web add @dsh-external/dsh-vision-toolkit`
+**Install:** `dsh plugin --profile web add @anionex/dsh-vision-toolkit`
 
 **DSH Vision Toolkit brings [`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit) into DeepSeek Harness as a native Profile Bundle.**
 
@@ -91,8 +91,8 @@ The checked-in UI-restoration workflow renders an intentionally inaccurate HTML 
 Prerequisites: DeepSeek Harness `0.1.0-rc.6` or a compatible later `0.1.x` release, Python 3.11+, and `pnpm` available to `dsh plugin`. Install the published bundle from npm, add it to the profiles you use, and confirm the bundle row:
 
 ```sh
-dsh plugin --profile web add @dsh-external/dsh-vision-toolkit
-dsh plugin --profile headless add @dsh-external/dsh-vision-toolkit
+dsh plugin --profile web add @anionex/dsh-vision-toolkit
+dsh plugin --profile headless add @anionex/dsh-vision-toolkit
 dsh --profile web --dump-config | grep vision-toolkit
 dsh --profile headless --dump-config | grep vision-toolkit
 ```
@@ -161,8 +161,8 @@ Health checks, connection testing, and plugin/upstream version inspection are ad
 Install the bundle into each profile that should expose it:
 
 ```sh
-dsh plugin --profile web add @dsh-external/dsh-vision-toolkit
-dsh plugin --profile headless add @dsh-external/dsh-vision-toolkit
+dsh plugin --profile web add @anionex/dsh-vision-toolkit
+dsh plugin --profile headless add @anionex/dsh-vision-toolkit
 dsh --profile web --dump-config | grep vision-toolkit
 dsh --profile headless --dump-config | grep vision-toolkit
 ```
@@ -187,8 +187,8 @@ Remove the flag or set it to `false` to re-enable the plugin. Disposal first can
 For a registry installation, update the dependency through the profile package manager:
 
 ```sh
-dsh plugin --profile web update @dsh-external/dsh-vision-toolkit
-dsh plugin --profile headless update @dsh-external/dsh-vision-toolkit
+dsh plugin --profile web update @anionex/dsh-vision-toolkit
+dsh plugin --profile headless update @anionex/dsh-vision-toolkit
 ```
 
 For a local path installation, run `add` again against the replacement checkout or tarball. Settings remain in the profile's Settings provider. A candidate runtime is fully validated and prepared before it is persisted and made active; a failed or obsolete concurrent candidate cannot replace the current serving generation.
@@ -196,8 +196,8 @@ For a local path installation, run `add` again against the replacement checkout 
 ### Uninstall
 
 ```sh
-dsh plugin --profile web remove @dsh-external/dsh-vision-toolkit
-dsh plugin --profile headless remove @dsh-external/dsh-vision-toolkit
+dsh plugin --profile web remove @anionex/dsh-vision-toolkit
+dsh plugin --profile headless remove @anionex/dsh-vision-toolkit
 ```
 
 `dsh plugin remove` removes both the dependency and its bundle layer. The profile no longer exposes the activation bootstrap, Agent-scoped Vision Toolkit tools, or Skill entries. Managed cache data may be deleted separately when no profile uses the package; it is not active configuration and cannot register anything by itself.

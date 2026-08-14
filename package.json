@@ -1,5 +1,5 @@
 {
-  "name": "@dsh-external/dsh-vision-toolkit",
+  "name": "@anionex/dsh-vision-toolkit",
   "version": "0.1.5",
   "description": "DeepSeek Harness-native integration for agent-vision-toolkit: image Q&A, OCR, grounding, UI restoration, pixel diff, Artifacts, and Web UI.",
   "keywords": [
