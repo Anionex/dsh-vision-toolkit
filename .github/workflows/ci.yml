@@ -43,7 +43,11 @@ jobs:
         run: pnpm install --frozen-lockfile --trust-lockfile --registry=https://registry.npmjs.org
 
       - name: Install the compatible DSH CLI for Profile acceptance
-        run: pnpm add --global @deepseek-ai/dsh@0.1.0-rc.6 --registry=https://registry.npmjs.org --config.minimumReleaseAge=0
+        run: |
+          npm install --global --prefix "$RUNNER_TEMP/dsh-cli" \
+            @deepseek-ai/dsh@0.1.0-rc.6 \
+            --registry=https://registry.npmjs.org
+          echo "$RUNNER_TEMP/dsh-cli/bin" >> "$GITHUB_PATH"
 
       - name: Build against public registry exports
         run: pnpm run build
