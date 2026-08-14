@@ -3,30 +3,8 @@
 import { useSyncExternalStore, type ReactNode } from 'react'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { InputTriggerSource } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-
-interface SlashSource {
-  trigger: string
-  name: string
-  order: number
-  candidates: () => Promise<readonly unknown[]>
-  onPick: () => undefined
-  codec: {
-    clipboardText: (ref: string) => string
-    serialize: (ref: string, signal: AbortSignal) => Promise<string>
-  }
-}
-
-interface SlashServiceContract {
-  registerSource: (source: SlashSource) => () => void
-}
-
-declare module '@deepseek-ai/cordis' {
-  interface Context {
-    /** Slash source registry supplied by the injected Web client plugin. */
-    slash: SlashServiceContract
-  }
-}
 
 const SOURCE = 'vision-toolkit-pasted-image'
 export const PASTE_IMAGES_ROUTE = '/_dsh/vision-toolkit/paste-images'
@@ -70,7 +48,7 @@ type PasteDockProps = PropsRuntime<'conversation.input.dock'> & {
 }
 
 interface ReferenceSourceRegistry {
-  registerSource: (source: SlashSource) => () => void
+  registerSource: (source: InputTriggerSource) => () => void
 }
 
 interface ReferenceSourceRegistration {
@@ -80,6 +58,10 @@ interface ReferenceSourceRegistration {
 
 interface LegacyTriggerContext {
   inputTriggers: ReferenceSourceRegistry
+}
+
+interface LegacySlashContext {
+  slash: ReferenceSourceRegistry
 }
 
 const CORDIS_ORIGINAL = Symbol.for('cordis.original')
@@ -165,7 +147,7 @@ export class PasteImageController {
     for (const listener of this.listeners) listener()
   }
 
-  source(): SlashSource {
+  source(): InputTriggerSource {
     return {
       trigger: '@',
       name: SOURCE,
@@ -421,7 +403,9 @@ export function installPasteImages(ctx: ClientContext): void {
       }
     }, 'dsh-vision-toolkit: pasted image reference codec')
   }
-  ctx.inject(['slash'], (scope: ClientContext) => { register(scope, scope.slash) })
+  ctx.inject(['slash'], (scope: ClientContext) => {
+    register(scope, (scope as unknown as LegacySlashContext).slash)
+  })
   ctx.inject(['inputTriggers'], (scope: ClientContext) => {
     register(scope, (scope as unknown as LegacyTriggerContext).inputTriggers)
   })

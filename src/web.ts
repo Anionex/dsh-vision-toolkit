@@ -10,6 +10,8 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { CredentialInfo } from '@deepseek-ai/dsh-credentials'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import { SettingsConflictError, type SettingsDescriptor } from '@deepseek-ai/dsh-settings'
+// Type-only import activates the optional webServer Context declaration.
+import type {} from '@deepseek-ai/dsh-host-webserver'
 import { ArtifactAccessController, ARTIFACT_ROUTE_PREFIX } from './artifact-access.ts'
 import { PastedImageBackend, PASTE_IMAGES_ROUTE } from './paste-images.ts'
 import {
@@ -81,14 +83,6 @@ interface JsonSuccess<T> {
 }
 
 type JsonResponse<T> = JsonSuccess<T> | JsonError
-
-interface WebRouteRegistrar {
-  register(route: {
-    kind: 'exact' | 'prefix'
-    path: string
-    handler: (req: IncomingMessage, res: ServerResponse) => void | Promise<void>
-  }): () => void
-}
 
 /** Minimal runtime-manager face used by the Web route and its tests. */
 export interface WebRuntimeManager {
@@ -295,7 +289,7 @@ export class VisionToolkitWebBackend {
 }
 
 /**
- * Attach optional Web routes through either published DSH HTTP service name.
+ * Attach optional Web routes whenever a webServer service is present.
  * @param ctx - plugin context owning route effects.
  * @param backend - Settings handler.
  * @param artifacts - signed Artifact handler.
@@ -306,37 +300,30 @@ export function installVisionToolkitWeb(
   artifacts: ArtifactAccessController,
   pastedImages: PastedImageBackend,
 ): void {
-  const install = (serviceName: 'httpServer' | 'webServer'): void => {
-    ctx.inject([serviceName], (candidate) => {
-      const webCtx = candidate as Context & Record<typeof serviceName, WebRouteRegistrar>
-      webCtx.effect(() => {
-        const server = webCtx[serviceName]
-        const detach = artifacts.attachRoute()
-        const disposeArtifact = server.register({
-          kind: 'prefix',
-          path: ARTIFACT_ROUTE_PREFIX,
-          handler: (req, res) => artifacts.handle(req, res),
-        })
-        const disposeSettings = server.register({
-          kind: 'exact',
-          path: SETTINGS_ROUTE,
-          handler: (req, res) => backend.handle(req, res),
-        })
-        const disposePasteImages = server.register({
-          kind: 'exact',
-          path: PASTE_IMAGES_ROUTE,
-          handler: (req, res) => pastedImages.handle(req, res),
-        })
-        return () => {
-          disposePasteImages()
-          disposeSettings()
-          disposeArtifact()
-          detach()
-        }
-      }, `dsh-vision-toolkit: Web routes (${serviceName})`)
-    })
-  }
-
-  install('httpServer')
-  install('webServer')
+  ctx.inject(['webServer'], (webCtx) => {
+    webCtx.effect(() => {
+      const detach = artifacts.attachRoute()
+      const disposeArtifact = webCtx.webServer.register({
+        kind: 'prefix',
+        path: ARTIFACT_ROUTE_PREFIX,
+        handler: (req, res) => artifacts.handle(req, res),
+      })
+      const disposeSettings = webCtx.webServer.register({
+        kind: 'exact',
+        path: SETTINGS_ROUTE,
+        handler: (req, res) => backend.handle(req, res),
+      })
+      const disposePasteImages = webCtx.webServer.register({
+        kind: 'exact',
+        path: PASTE_IMAGES_ROUTE,
+        handler: (req, res) => pastedImages.handle(req, res),
+      })
+      return () => {
+        disposePasteImages()
+        disposeSettings()
+        disposeArtifact()
+        detach()
+      }
+    }, 'dsh-vision-toolkit: Web routes')
+  })
 }

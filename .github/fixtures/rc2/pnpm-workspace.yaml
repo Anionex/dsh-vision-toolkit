@@ -1,7 +1,0 @@
-packages:
-  - .
-
-nodeLinker: hoisted
-autoInstallPeers: false
-allowBuilds:
-  node-pty: true

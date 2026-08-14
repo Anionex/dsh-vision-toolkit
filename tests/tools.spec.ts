@@ -10,7 +10,7 @@ import ToolRegistry, { defineTool } from '@deepseek-ai/dsh-tools'
 import SkillService from '@deepseek-ai/dsh-skill'
 import * as ToolSkill from '@deepseek-ai/dsh-tool-skill'
 import Settings, { type SettingsNamespace } from '@deepseek-ai/dsh-settings'
-import { SubprocessService } from '@deepseek-ai/dsh-subprocess'
+import { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type { SubprocessHandle, SubprocessOutputRead, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import type { Credentials } from '@deepseek-ai/dsh-credentials'
 import * as VisionToolkit from '../src/index.ts'
@@ -42,7 +42,7 @@ function fakeCredentials(): Credentials {
   } as unknown as Credentials
 }
 
-class ProbeSubprocessService extends SubprocessService {
+class ProbeSubprocessService extends SubprocessRuntime {
   override spawn(spec: SubprocessSpawnSpec): SubprocessHandle {
     const command = spec.argv.join('\n')
     const stdout = command.includes('sys.version_info')
@@ -50,7 +50,7 @@ class ProbeSubprocessService extends SubprocessService {
       : command.includes('with Image.open')
         ? '{"width":256,"height":256,"format":"png","mode":"RGBA"}\n'
         : command.includes('import PIL')
-          ? '{"pillow":"12.3.0","numpy":"2.5.1","vtracer":"0.6.15"}\n'
+          ? '{"pillow":"12.3.0","numpy":"2.4.6","vtracer":"0.6.15"}\n'
           : ''
     const read = (text: string): SubprocessOutputRead => ({ text, nextOffset: Buffer.byteLength(text), lossy: false })
     return {

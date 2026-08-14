@@ -88,7 +88,7 @@ DSH Vision Toolkit 在这些上游能力之外增加原生工具 schema、版本
 
 ## 快速开始
 
-前置条件：DeepSeek Harness、Python 3.11+，并确保 `dsh plugin` 可以使用 `pnpm`。从 npm 安装已发布的 Bundle，将其加入所需 Profile，并确认 Bundle 行已经挂载：
+前置条件：DeepSeek Harness `0.1.0-rc.6` 或兼容的后续 `0.1.x` 版本、Python 3.11+，并确保 `dsh plugin` 可以使用 `pnpm`。从 npm 安装已发布的 Bundle，将其加入所需 Profile，并确认 Bundle 行已经挂载：
 
 ```sh
 dsh plugin --profile web add @dsh-external/dsh-vision-toolkit
@@ -96,6 +96,8 @@ dsh plugin --profile headless add @dsh-external/dsh-vision-toolkit
 dsh --profile web --dump-config | grep vision-toolkit
 dsh --profile headless --dump-config | grep vision-toolkit
 ```
+
+旧 Profile 的 `pnpm-workspace.yaml` 必须使用 `nodeLinker: hoisted` 和 `autoInstallPeers: false`。更新后的 DSH launcher 会在 `dsh plugin` 运行前修复这两个自有设置；使用旧 launcher 时，应在安装前手动设置，避免 pnpm 在 Profile 内组装第二套 Harness 依赖图。
 
 安装后重启正在运行的 Web Profile，打开 **设置 → 视觉工具**，为远程工具选择 DSH Credential，并显式执行**测试连接**。在会话中把图片放进工作区路径，调用 `/vision-tools`，再让 Agent 使用明确的 `vision_*` 工具。本地裁剪、SVG、像素、颜色、前景和 HTML 操作不需要视觉 API Credential。
 
@@ -350,14 +352,15 @@ npm run example:ui-restoration:write
 ## 开发与验证
 
 ```sh
-npm run verify:portable
+pnpm install --frozen-lockfile --trust-lockfile
+pnpm run verify:portable
 pnpm run build
 pnpm test
 pnpm run example:ui-restoration
 pnpm pack --dry-run
 ```
 
-`npm run verify:portable` 验证不依赖外部开发包的 package 表面：上游快照、package 元数据与 exports、已提交 JavaScript 语法、README 链接和图片、必需的开源门面文件、social preview 尺寸以及 dry-run tarball。CI 会另行安装已发布的 DSH rc.2 peer fixture，运行完整 TypeScript 测试、重新构建 `lib/`，并拒绝任何已提交产物差异；`lib/BUILD_MANIFEST.json` 仅保留为审计记录，不再承担唯一 freshness 证明。
+`pnpm run verify:portable` 是不依赖外部开发包的可移植验证门禁：验证上游快照、package 元数据与 exports、已提交 JavaScript 语法、README 链接和图片、必需的开源门面文件、social preview 尺寸以及 dry-run tarball。完整 TypeScript 构建和测试会在这个独立 checkout 中直接使用 lockfile 锁定的 DSH `0.1.0-rc.6` registry 包；客户端构建还通过独立 compiler face 验证这些包的公开 exports，不使用内部路径 alias。PATH 中存在兼容的 `dsh` 与 `pnpm` 时会执行真实 Profile 验收，CI 会强制要求该路径，而不会静默跳过。
 
 `pnpm run build` 会先验证 vendored manifest，再生成 JavaScript、声明文件和 loader 兼容 Web 客户端。本包提交 `lib/`，因此从 checkout 安装时不要求消费方构建。无真实 Key 的真实 Profile 测试会安装到干净 `DSH_HOME`、启动 Headless、通过真实工具调用执行全部五个 P0 工具和具有代表性的 P1 本地/远程工具、验证禁用与重新启用行为，并卸载 Bundle。每项 P0/P1 需求对应的实现与验证位置见[需求追踪参考](docs/requirements-traceability/README.md)。
 

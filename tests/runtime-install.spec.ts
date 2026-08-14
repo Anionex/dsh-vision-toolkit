@@ -3,12 +3,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { SubprocessService } from '@deepseek-ai/dsh-subprocess'
+import { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type { SubprocessHandle, SubprocessOutputRead, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import { resolveConfig } from '../src/config.ts'
 import { bundledUpstreamRoot, prepareUpstreamRuntime } from '../src/runtime-install.ts'
 
-class ProbeSubprocessService extends SubprocessService {
+class ProbeSubprocessService extends SubprocessRuntime {
   readonly spawns: SubprocessSpawnSpec[] = []
 
   override spawn(spec: SubprocessSpawnSpec): SubprocessHandle {
@@ -19,7 +19,7 @@ class ProbeSubprocessService extends SubprocessService {
     const stdout = isMetadata
       ? '{"version":"3.12.0","major":3,"minor":12}\n'
       : isDependencies
-        ? '{"pillow":"12.3.0","numpy":"2.5.1","vtracer":"0.6.15"}\n'
+        ? '{"pillow":"12.3.0","numpy":"2.4.6","vtracer":"0.6.15"}\n'
         : ''
     const exitCode = isMetadata || isDependencies ? 0 : 1
     const stderr = exitCode === 0 ? '' : 'not a git checkout\n'
@@ -84,7 +84,7 @@ describe('external pinned runtime preparation', () => {
     expect(prepared).toMatchObject({
       source: 'external',
       pythonVersion: '3.12.0',
-      dependencies: { pillow: '12.3.0', numpy: '2.5.1', vtracer: '0.6.15' },
+      dependencies: { pillow: '12.3.0', numpy: '2.4.6', vtracer: '0.6.15' },
     })
     expect(prepared.root).toBe(await realpath(snapshot))
     expect(service.spawns).toHaveLength(2)

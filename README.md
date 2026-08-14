@@ -88,7 +88,7 @@ The checked-in UI-restoration workflow renders an intentionally inaccurate HTML 
 
 ## Quick start
 
-Prerequisites: DeepSeek Harness, Python 3.11+, and `pnpm` available to `dsh plugin`. Install the published bundle from npm, add it to the profiles you use, and confirm the bundle row:
+Prerequisites: DeepSeek Harness `0.1.0-rc.6` or a compatible later `0.1.x` release, Python 3.11+, and `pnpm` available to `dsh plugin`. Install the published bundle from npm, add it to the profiles you use, and confirm the bundle row:
 
 ```sh
 dsh plugin --profile web add @dsh-external/dsh-vision-toolkit
@@ -96,6 +96,8 @@ dsh plugin --profile headless add @dsh-external/dsh-vision-toolkit
 dsh --profile web --dump-config | grep vision-toolkit
 dsh --profile headless --dump-config | grep vision-toolkit
 ```
+
+Legacy profiles must use `nodeLinker: hoisted` and `autoInstallPeers: false` in their `pnpm-workspace.yaml`. An updated DSH launcher repairs these owned settings before `dsh plugin` runs; when using an older launcher, set them before installation so pnpm does not assemble a second Harness dependency graph inside the profile.
 
 Restart a running Web profile, open **Settings → Vision Toolkit**, select a DSH Credential for remote tools, and explicitly run **Test connection**. In a conversation, make an image available as a workspace path, invoke `/vision-tools`, and ask the Agent to call a specific `vision_*` tool. Local crop, trace, pixel, color, foreground, and HTML operations do not require a visual API credential.
 
@@ -350,14 +352,15 @@ The committed evidence records an initial `6.04%` difference across six non-zero
 ## Development and verification
 
 ```sh
-npm run verify:portable
+pnpm install --frozen-lockfile --trust-lockfile
+pnpm run verify:portable
 pnpm run build
 pnpm test
 pnpm run example:ui-restoration
 pnpm pack --dry-run
 ```
 
-`npm run verify:portable` validates the dependency-free package surface: the vendored snapshot, package metadata and exports, committed JavaScript syntax, README links and images, required facade files, social-preview dimensions, and the dry-run tarball. CI separately installs the published DSH rc.2 peer fixture, runs the complete TypeScript suite, rebuilds `lib/`, and rejects any committed artifact difference; `lib/BUILD_MANIFEST.json` remains an audit record rather than the sole freshness proof.
+`pnpm run verify:portable` is the dependency-free portable verification gate: it validates the vendored snapshot, package metadata and exports, committed JavaScript syntax, README links and images, required facade files, social-preview dimensions, and the dry-run tarball. The full TypeScript build and test suite run from this standalone checkout against the locked DSH `0.1.0-rc.6` registry packages; the client build also has a separate compiler face that resolves the packages' public exports without internal path aliases. The real Profile acceptance runs when compatible `dsh` and `pnpm` commands are on PATH, and CI requires that path instead of silently skipping it.
 
 `pnpm run build` verifies the vendored manifest before emitting JavaScript, declarations, and the loader-compatible Web client. The package commits `lib/`, so installation from a checkout does not require a consumer-side build. The keyless real-profile test installs into a clean `DSH_HOME`, boots Headless, executes all five P0 tools plus representative P1 local/remote tools through real tool calls, verifies disable and re-enable behavior, and uninstalls the bundle. See the [requirements traceability reference](docs/requirements-traceability/README.md) for the implementation and verification home of every P0/P1 requirement.
 
