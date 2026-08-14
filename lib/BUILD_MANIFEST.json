@@ -18,13 +18,13 @@
     },
     {
       "path": "src/client/index.tsx",
-      "bytes": 50443,
-      "sha256": "e80d84cf5b717a3777310575758d90fd0c1c15398662896bdff3de603b07b6ce"
+      "bytes": 51052,
+      "sha256": "3561ba52b46a9e9796d13261025b82e7b775355a11701e9d668128152a191169"
     },
     {
       "path": "src/client/paste-images.tsx",
-      "bytes": 15022,
-      "sha256": "15736c668811997d1e9e4cdfc6781de8919b3bab07a47175d59d789f070a8f63"
+      "bytes": 16613,
+      "sha256": "64dc0ebccb7f0061211b9bfd42241594d1f8e58f55675b1c5fbcfb712b47c747"
     },
     {
       "path": "src/config.ts",
@@ -135,13 +135,13 @@
     },
     {
       "path": "lib/client.js",
-      "bytes": 69382,
-      "sha256": "0f606eb3a25e868683ad2811688163f44cd6226719ca6edf0febb12c092b1eca"
+      "bytes": 71256,
+      "sha256": "937c6a409bded4b491d584029c89bd91f239589473b7c549d415f0598ae68d00"
     },
     {
       "path": "lib/client.js.map",
-      "bytes": 52054,
-      "sha256": "af900a16e799de47aeadbdb1fe3593df67cf8f0cd087b0db5d3a0f2dd9221363"
+      "bytes": 53764,
+      "sha256": "b57983cd72f44fc0d758d8d2d1cbeb81032b55e92365906fd97516fd0bce61b1"
     },
     {
       "path": "lib/config.js",
@@ -275,13 +275,13 @@
     },
     {
       "path": "lib/types/client/index.d.ts",
-      "bytes": 6862,
-      "sha256": "08ef7fc35bf28adf11c11b923e5026e61afb1b6a8fc7b1ee47674ae958b3c26a"
+      "bytes": 6943,
+      "sha256": "d2039bf3fc2f7424b13991f8a3bc6df75c872e5cab67189ac28f9e4087bbd0ae"
     },
     {
       "path": "lib/types/client/index.d.ts.map",
       "bytes": 3370,
-      "sha256": "59300789321763a5118cae2db304bffe2b2503c6fe329f360e6ba5c978b158e4"
+      "sha256": "0feff98e5cf2a1b8e4aca9be165e83652503b7e62e1665009a380d86a01deaec"
     },
     {
       "path": "lib/types/client/paste-images.d.ts",
@@ -291,7 +291,7 @@
     {
       "path": "lib/types/client/paste-images.d.ts.map",
       "bytes": 1886,
-      "sha256": "2cc7fe06a9d841a14f1fb4af57488bf2c90224f00de64e355326eb0bb9dbad9a"
+      "sha256": "b11a7cdd1f67c3ed948d4a27a5dffddb44ed6baff0b025e9f730c6626c9cfc4b"
     },
     {
       "path": "lib/types/config.d.ts",
