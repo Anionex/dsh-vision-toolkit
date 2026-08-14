@@ -391,7 +391,7 @@ export function parseDominantColorsOutput(stdout: string): DominantColorsOutput 
   if (paletteHeader !== null) {
     const colors: DominantColorCluster[] = []
     for (const line of lines.slice(2)) {
-      const row = /^(#[0-9A-Fa-f]{6})\s+(\d+(?:\.\d+)?)%\s+#+$/.exec(line.trim())
+      const row = /^(#[0-9A-Fa-f]{6})\s+(\d+(?:\.\d+)?)%(?:\s+#+)?$/.exec(line.trim())
       if (row === null) throw new VisionToolkitError('output', `dominant_colors: unexpected palette row: ${line.trim()}`)
       colors.push({ color: (row[1] ?? '').toUpperCase(), sharePct: Number(row[2]) })
     }

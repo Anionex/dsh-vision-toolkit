@@ -4,6 +4,10 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+### Fixed
+
+- Accept low-share `vision_dominant_colors` palette and candidate rows whose histogram bar is empty.
+
 ## [0.1.2] - 2026-08-11
 
 ### Changed
