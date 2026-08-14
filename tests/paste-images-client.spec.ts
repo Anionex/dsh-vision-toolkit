@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createElement, type ComponentType } from 'react'
 import { fireEvent, render, screen } from '@testing-library/react'
+import { Context } from 'cordis'
 import {
   installPasteImages,
   PASTE_IMAGES_ROUTE as CLIENT_PASTE_IMAGES_ROUTE,
@@ -81,12 +82,16 @@ function fakeClient(initial = '', triggerServices: readonly TriggerService[] = [
     component: ComponentType<Record<string, unknown>>
   }> = []
   let source: ReturnType<PasteImageController['source']> | undefined
-  const createTriggerRegistry = () => ({
-    registerSource: vi.fn((next: ReturnType<PasteImageController['source']>) => {
-      source = next
-      return () => { source = undefined }
-    }),
-  })
+  const createTriggerRegistry = () => {
+    const dispose = vi.fn(() => { source = undefined })
+    return {
+      dispose,
+      registerSource: vi.fn((next: ReturnType<PasteImageController['source']>) => {
+        source = next
+        return dispose
+      }),
+    }
+  }
   const triggerRegistries = {
     slash: createTriggerRegistry(),
     inputTriggers: createTriggerRegistry(),
@@ -122,6 +127,12 @@ function fakeClient(initial = '', triggerServices: readonly TriggerService[] = [
     registrations,
     source: () => source,
     triggerRegistries,
+    disposeEffect: (index: number) => {
+      const dispose = effects[index]
+      if (dispose === undefined) return
+      effects[index] = () => {}
+      dispose()
+    },
     dispose: () => effects.reverse().forEach(fn => { fn() }),
   }
 }
@@ -182,7 +193,44 @@ describe('clipboard image client', () => {
     const bench = fakeClient('', ['slash', 'inputTriggers'], true)
     expect(bench.triggerRegistries.slash.registerSource).toHaveBeenCalledTimes(1)
     expect(bench.triggerRegistries.inputTriggers.registerSource).not.toHaveBeenCalled()
+    bench.disposeEffect(0)
+    expect(bench.source()?.name).toBe('vision-toolkit-pasted-image')
+    expect(bench.triggerRegistries.slash.dispose).not.toHaveBeenCalled()
+    bench.disposeEffect(1)
+    expect(bench.source()).toBeUndefined()
+    expect(bench.triggerRegistries.slash.dispose).toHaveBeenCalledTimes(1)
     bench.dispose()
+  })
+
+  it('keeps an aliased registry live across real Cordis service removal and re-provision', async () => {
+    const ctx = new Context()
+    const unregister = vi.fn()
+    const registry = { registerSource: vi.fn(() => unregister) }
+    ctx.provide('sessions', {
+      list: { getSnapshot: () => ({ current: 'session-1' }) },
+      scope: () => ({}),
+    })
+    ctx.provide('conversation', { input: { for: () => inputMachine() } })
+    ctx.provide('slots', {
+      inject: (_name: string, callback: () => unknown) => { callback() },
+      register: () => () => {},
+    })
+    const removeSlash = ctx.provide('slash', registry)
+    const removeLegacy = ctx.provide('inputTriggers', registry)
+
+    installPasteImages(ctx as never)
+    await vi.waitFor(() => { expect(registry.registerSource).toHaveBeenCalledTimes(1) })
+
+    await removeSlash()
+    expect(unregister).not.toHaveBeenCalled()
+    await removeLegacy()
+    await vi.waitFor(() => { expect(unregister).toHaveBeenCalledTimes(1) })
+
+    const removeAgain = ctx.provide('inputTriggers', registry)
+    await vi.waitFor(() => { expect(registry.registerSource).toHaveBeenCalledTimes(2) })
+    await removeAgain()
+    await vi.waitFor(() => { expect(unregister).toHaveBeenCalledTimes(2) })
+    await ctx.fiber.dispose()
   })
 
   it('preserves pasted text, inserts every image as a text reference, and blocks the native ImageBlock path', async () => {

@@ -51,6 +51,11 @@ interface ReferenceSourceRegistry {
   registerSource: (source: SlashSource) => () => void
 }
 
+interface ReferenceSourceRegistration {
+  dispose: () => void
+  owners: number
+}
+
 interface LegacyTriggerContext {
   inputTriggers: ReferenceSourceRegistry
 }
@@ -362,16 +367,21 @@ export function PasteImageDock(props: PasteDockProps): ReactNode {
 /** Install capture interception, the text-reference codec, and composer feedback. */
 export function installPasteImages(ctx: ClientContext): void {
   const controller = new PasteImageController(ctx)
-  const registered = new WeakMap<ReferenceSourceRegistry, () => void>()
+  const registered = new WeakMap<ReferenceSourceRegistry, ReferenceSourceRegistration>()
   const register = (scope: ClientContext, registry: ReferenceSourceRegistry): void => {
     scope.effect(() => {
-      if (registered.has(registry)) return () => {}
-      const dispose = registry.registerSource(controller.source())
-      registered.set(registry, dispose)
+      let registration = registered.get(registry)
+      if (registration === undefined) {
+        registration = { dispose: registry.registerSource(controller.source()), owners: 0 }
+        registered.set(registry, registration)
+      }
+      registration.owners += 1
       return () => {
-        if (registered.get(registry) !== dispose) return
+        if (registered.get(registry) !== registration) return
+        registration.owners -= 1
+        if (registration.owners > 0) return
         registered.delete(registry)
-        dispose()
+        registration.dispose()
       }
     }, 'dsh-vision-toolkit: pasted image reference codec')
   }
