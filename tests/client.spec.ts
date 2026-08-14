@@ -314,6 +314,30 @@ describe('Vision Toolkit client plugin', () => {
     expect(screen.getAllByRole('link', { name: 'download' })).toHaveLength(2)
   })
 
+  it('puts the required service fields first and the plugin identity at the bottom', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ ok: true, value: settingsSnapshot() })))
+
+    const { ctx, registrations } = fakeClientContext()
+    apply(ctx as never)
+    const settings = registrations.find(entry => entry.options.name === 'settings.section')
+    if (settings === undefined) throw new Error('Settings component was not registered')
+    const view = render(createElement(settings.component, {
+      controller: new VisionSettingsController(),
+      t: (key: string) => key,
+    }))
+
+    await screen.findByText('0.1.0')
+    const root = view.container.querySelector('.dvt-settings')
+    const essential = view.container.querySelector('.dvt-essential')
+    const advanced = view.container.querySelector('.dvt-advanced')
+    const footer = view.container.querySelector('.dvt-settings-footer')
+    expect(root?.firstElementChild).not.toBe(footer)
+    expect(root?.querySelector('.dvt-essential')).toBe(essential)
+    expect(root?.lastElementChild).toBe(footer)
+    expect(advanced).not.toBeNull()
+    expect(view.container.querySelector('.dvt-settings-header')).toBeNull()
+  })
+
   it('reloads the authoritative same-revision settings after a runtime candidate is rejected', async () => {
     const initial = settingsSnapshot()
     const rejected = settingsSnapshot({
