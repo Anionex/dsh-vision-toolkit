@@ -8,6 +8,7 @@ import { apply, decodeVisionResult, inject, VisionSettingsController } from '../
 
 afterEach(() => {
   cleanup()
+  document.querySelectorAll('style[data-plugin-css="@dsh-external/dsh-vision-toolkit/client"]').forEach(element => { element.remove() })
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
@@ -156,6 +157,23 @@ describe('Vision Toolkit client plugin', () => {
     expect(registrations.find(entry => entry.options.name === 'settings.section')?.options).toMatchObject({
       id: 'vision-toolkit', order: 30,
     })
+  })
+
+  it('uses the Harness theme tokens for dark-mode text and borders', () => {
+    const { ctx } = fakeClientContext()
+    apply(ctx as never)
+
+    const styles = document.querySelector<HTMLStyleElement>('style[data-plugin-css="@dsh-external/dsh-vision-toolkit/client"]')
+    expect(styles?.textContent).toContain('var(--dsw-alias-label-primary,#26231f)')
+    expect(styles?.textContent).toContain('var(--dsw-alias-label-secondary,#77736d)')
+    expect(styles?.textContent).toContain('var(--dsw-alias-border-l1,#dedbd5)')
+    expect(styles?.textContent).toContain('.dvt-alert.notice{background:rgba(92,108,213,.09);color:#5149a6}')
+    expect(styles?.textContent).toContain('.dvt-alert.warning{background:rgba(224,162,55,.12);color:#986818}')
+    expect(styles?.textContent).toContain('body[data-ds-dark-theme] .dvt-tool-icon,body[data-ds-dark-theme] .dvt-list code,body[data-ds-dark-theme] .dvt-kicker{color:var(--dsw-alias-state-business-primary)}')
+    expect(styles?.textContent).toContain('body[data-ds-dark-theme] .dvt-alert.warning{color:var(--dsw-alias-state-warn-label)}')
+    expect(styles?.textContent).toContain('body[data-ds-dark-theme] .dvt-alert.error,body[data-ds-dark-theme] .dvt-badge.error{color:var(--dsw-alias-state-error-primary)}')
+    expect(styles?.textContent).toContain('body[data-ds-dark-theme] .dvt-alert.success,body[data-ds-dark-theme] .dvt-badge.ok{color:var(--dsw-alias-state-success-primary)}')
+    expect(styles?.textContent).not.toMatch(/--dsw-alias-(?:fg-primary|fg-muted|border-subtle)/u)
   })
 
   it('prefers canonical presentation metadata and falls back to JSON result text', () => {
