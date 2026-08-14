@@ -5,7 +5,7 @@
 - Read the [README](README.md) for installation, configuration, usage, security, scope, and troubleshooting.
 - Check the [requirements traceability reference](docs/requirements-traceability/README.md) when you need the implementation or verification home for a product requirement.
 - Reproduce visual-verification issues with the checked-in [UI restoration example](examples/ui-restoration/README.md).
-- Search existing [issues](https://github.com/dsh-external/dsh-vision-toolkit/issues) and [pull requests](https://github.com/dsh-external/dsh-vision-toolkit/pulls) before opening a duplicate.
+- Search existing [issues](https://github.com/Anionex/dsh-vision-toolkit/issues) and [pull requests](https://github.com/Anionex/dsh-vision-toolkit/pulls) before opening a duplicate.
 
 ## Where to ask
 
@@ -15,7 +15,7 @@
 - Security concern: follow [SECURITY.md](SECURITY.md) and report it privately.
 - Code contribution: read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
-Open the repository's [issue chooser](https://github.com/dsh-external/dsh-vision-toolkit/issues/new/choose) to select the appropriate form.
+Open the repository's [issue chooser](https://github.com/Anionex/dsh-vision-toolkit/issues/new/choose) to select the appropriate form.
 
 ## Information to include
 

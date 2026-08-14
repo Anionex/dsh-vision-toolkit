@@ -52,7 +52,7 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 - Runtime teardown cancels in-flight operations before removing Agent-scoped tools, the activation bootstrap, and the Skill.
 - The Web client is published through the current nested `dsh.client` manifest and loader-compatible built artifact required by DSH snapshot0810.
 
-[Unreleased]: https://github.com/dsh-external/dsh-vision-toolkit/compare/v0.1.2...HEAD
-[0.1.2]: https://github.com/dsh-external/dsh-vision-toolkit/compare/v0.1.1...v0.1.2
-[0.1.1]: https://github.com/dsh-external/dsh-vision-toolkit/compare/v0.1.0...v0.1.1
-[0.1.0]: https://github.com/dsh-external/dsh-vision-toolkit/releases/tag/v0.1.0
+[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/3bc82526e63e559ee874ca436dace2ec475c35c2...HEAD
+[0.1.2]: https://github.com/Anionex/dsh-vision-toolkit/compare/64932217cf0194c50ee78dfc580e886ef2355300...3bc82526e63e559ee874ca436dace2ec475c35c2
+[0.1.1]: https://github.com/Anionex/dsh-vision-toolkit/compare/9835075c2eedab21ac895209a0c1d85074c1fe91...64932217cf0194c50ee78dfc580e886ef2355300
+[0.1.0]: https://github.com/Anionex/dsh-vision-toolkit/commit/9835075c2eedab21ac895209a0c1d85074c1fe91

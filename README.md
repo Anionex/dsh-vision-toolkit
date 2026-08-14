@@ -364,7 +364,7 @@ Version `0.1.4` is the current public npm release. P0 and P1 are product commitm
 ## Community and About
 
 - Read [CONTRIBUTING.md](CONTRIBUTING.md) before proposing code, protocol, or upstream-snapshot changes.
-- Use [GitHub Issues](https://github.com/dsh-external/dsh-vision-toolkit/issues) for reproducible bugs, focused feature requests, and usage questions; use [SUPPORT.md](SUPPORT.md) to choose the right channel.
+- Use [GitHub Issues](https://github.com/Anionex/dsh-vision-toolkit/issues) for reproducible bugs, focused feature requests, and usage questions; use [SUPPORT.md](SUPPORT.md) to choose the right channel.
 - Report vulnerabilities privately through the process in [SECURITY.md](SECURITY.md), never in a public issue.
 - Follow releases and compatibility notes in [CHANGELOG.md](CHANGELOG.md).
 - Optional sponsorship is described transparently in [FUNDING.md](FUNDING.md); support does not purchase roadmap priority or private support.
