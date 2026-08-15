@@ -21,6 +21,7 @@ import {
   type VisionToolkitConfig,
 } from './config.ts'
 import { VisionToolExposure } from './exposure.ts'
+import { installImageInputVariants, sessionPasteTakeover } from './image-input-variants.ts'
 import { VisionToolkitRuntimeManager } from './runtime-manager.ts'
 import { VISION_TOOLS_SKILL } from './skill.ts'
 import { createVisionTools } from './tools.ts'
@@ -98,11 +99,27 @@ export async function apply(ctx: Context, config: VisionToolkitConfig = {}): Pro
   const pastedImages = new PastedImageBackend(ctx, {
     maxImageBytes: () => manager.status().activeConfig?.maxImageBytes ?? resolveConfig(settings.get()).maxImageBytes,
   })
-  installVisionToolkitWeb(ctx, backend, artifacts, pastedImages)
+  // Image-input variants register asynchronously once eligible routes exist;
+  // the runtime getter stays lazy so variants appear even when the runtime
+  // becomes ready after the first sweep.
+  const variants = installImageInputVariants(
+    ctx,
+    () => resolveConfig(settings.get()),
+    () => manager.ready ? manager.current() : undefined,
+  )
+  installVisionToolkitWeb(
+    ctx,
+    backend,
+    artifacts,
+    pastedImages,
+    sessionId => sessionPasteTakeover(ctx, sessionId),
+  )
+  disposers.push(variants.dispose)
   disposers.push(settings.watch(async (next) => {
     try {
       await manager.reconfigure(next)
       ensureOperational()
+      variants.reconcile()
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       ctx.logger.error('dsh-vision-toolkit: keeping the previous runtime after a refused Settings generation. %s', message)

@@ -13,7 +13,7 @@ import { SettingsConflictError, type SettingsDescriptor } from '@deepseek-ai/dsh
 // Type-only import activates the optional webServer Context declaration.
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import { ArtifactAccessController, ARTIFACT_ROUTE_PREFIX } from './artifact-access.ts'
-import { PastedImageBackend, PASTE_IMAGES_ROUTE } from './paste-images.ts'
+import { PastedImageBackend, PASTE_IMAGES_ROUTE, PASTE_POLICY_ROUTE } from './paste-images.ts'
 import {
   resolveConfig,
   VISION_TOOLKIT_SETTINGS_NAMESPACE,
@@ -27,7 +27,7 @@ import {
   type RuntimeManagerStatus,
 } from './runtime-manager.ts'
 import { PLUGIN_VERSION, UPSTREAM_COMMIT, UPSTREAM_REPOSITORY, UPSTREAM_VERSION } from './version.ts'
-import { sameOriginPost } from './web-request.ts'
+import { sameOriginPost, sameOriginRequest } from './web-request.ts'
 
 /** Exact route used by the browser Settings page. */
 export const SETTINGS_ROUTE = '/_dsh/vision-toolkit/settings'
@@ -354,16 +354,61 @@ export class VisionToolkitWebBackend {
 }
 
 /**
+ * Same-origin policy handler for the paste route: whether the browser should
+ * turn a paste into workspace paths instead of the native attachment flow.
+ * Answers false for every unresolved route — native paste is the safe default.
+ * @param takeover - resolves one live Session's paste verdict.
+ * @returns the HTTP handler.
+ */
+export function createPastePolicyHandler(
+  takeover: (sessionId: string) => Promise<boolean>,
+): (req: IncomingMessage, res: ServerResponse) => void {
+  return (req, res) => {
+    void (async () => {
+      if (req.method !== 'GET') {
+        requestError(res, 405, 'method-not-allowed', 'Use GET')
+        return
+      }
+      if (!sameOriginRequest(req)) {
+        requestError(res, 403, 'origin-rejected', 'The request must originate from this DSH Web application')
+        return
+      }
+      let sessionId: string
+      try {
+        const url = new URL(req.url ?? PASTE_POLICY_ROUTE, 'http://dsh.internal')
+        const values = url.searchParams.getAll('sessionId')
+        if (values.length !== 1 || values[0] === undefined || values[0] === '') {
+          throw new TypeError('sessionId is required exactly once')
+        }
+        sessionId = values[0]!
+      } catch (error) {
+        requestError(res, 400, 'invalid-request', publicMessage(error))
+        return
+      }
+      try {
+        const takeOver = await takeover(sessionId)
+        responseJson(res, 200, { ok: true, value: { takeOver } })
+      } catch (error) {
+        requestError(res, 500, 'policy-failed', publicMessage(error))
+      }
+    })()
+  }
+}
+
+/**
  * Attach optional Web routes whenever a webServer service is present.
  * @param ctx - plugin context owning route effects.
  * @param backend - Settings handler.
  * @param artifacts - signed Artifact handler.
+ * @param pastedImages - pasted-image workspace handler.
+ * @param pastePolicy - paste-takeover verdict resolver.
  */
 export function installVisionToolkitWeb(
   ctx: Context,
   backend: VisionToolkitWebBackend,
   artifacts: ArtifactAccessController,
   pastedImages: PastedImageBackend,
+  pastePolicy: (sessionId: string) => Promise<boolean>,
 ): void {
   ctx.inject(['webServer'], (webCtx) => {
     webCtx.effect(() => {
@@ -383,7 +428,13 @@ export function installVisionToolkitWeb(
         path: PASTE_IMAGES_ROUTE,
         handler: (req, res) => pastedImages.handle(req, res),
       })
+      const disposePastePolicy = webCtx.webServer.register({
+        kind: 'exact',
+        path: PASTE_POLICY_ROUTE,
+        handler: createPastePolicyHandler(pastePolicy),
+      })
       return () => {
+        disposePastePolicy()
         disposePasteImages()
         disposeSettings()
         disposeArtifact()

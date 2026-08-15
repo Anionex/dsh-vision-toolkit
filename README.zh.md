@@ -146,6 +146,14 @@ flowchart LR
 
 健康检查、连接测试以及插件/上游版本检查属于 Web Settings 管理操作。`vision_toolkit_health` 和 `vision_toolkit_version` 不是模型工具，即使视觉执行工具已经激活，也永远不会进入 Agent schema。
 
+## 纯文本模型的图片输入变体
+
+纯文本模型路由会获得同名的兄弟模型条目：`<模型名> (Vision Toolkit)`，挂在对应的提供方分组下。变体声明支持图片输入，因此粘贴的图片走原生附件流程——输入框缩略图、会话持久化图片与历史渲染全部保留——插件只在发往模型的请求链路上把每个图片块改写成 Vision Toolkit 描述文本，再转交上游路由。会话日志不被改动；回放与 UI 看到的始终是真实图片。
+
+插件会自动为宿主明确声明为纯文本的每个模型注册变体（例如 DeepSeek 对话家族）。在模型选择器里选中变体后正常粘贴即可。插件的"粘贴转路径"拦截会先询问宿主，只有在当前模型被确认为纯文本时才接管粘贴；因此变体模型以及任何支持图片的模型都保持原生流程。
+
+描述转换需要已配置的视觉提供方及其 Credential；当运行时未就绪或读取失败时，请求链路上的图片块降级为说明文本，而不是让整轮失败。用 `imageInputVariants.enabled: false` 关闭变体，或用 `imageInputVariants.providers` 限制被包装的路由。
+
 ## 运行要求
 
 - 启用 Web 或 Headless Profile 的 DeepSeek Harness，并确保 `dsh plugin` 可以使用 `pnpm`。
@@ -234,6 +242,9 @@ Bundle 默认使用 managed 运行时。Profile patch 可以覆盖提供方与�
     runtime:
       mode: managed
     allowedDirs: []
+    imageInputVariants:
+      enabled: true
+      providers: []
 ```
 
 ### 配置字段
@@ -255,6 +266,8 @@ Bundle 默认使用 managed 运行时。Profile patch 可以覆盖提供方与�
 | `runtime.agentVisionToolkitPath` | 未设置 | `external` 模式必填；必须是精确导出快照或固定 commit 的干净 Git checkout |
 | `runtime.python` | 未设置 | 可选的 Python 3.11+ 引导程序/解释器覆盖值 |
 | `allowedDirs` | `[]` | 额外的 realpath 解析输入根目录；会话工作区始终允许 |
+| `imageInputVariants.enabled` | `true` | 为纯文本模型路由在模型选择器中注册图片输入变体条目 |
+| `imageInputVariants.providers` | `[]` | 按提供方 id 限制被包装的上游路由；为空时包装所有符合条件的路由 |
 
 ### Credential
 
@@ -342,7 +355,7 @@ npm run example:ui-restoration:write
 
 | 症状 | 解决方法 |
 |---|---|
-| `Model "..." does not support image input. (attachment-error)` | 图片走了 DSH 的模型原生附件通道，纯文本模型会在 Skill 或 Vision Toolkit 运行前拒绝该轮。请使用 DSH Paste Input 的附件按钮、粘贴或拖放流程，让文件先复制到会话工作区并以路径形式进入消息，再调用 `/vision-tools`。安装或升级任一浏览器插件后，需要重启 Web Profile 并刷新页面。 |
+| `Model "..." does not support image input. (attachment-error)` | 图片走了 DSH 的模型原生附件通道，纯文本模型会在 Skill 或 Vision Toolkit 运行前拒绝该轮。请在模型选择器中选择 `<模型名> (Vision Toolkit)` 变体后重新粘贴：图片会保留原生缩略图，并在请求链路上自动转成描述文本。若已关闭变体，请使用 DSH Paste Input 的附件按钮、粘贴或拖放流程，让文件先复制到会话工作区并以路径形式进入消息，再调用 `/vision-tools`。安装或升级任一浏览器插件后，需要重启 Web Profile 并刷新页面。 |
 | Credential 显示缺失 | 在 Web 设置页的 **API 密钥** 中粘贴密钥，确认高级设置中的 **凭据名称** 与 `provider.credential` 一致，保存后重新运行健康检查。Headless 部署可以在 `$DSH_HOME/.credentials.yaml` 中预置同名引用。本地工具不需要它。 |
 | 运行时准备失败 | 查看 Settings 中的运行时错误，检查 Python 3.11+、软件包缓存/网络、磁盘权限和精确 external 固定版本。修正候选后再保存；当前 generation 不受影响。 |
 | 找不到 Chrome | 安装 Chrome、Chromium 或 Edge，或让其中一个可被运行环境发现。只有 `vision_html_screenshot` 不可用。 |

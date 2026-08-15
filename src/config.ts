@@ -54,6 +54,19 @@ export interface VisionToolkitConfig {
   }
   /** Extra directories (besides the workspace) inputs may come from. */
   allowedDirs?: string[]
+  /**
+   * Image-input variants: sibling model-selector entries for every model the
+   * host positively declares text-only. A variant declares image input, so
+   * pasted images keep the native attachment flow (composer thumbnail and
+   * durable session image), and the plugin rewrites image blocks into Vision
+   * Toolkit descriptions only on the wire to the model.
+   */
+  imageInputVariants?: {
+    /** Whether variant routes are registered at all (default true). */
+    enabled?: boolean
+    /** Restrict wrapped upstream routes by provider id; empty wraps every eligible route. */
+    providers?: string[]
+  }
 }
 
 /** Configuration schema with the documented P0 defaults. */
@@ -77,6 +90,10 @@ export const Config: Schema<VisionToolkitConfig> = z.object({
     python: z.string(),
   }),
   allowedDirs: z.array(z.string()).default([]),
+  imageInputVariants: z.object({
+    enabled: z.boolean().default(true),
+    providers: z.array(z.string()).default([]),
+  }),
 })
 
 /** Configuration after static validation, with every default materialized. */
@@ -100,6 +117,10 @@ export interface ResolvedVisionToolkitConfig {
     python?: string
   }
   allowedDirs: string[]
+  imageInputVariants: {
+    enabled: boolean
+    providers: string[]
+  }
 }
 
 const MAX_TIMEOUT_MS = 600000
@@ -187,6 +208,10 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
     throw new VisionToolkitError('config', 'runtime.python must not be empty')
   }
   const allowedDirs = (config.allowedDirs ?? []).map(dir => dir.trim()).filter(dir => dir.length > 0)
+  const imageInputVariants = config.imageInputVariants ?? {}
+  const variantProviders = (imageInputVariants.providers ?? [])
+    .map(provider => provider.trim())
+    .filter(provider => provider.length > 0)
   return {
     provider: { baseUrl, credential, model, protocol, anthropicThinking, userAgent },
     language,
@@ -200,5 +225,9 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
       ...(python !== undefined ? { python } : {}),
     },
     allowedDirs,
+    imageInputVariants: {
+      enabled: imageInputVariants.enabled ?? true,
+      providers: variantProviders,
+    },
   }
 }

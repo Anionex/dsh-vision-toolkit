@@ -146,6 +146,14 @@ Runtime readiness is profile-wide, but the ten visual execution schemas are Agen
 
 Health checks, connection testing, and plugin/upstream version inspection are administrative Web Settings operations. `vision_toolkit_health` and `vision_toolkit_version` are not model tools and never enter an Agent's schema, including after visual-tool activation.
 
+## Image-input variants for text-only models
+
+Text-only model routes get sibling model-selector entries named `<model> (Vision Toolkit)` under a matching provider group. A variant declares image input, so pasted images keep the native attachment flow — composer thumbnail, durable session image, and history rendering — and the plugin rewrites every image block into a Vision Toolkit description only on the wire to the model, before the request reaches the upstream route. The session log is untouched; replay and the UI keep the real image.
+
+A variant is registered automatically for every model the host positively declares text-only (for example the DeepSeek chat family). Select the variant in the model selector, then paste normally. The plugin's paste-to-path interception asks the host before taking a paste over and only intercepts when the current model is confirmed text-only, so variant models and any image-capable model keep the native flow.
+
+Description conversion needs the configured vision provider and its credential; when the runtime is not ready or a read fails, the wire block degrades to an explanatory note instead of failing the turn. Disable variants with `imageInputVariants.enabled: false`, or restrict the wrapped routes with `imageInputVariants.providers`.
+
 ## Requirements
 
 - DeepSeek Harness with a Web or Headless profile and `pnpm` available to `dsh plugin`.
@@ -234,6 +242,9 @@ The bundle defaults to the managed runtime. A profile patch can override the pro
     runtime:
       mode: managed
     allowedDirs: []
+    imageInputVariants:
+      enabled: true
+      providers: []
 ```
 
 ### Configuration fields
@@ -255,6 +266,8 @@ The bundle defaults to the managed runtime. A profile patch can override the pro
 | `runtime.agentVisionToolkitPath` | unset | Required in `external` mode; exported exact snapshot or clean pinned Git checkout |
 | `runtime.python` | unset | Optional Python 3.11+ bootstrap/interpreter override |
 | `allowedDirs` | `[]` | Additional realpath-resolved input roots; the session workspace is always allowed |
+| `imageInputVariants.enabled` | `true` | Register image-input variant entries for text-only model routes in the model selector |
+| `imageInputVariants.providers` | `[]` | Restrict wrapped upstream routes by provider id; empty wraps every eligible route |
 
 ### Credentials
 
@@ -342,7 +355,7 @@ The committed evidence records an initial `6.04%` difference across six non-zero
 
 | Symptom | Resolution |
 |---|---|
-| `Model "..." does not support image input. (attachment-error)` | The image used DSH's native model-attachment channel, so a text-only model rejected the turn before the Skill or Vision Toolkit could run. Use DSH Paste Input's attachment button, paste, or drop flow so the file is copied into the session workspace and represented by a path, then invoke `/vision-tools`. Restart the Web profile and reload the page after installing or upgrading either browser plugin. |
+| `Model "..." does not support image input. (attachment-error)` | The image used DSH's native model-attachment channel, so a text-only model rejected the turn before the Skill or Vision Toolkit could run. Select the `<model> (Vision Toolkit)` variant in the model selector and paste again: the image then keeps its native thumbnail and is described on the wire. If variants are disabled, use DSH Paste Input's attachment button, paste, or drop flow so the file is copied into the session workspace and represented by a path, then invoke `/vision-tools`. Restart the Web profile and reload the page after installing or upgrading either browser plugin. |
 | Credential reported missing | Paste the key into Web Settings **API key**, keep the advanced **Credential name** aligned with `provider.credential`, save, then rerun health. Headless deployments can provision the same reference in `$DSH_HOME/.credentials.yaml`. Local-only tools do not need it. |
 | Runtime preparation fails | Read the Settings runtime error, verify Python 3.11+, package-cache/network access, disk permissions, and the exact external pin. Save only after correcting the candidate; the active generation remains intact. |
 | Chrome is not found | Install Chrome, Chromium, or Edge or configure an environment where one is discoverable. Only `vision_html_screenshot` is unavailable. |

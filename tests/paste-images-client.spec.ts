@@ -7,9 +7,10 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import {
   installPasteImages,
   PASTE_IMAGES_ROUTE as CLIENT_PASTE_IMAGES_ROUTE,
+  PASTE_POLICY_ROUTE,
   PasteImageController,
 } from '../src/client/paste-images.tsx'
-import { PASTE_IMAGES_ROUTE as SERVER_PASTE_IMAGES_ROUTE } from '../src/paste-images.ts'
+import { PASTE_IMAGES_ROUTE as SERVER_PASTE_IMAGES_ROUTE, PASTE_POLICY_ROUTE as SERVER_PASTE_POLICY_ROUTE } from '../src/paste-images.ts'
 
 interface Occurrence {
   occurrenceId: number
@@ -163,6 +164,44 @@ function composer(): HTMLTextAreaElement {
   return textarea
 }
 
+function policyResponse(takeOver: boolean): Response {
+  return new Response(JSON.stringify({ ok: true, value: { takeOver } }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+/**
+ * Wrap an upload fetch mock so host verdict re-asks short-circuit before any
+ * upload assertion (every paste refreshes the verdict).
+ */
+function uploadMock(handle: (url: string, init: RequestInit) => Promise<Response>): ReturnType<typeof vi.fn> {
+  return vi.fn(async (url: string, init?: RequestInit) => {
+    if (String(url).startsWith('/_dsh/vision-toolkit/paste-policy')) return policyResponse(true)
+    return handle(url, init ?? ({} as RequestInit))
+  })
+}
+
+/** Upload-only calls of a fetch mock, excluding verdict re-asks. */
+function uploadsOf(mock: ReturnType<typeof vi.fn>): Array<[string, RequestInit]> {
+  return mock.mock.calls.filter(([url]) => !String(url).includes('paste-policy')) as Array<[string, RequestInit]>
+}
+
+/**
+ * Seed a confirmed host verdict, the way a focus into the composer does.
+ * Runs the policy fetch under its own stub, then restores the global fetch so
+ * the test can stub the upload route next.
+ */
+async function confirmTakeover(bench: ReturnType<typeof fakeClient>): Promise<void> {
+  const policy = vi.fn(async () => policyResponse(true))
+  vi.stubGlobal('fetch', policy)
+  document.dispatchEvent(new Event('focusin'))
+  await vi.waitFor(() => { expect(policy).toHaveBeenCalledTimes(1) })
+  // Let the response microtasks settle into the verdict cache.
+  await new Promise(resolve => setTimeout(resolve, 0))
+  vi.unstubAllGlobals()
+}
+
 afterEach(() => {
   document.body.replaceChildren()
   vi.unstubAllGlobals()
@@ -170,8 +209,9 @@ afterEach(() => {
 })
 
 describe('clipboard image client', () => {
-  it('uses the exact Web route registered by the server', () => {
+  it('uses the exact Web routes registered by the server', () => {
     expect(CLIENT_PASTE_IMAGES_ROUTE).toBe(SERVER_PASTE_IMAGES_ROUTE)
+    expect(PASTE_POLICY_ROUTE).toBe(SERVER_PASTE_POLICY_ROUTE)
   })
 
   it('registers the reference codec through the legacy inputTriggers service', () => {
@@ -261,14 +301,17 @@ describe('clipboard image client', () => {
 
   it('preserves pasted text, inserts every image as a text reference, and blocks the native ImageBlock path', async () => {
     const bench = fakeClient('prefix ')
+    await confirmTakeover(bench)
     const textarea = composer()
     textarea.value = 'prefix '
     textarea.setSelectionRange(7, 7)
     const nativePaste = vi.fn()
     textarea.addEventListener('paste', nativePaste)
-    const request = vi.fn(async (url: string, init: RequestInit) => {
+    let uploads = 0
+    const request = uploadMock(async (_url, init) => {
       expect(init.body).toBeInstanceOf(File)
-      const index = request.mock.calls.length - 1
+      const index = uploads
+      uploads += 1
       return new Response(JSON.stringify({
         ok: true,
         value: { absolutePath: index === 0
@@ -296,8 +339,8 @@ describe('clipboard image client', () => {
     if (codec === undefined) throw new Error('paste source was not registered')
     const refs = bench.input.state.getSnapshot().occurrences.map(row => row.ref)
     const serialized = await Promise.all(refs.map(ref => codec.serialize(ref, new AbortController().signal)))
-    expect(request).toHaveBeenCalledTimes(2)
-    expect(request.mock.calls.every(([url]) => String(url).startsWith('/_dsh/vision-toolkit/paste-images?'))).toBe(true)
+    expect(uploads).toBe(2)
+    expect(uploadsOf(request).every(([url]) => String(url).startsWith('/_dsh/vision-toolkit/paste-images?'))).toBe(true)
     expect(serialized).toEqual([
       '[Pasted image available at absolute path: "/workspace/.dsh-vision-toolkit/tmp/pasted-images/a/image-01.png"]',
       '[Pasted image available at absolute path: "/workspace/.dsh-vision-toolkit/tmp/pasted-images/a/image-02.webp"]',
@@ -321,8 +364,9 @@ describe('clipboard image client', () => {
     bench.dispose()
   })
 
-  it('preserves same-paste text when image admission fails', () => {
+  it('preserves same-paste text when image admission fails', async () => {
     const bench = fakeClient('before ')
+    await confirmTakeover(bench)
     const textarea = composer()
     textarea.value = 'before '
     textarea.setSelectionRange(7, 7)
@@ -338,8 +382,9 @@ describe('clipboard image client', () => {
     bench.dispose()
   })
 
-  it('removes references through insertText so later occurrence offsets stay current', () => {
+  it('removes references through insertText so later occurrence offsets stay current', async () => {
     const bench = fakeClient('')
+    await confirmTakeover(bench)
     const textarea = composer()
     textarea.dispatchEvent(clipboardEvent('', [
       file('one.png', 'image/png', [1]),
@@ -384,8 +429,9 @@ describe('clipboard image client', () => {
     bench.dispose()
   })
 
-  it('retains a pasted image record when the occurrence-aware removal is rejected', () => {
+  it('retains a pasted image record when the occurrence-aware removal is rejected', async () => {
     const bench = fakeClient('')
+    await confirmTakeover(bench)
     const textarea = composer()
     textarea.dispatchEvent(clipboardEvent('', [file('one.png', 'image/png', [1])]))
     const dock = bench.registrations.find(row => row.options.id === 'vision-toolkit-pasted-images')
@@ -407,9 +453,10 @@ describe('clipboard image client', () => {
 
   it('reuses successful workspace paths and retries only records still missing a path', async () => {
     const bench = fakeClient('')
+    await confirmTakeover(bench)
     const textarea = composer()
     let secondAttempts = 0
-    const request = vi.fn(async (url: string) => {
+    const request = uploadMock(async (url) => {
       const name = new URL(String(url), 'http://localhost').searchParams.get('name')
       if (name === 'one.png') {
         return new Response(JSON.stringify({
@@ -442,22 +489,23 @@ describe('clipboard image client', () => {
     if (codec === undefined) throw new Error('paste source was not registered')
 
     await expect(codec.serialize(first.ref, new AbortController().signal)).rejects.toThrow('second copy failed')
-    expect(request).toHaveBeenCalledTimes(2)
+    expect(uploadsOf(request)).toHaveLength(2)
 
     const secondText = await codec.serialize(second.ref, new AbortController().signal)
-    expect(request).toHaveBeenCalledTimes(3)
-    const names = request.mock.calls.map(([url]) => new URL(String(url), 'http://localhost').searchParams.get('name'))
+    expect(uploadsOf(request)).toHaveLength(3)
+    const names = uploadsOf(request).map(([url]) => new URL(String(url), 'http://localhost').searchParams.get('name'))
     expect(names).toEqual(['one.png', 'two.png', 'two.png'])
     expect(secondText).toBe('[Pasted image available at absolute path: "/workspace/.dsh-vision-toolkit/tmp/pasted-images/a/retried-two.png"]')
 
     const firstText = await codec.serialize(first.ref, new AbortController().signal)
-    expect(request).toHaveBeenCalledTimes(3)
+    expect(uploadsOf(request)).toHaveLength(3)
     expect(firstText).toBe('[Pasted image available at absolute path: "/workspace/.dsh-vision-toolkit/tmp/pasted-images/a/stable-one.png"]')
     bench.dispose()
   })
 
   it('keeps failed serialization out of the model send and exposes retry/removal feedback', async () => {
     const bench = fakeClient('')
+    await confirmTakeover(bench)
     const textarea = composer()
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
       ok: false,
@@ -486,6 +534,65 @@ describe('clipboard image client', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove broken.png' }))
     expect(bench.input.state.getSnapshot().occurrences).toEqual([])
     expect(controller.recordsFor([occurrence])).toEqual([])
+    bench.dispose()
+  })
+
+  it('prefetches the paste verdict when the composer gains focus', async () => {
+    const bench = fakeClient('')
+    const policy = vi.fn(async () => policyResponse(true))
+    vi.stubGlobal('fetch', policy)
+    document.dispatchEvent(new Event('focusin'))
+    await vi.waitFor(() => { expect(policy).toHaveBeenCalledTimes(1) })
+    expect(String(policy.mock.calls[0]?.[0])).toContain('paste-policy')
+    expect(String(policy.mock.calls[0]?.[0])).toContain(encodeURIComponent('session-1'))
+    bench.dispose()
+  })
+
+  it('leaves pastes native while the host verdict is unconfirmed', async () => {
+    const bench = fakeClient('')
+    // A pending policy response: the safe default is the native flow, so the
+    // first paste on a text-only model keeps its ordinary admission error.
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => {})))
+    const textarea = composer()
+    const nativePaste = vi.fn()
+    textarea.addEventListener('paste', nativePaste)
+    textarea.dispatchEvent(clipboardEvent('', [file('one.png', 'image/png', [1])]))
+
+    expect(textarea.value).toBe('')
+    expect(nativePaste).toHaveBeenCalledTimes(1)
+    bench.dispose()
+  })
+
+  it('leaves pastes native when the host confirms an image-capable model', async () => {
+    const bench = fakeClient('')
+    vi.stubGlobal('fetch', vi.fn(async () => policyResponse(false)))
+    document.dispatchEvent(new Event('focusin'))
+    await new Promise(resolve => setTimeout(resolve, 0))
+    const textarea = composer()
+    const nativePaste = vi.fn()
+    textarea.addEventListener('paste', nativePaste)
+    textarea.dispatchEvent(clipboardEvent('', [file('one.png', 'image/png', [1])]))
+
+    expect(textarea.value).toBe('')
+    expect(nativePaste).toHaveBeenCalledTimes(1)
+    expect(bench.input.state.getSnapshot().occurrences).toEqual([])
+    bench.dispose()
+  })
+
+  it('stands down entirely after the paste-policy route disappears', async () => {
+    const bench = fakeClient('')
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('not found', { status: 404 })))
+    document.dispatchEvent(new Event('focusin'))
+    await new Promise(resolve => setTimeout(resolve, 0))
+    const policySpy = vi.fn(async () => policyResponse(true))
+    vi.stubGlobal('fetch', policySpy)
+    const textarea = composer()
+    const nativePaste = vi.fn()
+    textarea.addEventListener('paste', nativePaste)
+    textarea.dispatchEvent(clipboardEvent('', [file('one.png', 'image/png', [1])]))
+
+    expect(policySpy).not.toHaveBeenCalled()
+    expect(nativePaste).toHaveBeenCalledTimes(1)
     bench.dispose()
   })
 })

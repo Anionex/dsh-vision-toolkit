@@ -8,9 +8,12 @@ import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 
 const SOURCE = 'vision-toolkit-pasted-image'
 export const PASTE_IMAGES_ROUTE = '/_dsh/vision-toolkit/paste-images'
+export const PASTE_POLICY_ROUTE = '/_dsh/vision-toolkit/paste-policy'
 const MAX_IMAGES = 20
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024
 const MAX_BATCH_BYTES = 80 * 1024 * 1024
+/** A confirmed paste verdict older than this is unknown again, even while a refresh is in flight. */
+const VERDICT_MAX_AGE_MS = 15000
 
 interface PasteRecord {
   ref: string
@@ -132,6 +135,8 @@ export class PasteImageController {
   private readonly records = new Map<string, PasteRecord>()
   private readonly listeners = new Set<() => void>()
   private revision = 0
+  private readonly verdicts = new Map<string, { takeOver: boolean; at: number; pending: boolean }>()
+  private routeAvailable = true
 
   constructor(private readonly ctx: ClientContext) {}
 
@@ -234,18 +239,83 @@ export class PasteImageController {
     }
   }
 
+  /**
+   * Whether to take a paste over for one Session, from the host's cached
+   * verdict. Unconfirmed or stale answers false, so the native attachment
+   * flow is the default; the host refreshes in the background.
+   * @param sessionId - the live Session the paste belongs to.
+   * @returns true only for a fresh confirmed text-only verdict.
+   */
+  private verdictFor(sessionId: string): boolean {
+    const entry = this.verdicts.get(sessionId)
+    if (entry === undefined || entry.at === 0 || !entry.takeOver) return false
+    return Date.now() - entry.at <= VERDICT_MAX_AGE_MS
+  }
+
+  /**
+   * Ask the host whether the current model is text-only, and cache the answer
+   * per Session. A 404 means the host route is off, so the client stands down
+   * entirely instead of swallowing pastes into a dead endpoint.
+   * @param sessionId - the live Session to ask about.
+   */
+  refreshVerdict(sessionId: string): void {
+    if (!this.routeAvailable) return
+    const cached = this.verdicts.get(sessionId)
+    // Dedupe only on an in-flight request, never on freshness: the host's
+    // model route can change under an unchanged Session id.
+    if (cached?.pending) return
+    const entry = { pending: true, takeOver: cached ? cached.takeOver : false, at: cached ? cached.at : 0 }
+    this.verdicts.set(sessionId, entry)
+    let request: Promise<Response>
+    try {
+      request = fetch(`${PASTE_POLICY_ROUTE}?sessionId=${encodeURIComponent(sessionId)}`)
+    } catch {
+      // No fetch surface (test runtime, pre-fetch bootstrap): leave the
+      // verdict unconfirmed rather than letting the paste listener die.
+      entry.pending = false
+      return
+    }
+    request
+      .then((response) => {
+        if (response.status === 404) {
+          this.routeAvailable = false
+          this.verdicts.clear()
+          return null
+        }
+        if (!response.ok) throw new Error(`paste policy ${response.status}`)
+        return response.json() as Promise<{ ok: true; value: { takeOver: boolean } }>
+      })
+      .then((body) => {
+        entry.pending = false
+        if (body !== null) {
+          entry.takeOver = body.value.takeOver === true
+          entry.at = Date.now()
+        }
+      })
+      .catch(() => {
+        entry.pending = false
+      })
+  }
+
   handlePaste(event: ClipboardEvent): boolean {
     const files = imageFiles(event.clipboardData)
     if (files.length === 0) return false
     const target = event.target
     if (!(target instanceof HTMLTextAreaElement) || target.closest('[data-composer-card]') === null) return false
 
+    const sessionId = this.ctx.sessions.list.getSnapshot().current
+    if (sessionId === undefined) return false
+    this.refreshVerdict(sessionId)
+    // Only a host-confirmed text-only model gets the path flow; image-capable
+    // models (including the image-input variants) keep the native attachment
+    // flow, which is what preserves the composer thumbnail and the durable
+    // session image.
+    if (!this.verdictFor(sessionId)) return false
+
     event.preventDefault()
     event.stopPropagation()
     event.stopImmediatePropagation()
 
-    const sessionId = this.ctx.sessions.list.getSnapshot().current
-    if (sessionId === undefined) return true
     const input = this.inputFor(sessionId)
     const snapshot = input.state.getSnapshot()
     if (snapshot.phase !== 'plain') return true
@@ -411,8 +481,17 @@ export function installPasteImages(ctx: ClientContext): void {
   })
   ctx.effect(() => {
     const listener = (event: ClipboardEvent): void => { controller.handlePaste(event) }
+    // A focus-time prefetch has the verdict ready before the first paste can land.
+    const onFocusIn = (): void => {
+      const sessionId = ctx.sessions.list.getSnapshot().current
+      if (sessionId !== undefined) controller.refreshVerdict(String(sessionId))
+    }
     document.addEventListener('paste', listener, true)
-    return () => { document.removeEventListener('paste', listener, true) }
+    document.addEventListener('focusin', onFocusIn, true)
+    return () => {
+      document.removeEventListener('paste', listener, true)
+      document.removeEventListener('focusin', onFocusIn, true)
+    }
   }, 'dsh-vision-toolkit: clipboard image capture')
   ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({
     name: 'conversation.input.dock',

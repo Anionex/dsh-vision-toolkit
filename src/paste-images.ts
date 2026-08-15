@@ -11,6 +11,12 @@ import { sameOriginPost } from './web-request.ts'
 /** Exact route used by the browser paste integration. */
 export const PASTE_IMAGES_ROUTE = '/_dsh/vision-toolkit/paste-images'
 
+/**
+ * Exact route the browser paste integration asks before taking a paste over:
+ * `GET ?sessionId=` answers `{ takeOver }` from the live Session's model route.
+ */
+export const PASTE_POLICY_ROUTE = '/_dsh/vision-toolkit/paste-policy'
+
 const MAX_NAME_BYTES = 180
 
 interface PasteImageResponse {

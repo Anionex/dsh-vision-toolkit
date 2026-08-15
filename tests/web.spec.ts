@@ -7,7 +7,7 @@ import { ArtifactAccessController } from '../src/artifact-access.ts'
 import { Config, VISION_TOOLKIT_SETTINGS_NAMESPACE, resolveConfig } from '../src/config.ts'
 import type { VisionToolkitRuntime, VisionToolkitHealthResult } from '../src/runtime.ts'
 import type { PreparedRuntimeGeneration, RuntimeManagerStatus } from '../src/runtime-manager.ts'
-import { VisionToolkitWebBackend, type WebRuntimeManager } from '../src/web.ts'
+import { VisionToolkitWebBackend, createPastePolicyHandler, type WebRuntimeManager } from '../src/web.ts'
 
 const contexts: Context[] = []
 const servers: Server[] = []
@@ -233,5 +233,72 @@ describe('VisionToolkitWebBackend', () => {
       method: 'POST', headers: { 'Content-Type': 'text/plain', Origin: base }, body: '{}',
     })
     expect(plain.status).toBe(400)
+  })
+})
+
+describe('paste policy route', () => {
+  it('answers the takeover verdict for a live Session and refuses other methods', async () => {
+    const takeover = vi.fn(async (sessionId: string) => sessionId === 's1')
+    const server = createServer((req, res) => { createPastePolicyHandler(takeover)(req, res) })
+    servers.push(server)
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(0, '127.0.0.1', () => { resolve() })
+    })
+    const address = server.address()
+    if (address === null || typeof address === 'string') throw new Error('server did not bind')
+    const base = `http://127.0.0.1:${address.port}`
+    const route = `${base}/_dsh/vision-toolkit/paste-policy`
+
+    const taken = await fetch(`${route}?sessionId=s1`, { headers: { Origin: base } })
+    expect(taken.status).toBe(200)
+    expect(await taken.json()).toEqual({ ok: true, value: { takeOver: true } })
+    expect(takeover).toHaveBeenCalledWith('s1')
+
+    const native = await fetch(`${route}?sessionId=s2`, { headers: { Origin: base } })
+    expect(await native.json()).toEqual({ ok: true, value: { takeOver: false } })
+
+    const post = await fetch(route, { method: 'POST', headers: { Origin: base } })
+    expect(post.status).toBe(405)
+  })
+
+  it('refuses cross-origin and malformed policy requests', async () => {
+    const takeover = vi.fn(async () => true)
+    const server = createServer((req, res) => { createPastePolicyHandler(takeover)(req, res) })
+    servers.push(server)
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(0, '127.0.0.1', () => { resolve() })
+    })
+    const address = server.address()
+    if (address === null || typeof address === 'string') throw new Error('server did not bind')
+    const base = `http://127.0.0.1:${address.port}`
+    const route = `${base}/_dsh/vision-toolkit/paste-policy`
+
+    const crossSite = await fetch(`${route}?sessionId=s1`, { headers: { Origin: 'https://attacker.example' } })
+    expect(crossSite.status).toBe(403)
+
+    const missing = await fetch(route, { headers: { Origin: base } })
+    expect(missing.status).toBe(400)
+
+    expect(takeover).not.toHaveBeenCalled()
+  })
+
+  it('maps a verdict resolver failure to 500', async () => {
+    const server = createServer((req, res) => {
+      createPastePolicyHandler(async () => { throw new Error('llm exploded') })(req, res)
+    })
+    servers.push(server)
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(0, '127.0.0.1', () => { resolve() })
+    })
+    const address = server.address()
+    if (address === null || typeof address === 'string') throw new Error('server did not bind')
+    const base = `http://127.0.0.1:${address.port}`
+
+    const response = await fetch(`${base}/_dsh/vision-toolkit/paste-policy?sessionId=s1`, { headers: { Origin: base } })
+    expect(response.status).toBe(500)
+    expect(await response.json()).toMatchObject({ ok: false, error: { code: 'policy-failed' } })
   })
 })
