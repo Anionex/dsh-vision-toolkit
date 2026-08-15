@@ -12,7 +12,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
-import LlmService, { LlmAdapter } from '@deepseek-ai/dsh-llm'
+import LlmService, { LlmAdapter, contentHasImage } from '@deepseek-ai/dsh-llm'
 import type {
   ContentBlock,
   GenerateOptions,
@@ -69,10 +69,7 @@ export function shouldWrapModel(info: Pick<LlmModelInfo, 'inputModalities'>): bo
 }
 
 /** Whether a content block list carries an image at any depth (tool-result nesting included). */
-export function contentHasImage(blocks: readonly ContentBlock[]): boolean {
-  return blocks.some(block => block.type === 'image'
-    || (block.type === 'tool-result' && contentHasImage(block.content)))
-}
+export { contentHasImage } from '@deepseek-ai/dsh-llm'
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
@@ -123,6 +120,11 @@ export class EvidenceCache {
       this.entries.delete(oldest)
     }
     return pending
+  }
+
+  /** Drop every cached description (runtime reconfiguration invalidates provider-specific reads). */
+  clear(): void {
+    this.entries.clear()
   }
 }
 
@@ -265,6 +267,8 @@ export async function convertImagesToEvidence(
  * retry policy, and replay handling still apply).
  */
 export class ImageInputVariantAdapter extends LlmAdapter {
+  private lastRuntime: VisionToolkitRuntime | undefined
+
   constructor(
     private readonly ctx: Context,
     private readonly llm: LlmService,
@@ -306,10 +310,23 @@ export class ImageInputVariantAdapter extends LlmAdapter {
       name: `${info.name}${VARIANT_SUFFIX}`,
       inputModalities: ['text', 'image'],
       ...(info.description === undefined ? {} : { description: info.description }),
+      // Capability and call-default metadata rides through unchanged: the
+      // variant is a wire-only facade, so context capacity, output caps, and
+      // reasoning efforts must behave exactly like the upstream route.
+      ...(info.context === undefined ? {} : { context: info.context }),
+      ...(info.defaultMaxTokens === undefined ? {} : { defaultMaxTokens: info.defaultMaxTokens }),
+      ...(info.reasoning === undefined ? {} : { reasoning: info.reasoning }),
     }
   }
 
   override async *stream(options: GenerateOptions): AsyncGenerator<StreamChunk> {
+    // A reconfigured runtime is a NEW instance; descriptions read through the
+    // previous provider must not be replayed for the new one.
+    const current = this.runtime()
+    if (current !== this.lastRuntime) {
+      this.cache.clear()
+      this.lastRuntime = current
+    }
     const messages = await convertImagesToEvidence(
       this.ctx,
       this.runtime,
@@ -325,14 +342,36 @@ export class ImageInputVariantAdapter extends LlmAdapter {
 
 /**
  * Whether the plugin should take a paste over for one live Session: true only
- * when the session's current model is positively declared text-only. Unknown
- * routes answer false — the native attachment flow is the safe default, and a
+ * when the current model is positively declared text-only. The model-selector
+ * label is the authoritative source when supplied — the Session's persisted
+ * route header only updates on a request, so a model switch would otherwise be
+ * invisible until the next turn — with a fallback to that header. Unknown
+ * routes answer false: the native attachment flow is the safe default, and a
  * text-only model merely keeps its ordinary image-admission error.
  * @param ctx - plugin context with `sessions` and `llm`.
  * @param sessionId - the live Session id the paste belongs to.
+ * @param modelLabel - the model-selector label the client currently shows, if any.
  * @returns true when pastes should become workspace paths instead of attachments.
  */
-export async function sessionPasteTakeover(ctx: Context, sessionId: string): Promise<boolean> {
+export async function sessionPasteTakeover(
+  ctx: Context,
+  sessionId: string,
+  modelLabel?: string,
+): Promise<boolean> {
+  if (modelLabel !== undefined && modelLabel.trim() !== '') {
+    const byLabel = await labelTakeoverVerdict(ctx, modelLabel)
+    if (byLabel !== undefined) return byLabel
+  }
+  return sessionHeaderTakeover(ctx, sessionId)
+}
+
+/**
+ * Resolve the takeover verdict from the Session's last requested route header.
+ * @param ctx - plugin context with `sessions` and `llm`.
+ * @param sessionId - the live Session id.
+ * @returns true when the persisted route is positively text-only.
+ */
+export async function sessionHeaderTakeover(ctx: Context, sessionId: string): Promise<boolean> {
   const session = ctx.sessions.get(sessionId as never)
   if (session === undefined) return false
   const routed = session.requestHeader()?.config
@@ -346,6 +385,87 @@ export async function sessionPasteTakeover(ctx: Context, sessionId: string): Pro
     return false
   }
   return shouldWrapModel(info)
+}
+
+/**
+ * Resolve the takeover verdict from a model-selector label alone. Every model
+ * whose name or id appears in the label votes: any image-capable (or unknown-
+ * capability) match vetoes the takeover, and at least one positively text-only
+ * match confirms it. The label carries no provider id, so no picking is
+ * attempted — the answer is decisive only when every match agrees.
+ * @param ctx - plugin context with the `llm` service.
+ * @param label - the selector label the browser shows.
+ * @returns true (take over), false (native), or undefined when nothing matched.
+ */
+export async function labelTakeoverVerdict(ctx: Context, label: string): Promise<boolean | undefined> {
+  const llm = ctx.get('llm')
+  if (llm === undefined) return undefined
+  const lowered = label.toLowerCase()
+  let matchedTextOnly = false
+  for (const provider of llm.listProviders()) {
+    let models: readonly LlmModelInfo[]
+    try {
+      models = await llm.listModels(provider.id)
+    } catch {
+      continue
+    }
+    for (const model of models) {
+      for (const candidate of [model.name, model.id]) {
+        if (typeof candidate !== 'string' || candidate.length === 0) continue
+        if (!lowered.includes(candidate.toLowerCase())) continue
+        if (!shouldWrapModel(model)) {
+          // An image-capable or unconfirmed model in the label keeps its
+          // native paste; the variant routes declare image input and are
+          // covered by this veto.
+          return false
+        }
+        // Positive confirmation has a floor: one- and two-character names
+        // match label prose far too easily to identify the selected model.
+        if (candidate.length >= 3) matchedTextOnly = true
+      }
+    }
+  }
+  return matchedTextOnly ? true : undefined
+}
+
+/** Label-verdict cache bound, so a long-lived Web profile cannot hoard catalog walks. */
+const LABEL_VERDICT_TTL_MS = 15_000
+const LABEL_VERDICT_CAP = 32
+
+/**
+ * Paste-takeover resolver with a short label-keyed cache. The label is the
+ * live fact (the client re-reads it per paste), and the host catalog only
+ * changes on topology events, so a brief cache is safe; every
+ * `llm/adapters-updated` notification empties it.
+ * @param ctx - plugin context with the `llm` service.
+ * @returns the cached verdict resolver for the Web paste-policy route.
+ */
+export function createPasteTakeoverResolver(
+  ctx: Context,
+): (sessionId: string, modelLabel?: string) => Promise<boolean> {
+  const verdicts = new Map<string, { takeOver: boolean; at: number }>()
+  if (typeof ctx.on === 'function') {
+    ctx.on('llm/adapters-updated', () => { verdicts.clear() })
+  }
+  return async (sessionId, modelLabel) => {
+    if (modelLabel !== undefined && modelLabel.trim() !== '') {
+      const cached = verdicts.get(modelLabel)
+      if (cached !== undefined && Date.now() - cached.at <= LABEL_VERDICT_TTL_MS) {
+        return cached.takeOver
+      }
+      const verdict = await labelTakeoverVerdict(ctx, modelLabel)
+      if (verdict !== undefined) {
+        verdicts.set(modelLabel, { takeOver: verdict, at: Date.now() })
+        while (verdicts.size > LABEL_VERDICT_CAP) {
+          const oldest = verdicts.keys().next().value
+          if (oldest === undefined) break
+          verdicts.delete(oldest)
+        }
+        return verdict
+      }
+    }
+    return sessionHeaderTakeover(ctx, sessionId)
+  }
 }
 
 /**
@@ -397,14 +517,23 @@ export function installImageInputVariants(
       for (const provider of providers) {
         const upstream = provider.id
         if (restrict.size > 0 && !restrict.has(upstream)) continue
-        if (registrations.has(upstream)) continue
         let models: readonly LlmModelInfo[]
         try {
           models = await llm.listModels(upstream)
         } catch {
           continue
         }
-        if (!models.some(shouldWrapModel)) continue
+        const eligible = models.some(shouldWrapModel)
+        const registered = registrations.has(upstream)
+        if (!eligible && registered) {
+          // The route lost its eligible models: release the stale variant.
+          const dispose = registrations.get(upstream)
+          dispose?.()
+          registrations.delete(upstream)
+          continue
+        }
+        if (!eligible || registered) continue
+        if (disposed) return
         try {
           const dispose = llm.registerAdapter(
             [variantProviderId(upstream)],
@@ -428,7 +557,10 @@ export function installImageInputVariants(
       }
       const live = new Set(providers.map(provider => provider.id))
       for (const [upstream, dispose] of [...registrations]) {
-        if (!live.has(upstream)) {
+        // A wrapper is released when its upstream route vanished OR the
+        // current configuration no longer allows that route (restrict
+        // narrowing must not leave stale variants behind).
+        if (!live.has(upstream) || (restrict.size > 0 && !restrict.has(upstream))) {
           dispose()
           registrations.delete(upstream)
         }

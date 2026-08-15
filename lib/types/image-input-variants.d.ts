@@ -27,7 +27,7 @@ export declare function variantProviderId(upstream: string): string;
  */
 export declare function shouldWrapModel(info: Pick<LlmModelInfo, 'inputModalities'>): boolean;
 /** Whether a content block list carries an image at any depth (tool-result nesting included). */
-export declare function contentHasImage(blocks: readonly ContentBlock[]): boolean;
+export { contentHasImage } from '@deepseek-ai/dsh-llm';
 /** Bounded promise cache for one attachment's description; failed reads are not retained. */
 export declare class EvidenceCache {
     private readonly limit;
@@ -45,6 +45,8 @@ export declare class EvidenceCache {
         ok: boolean;
         block: ContentBlock;
     }>): Promise<ContentBlock>;
+    /** Drop every cached description (runtime reconfiguration invalidates provider-specific reads). */
+    clear(): void;
 }
 /**
  * Wait on a shared promise without inheriting its lifetime: the caller's
@@ -80,6 +82,7 @@ export declare class ImageInputVariantAdapter extends LlmAdapter {
     private readonly upstreamName;
     private readonly runtime;
     private readonly cache;
+    private lastRuntime;
     constructor(ctx: Context, llm: LlmService, upstream: string, upstreamName: string, runtime: () => VisionToolkitRuntime | undefined, cache: EvidenceCache);
     providerInfo(provider: string): LlmProviderInfo;
     listModels(provider: string): Promise<readonly LlmModelInfo[]>;
@@ -88,14 +91,45 @@ export declare class ImageInputVariantAdapter extends LlmAdapter {
 }
 /**
  * Whether the plugin should take a paste over for one live Session: true only
- * when the session's current model is positively declared text-only. Unknown
- * routes answer false — the native attachment flow is the safe default, and a
+ * when the current model is positively declared text-only. The model-selector
+ * label is the authoritative source when supplied — the Session's persisted
+ * route header only updates on a request, so a model switch would otherwise be
+ * invisible until the next turn — with a fallback to that header. Unknown
+ * routes answer false: the native attachment flow is the safe default, and a
  * text-only model merely keeps its ordinary image-admission error.
  * @param ctx - plugin context with `sessions` and `llm`.
  * @param sessionId - the live Session id the paste belongs to.
+ * @param modelLabel - the model-selector label the client currently shows, if any.
  * @returns true when pastes should become workspace paths instead of attachments.
  */
-export declare function sessionPasteTakeover(ctx: Context, sessionId: string): Promise<boolean>;
+export declare function sessionPasteTakeover(ctx: Context, sessionId: string, modelLabel?: string): Promise<boolean>;
+/**
+ * Resolve the takeover verdict from the Session's last requested route header.
+ * @param ctx - plugin context with `sessions` and `llm`.
+ * @param sessionId - the live Session id.
+ * @returns true when the persisted route is positively text-only.
+ */
+export declare function sessionHeaderTakeover(ctx: Context, sessionId: string): Promise<boolean>;
+/**
+ * Resolve the takeover verdict from a model-selector label alone. Every model
+ * whose name or id appears in the label votes: any image-capable (or unknown-
+ * capability) match vetoes the takeover, and at least one positively text-only
+ * match confirms it. The label carries no provider id, so no picking is
+ * attempted — the answer is decisive only when every match agrees.
+ * @param ctx - plugin context with the `llm` service.
+ * @param label - the selector label the browser shows.
+ * @returns true (take over), false (native), or undefined when nothing matched.
+ */
+export declare function labelTakeoverVerdict(ctx: Context, label: string): Promise<boolean | undefined>;
+/**
+ * Paste-takeover resolver with a short label-keyed cache. The label is the
+ * live fact (the client re-reads it per paste), and the host catalog only
+ * changes on topology events, so a brief cache is safe; every
+ * `llm/adapters-updated` notification empties it.
+ * @param ctx - plugin context with the `llm` service.
+ * @returns the cached verdict resolver for the Web paste-policy route.
+ */
+export declare function createPasteTakeoverResolver(ctx: Context): (sessionId: string, modelLabel?: string) => Promise<boolean>;
 /**
  * Register and maintain one variant route per eligible upstream route. Routes
  * that later vanish are released; routes that gain eligible models later are

@@ -108,6 +108,21 @@ function imageFiles(data: DataTransfer | null): File[] {
   return candidates.filter(file => file.type.toLowerCase().startsWith('image/'))
 }
 
+/** The selector label the model picker currently shows, or '' when none is readable. */
+function currentModelLabel(): string {
+  const buttons = document.querySelectorAll('button[aria-label]')
+  for (const button of buttons) {
+    const label = button.getAttribute('aria-label') ?? ''
+    if (/select model|current model|选择模型/iu.test(label)) return label
+  }
+  return ''
+}
+
+/** Verdict cache key: the model label is part of the answer, so a switch invalidates it. */
+function verdictKey(sessionId: string, modelLabel: string): string {
+  return `${sessionId}|${modelLabel}`
+}
+
 function validateImages(files: readonly File[]): void {
   if (files.length > MAX_IMAGES) throw new Error(`Paste at most ${MAX_IMAGES} images at a time`)
   let total = 0
@@ -136,7 +151,6 @@ export class PasteImageController {
   private readonly listeners = new Set<() => void>()
   private revision = 0
   private readonly verdicts = new Map<string, { takeOver: boolean; at: number; pending: boolean }>()
-  private routeAvailable = true
 
   constructor(private readonly ctx: ClientContext) {}
 
@@ -240,35 +254,41 @@ export class PasteImageController {
   }
 
   /**
-   * Whether to take a paste over for one Session, from the host's cached
-   * verdict. Unconfirmed or stale answers false, so the native attachment
-   * flow is the default; the host refreshes in the background.
+   * Whether to take a paste over for one Session and selector label, from the
+   * host's cached verdict. Unconfirmed or stale answers false, so the native
+   * attachment flow is the default; the host refreshes in the background.
    * @param sessionId - the live Session the paste belongs to.
+   * @param modelLabel - the model-selector label currently shown.
    * @returns true only for a fresh confirmed text-only verdict.
    */
-  private verdictFor(sessionId: string): boolean {
-    const entry = this.verdicts.get(sessionId)
+  private verdictFor(sessionId: string, modelLabel: string): boolean {
+    const entry = this.verdicts.get(verdictKey(sessionId, modelLabel))
     if (entry === undefined || entry.at === 0 || !entry.takeOver) return false
     return Date.now() - entry.at <= VERDICT_MAX_AGE_MS
   }
 
   /**
    * Ask the host whether the current model is text-only, and cache the answer
-   * per Session. A 404 means the host route is off, so the client stands down
-   * entirely instead of swallowing pastes into a dead endpoint.
+   * per Session and selector label. A model switch changes the label, which
+   * changes the cache key, so a stale verdict never outlives the model it
+   * described. A 404 simply leaves the verdict unconfirmed; the next focus or
+   * paste retries.
    * @param sessionId - the live Session to ask about.
+   * @param modelLabel - the model-selector label currently shown.
    */
-  refreshVerdict(sessionId: string): void {
-    if (!this.routeAvailable) return
-    const cached = this.verdicts.get(sessionId)
+  refreshVerdict(sessionId: string, modelLabel: string): void {
+    const key = verdictKey(sessionId, modelLabel)
+    const cached = this.verdicts.get(key)
     // Dedupe only on an in-flight request, never on freshness: the host's
     // model route can change under an unchanged Session id.
     if (cached?.pending) return
     const entry = { pending: true, takeOver: cached ? cached.takeOver : false, at: cached ? cached.at : 0 }
-    this.verdicts.set(sessionId, entry)
+    this.verdicts.set(key, entry)
+    const query = new URLSearchParams({ sessionId })
+    if (modelLabel !== '') query.set('model', modelLabel)
     let request: Promise<Response>
     try {
-      request = fetch(`${PASTE_POLICY_ROUTE}?sessionId=${encodeURIComponent(sessionId)}`)
+      request = fetch(`${PASTE_POLICY_ROUTE}?${query.toString()}`)
     } catch {
       // No fetch surface (test runtime, pre-fetch bootstrap): leave the
       // verdict unconfirmed rather than letting the paste listener die.
@@ -278,7 +298,9 @@ export class PasteImageController {
     request
       .then((response) => {
         if (response.status === 404) {
-          this.routeAvailable = false
+          // Route not mounted yet (plugin load race, hot reload): forget every
+          // verdict and retry on the next focus or paste instead of standing
+          // down for the page lifetime.
           this.verdicts.clear()
           return null
         }
@@ -305,12 +327,13 @@ export class PasteImageController {
 
     const sessionId = this.ctx.sessions.list.getSnapshot().current
     if (sessionId === undefined) return false
-    this.refreshVerdict(sessionId)
+    const modelLabel = currentModelLabel()
+    this.refreshVerdict(sessionId, modelLabel)
     // Only a host-confirmed text-only model gets the path flow; image-capable
     // models (including the image-input variants) keep the native attachment
     // flow, which is what preserves the composer thumbnail and the durable
     // session image.
-    if (!this.verdictFor(sessionId)) return false
+    if (!this.verdictFor(sessionId, modelLabel)) return false
 
     event.preventDefault()
     event.stopPropagation()
@@ -484,7 +507,7 @@ export function installPasteImages(ctx: ClientContext): void {
     // A focus-time prefetch has the verdict ready before the first paste can land.
     const onFocusIn = (): void => {
       const sessionId = ctx.sessions.list.getSnapshot().current
-      if (sessionId !== undefined) controller.refreshVerdict(String(sessionId))
+      if (sessionId !== undefined) controller.refreshVerdict(String(sessionId), currentModelLabel())
     }
     document.addEventListener('paste', listener, true)
     document.addEventListener('focusin', onFocusIn, true)

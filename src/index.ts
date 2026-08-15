@@ -21,7 +21,7 @@ import {
   type VisionToolkitConfig,
 } from './config.ts'
 import { VisionToolExposure } from './exposure.ts'
-import { installImageInputVariants, sessionPasteTakeover } from './image-input-variants.ts'
+import { createPasteTakeoverResolver, installImageInputVariants } from './image-input-variants.ts'
 import { VisionToolkitRuntimeManager } from './runtime-manager.ts'
 import { VISION_TOOLS_SKILL } from './skill.ts'
 import { createVisionTools } from './tools.ts'
@@ -112,7 +112,7 @@ export async function apply(ctx: Context, config: VisionToolkitConfig = {}): Pro
     backend,
     artifacts,
     pastedImages,
-    sessionId => sessionPasteTakeover(ctx, sessionId),
+    createPasteTakeoverResolver(ctx),
   )
   disposers.push(variants.dispose)
   disposers.push(settings.watch(async (next) => {

@@ -579,20 +579,51 @@ describe('clipboard image client', () => {
     bench.dispose()
   })
 
-  it('stands down entirely after the paste-policy route disappears', async () => {
+  it('keeps pastes native while the policy route is down, then recovers on the next focus', async () => {
     const bench = fakeClient('')
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('not found', { status: 404 })))
+    const policySpy = vi.fn(async () => new Response('not found', { status: 404 }))
+    vi.stubGlobal('fetch', policySpy)
     document.dispatchEvent(new Event('focusin'))
     await new Promise(resolve => setTimeout(resolve, 0))
-    const policySpy = vi.fn(async () => policyResponse(true))
-    vi.stubGlobal('fetch', policySpy)
     const textarea = composer()
     const nativePaste = vi.fn()
     textarea.addEventListener('paste', nativePaste)
     textarea.dispatchEvent(clipboardEvent('', [file('one.png', 'image/png', [1])]))
 
-    expect(policySpy).not.toHaveBeenCalled()
     expect(nativePaste).toHaveBeenCalledTimes(1)
+    // The focus prefetch and the paste each re-ask while the route is down.
+    expect(policySpy).toHaveBeenCalledTimes(2)
+    // The route comes back: the next focus re-asks instead of standing down
+    // for the page lifetime.
+    policySpy.mockResolvedValueOnce(policyResponse(true))
+    document.dispatchEvent(new Event('focusin'))
+    await vi.waitFor(() => { expect(policySpy).toHaveBeenCalledTimes(2) })
+    bench.dispose()
+  })
+
+  it('treats a model-selector switch as a new verdict key, so a variant paste stays native', async () => {
+    const bench = fakeClient('')
+    const policy = vi.fn(async () => policyResponse(true))
+    vi.stubGlobal('fetch', policy)
+    const selector = document.createElement('button')
+    selector.setAttribute('aria-label', 'Current model: DeepSeek V4 Flash')
+    document.body.appendChild(selector)
+    document.dispatchEvent(new Event('focusin'))
+    await vi.waitFor(() => { expect(policy).toHaveBeenCalledTimes(1) })
+    await new Promise(resolve => setTimeout(resolve, 0))
+    const textarea = composer()
+    const nativePaste = vi.fn()
+    textarea.addEventListener('paste', nativePaste)
+    textarea.dispatchEvent(clipboardEvent('', [file('one.png', 'image/png', [1])]))
+    expect(nativePaste).not.toHaveBeenCalled()
+    // The user switches to the image-input variant: the label changes, the
+    // cached takeover verdict no longer applies, and the paste goes native.
+    selector.setAttribute('aria-label', 'Current model: DeepSeek V4 Flash (Vision Toolkit)')
+    const nativeAgain = vi.fn()
+    textarea.addEventListener('paste', nativeAgain)
+    textarea.dispatchEvent(clipboardEvent('', [file('two.png', 'image/png', [2])]))
+    expect(nativeAgain).toHaveBeenCalledTimes(1)
+    selector.remove()
     bench.dispose()
   })
 })

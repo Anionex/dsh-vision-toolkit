@@ -253,13 +253,33 @@ describe('paste policy route', () => {
     const taken = await fetch(`${route}?sessionId=s1`, { headers: { Origin: base } })
     expect(taken.status).toBe(200)
     expect(await taken.json()).toEqual({ ok: true, value: { takeOver: true } })
-    expect(takeover).toHaveBeenCalledWith('s1')
+    expect(takeover).toHaveBeenCalledWith('s1', undefined)
 
     const native = await fetch(`${route}?sessionId=s2`, { headers: { Origin: base } })
     expect(await native.json()).toEqual({ ok: true, value: { takeOver: false } })
 
     const post = await fetch(route, { method: 'POST', headers: { Origin: base } })
     expect(post.status).toBe(405)
+  })
+
+  it('forwards the model-selector label to the verdict resolver', async () => {
+    const takeover = vi.fn(async (_sessionId: string, modelLabel?: string) => modelLabel === 'DeepSeek V4 Flash')
+    const server = createServer((req, res) => { createPastePolicyHandler(takeover)(req, res) })
+    servers.push(server)
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(0, '127.0.0.1', () => { resolve() })
+    })
+    const address = server.address()
+    if (address === null || typeof address === 'string') throw new Error('server did not bind')
+    const base = `http://127.0.0.1:${address.port}`
+    const route = `${base}/_dsh/vision-toolkit/paste-policy`
+
+    const taken = await fetch(`${route}?sessionId=s1&model=${encodeURIComponent('DeepSeek V4 Flash')}`, {
+      headers: { Origin: base },
+    })
+    expect(await taken.json()).toEqual({ ok: true, value: { takeOver: true } })
+    expect(takeover).toHaveBeenCalledWith('s1', 'DeepSeek V4 Flash')
   })
 
   it('refuses cross-origin and malformed policy requests', async () => {

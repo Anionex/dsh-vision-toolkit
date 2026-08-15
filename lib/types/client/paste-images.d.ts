@@ -37,7 +37,6 @@ export declare class PasteImageController {
     private readonly listeners;
     private revision;
     private readonly verdicts;
-    private routeAvailable;
     constructor(ctx: ClientContext);
     subscribe: (listener: () => void) => (() => void);
     snapshot: () => number;
@@ -48,20 +47,24 @@ export declare class PasteImageController {
     private insertText;
     private insertRecords;
     /**
-     * Whether to take a paste over for one Session, from the host's cached
-     * verdict. Unconfirmed or stale answers false, so the native attachment
-     * flow is the default; the host refreshes in the background.
+     * Whether to take a paste over for one Session and selector label, from the
+     * host's cached verdict. Unconfirmed or stale answers false, so the native
+     * attachment flow is the default; the host refreshes in the background.
      * @param sessionId - the live Session the paste belongs to.
+     * @param modelLabel - the model-selector label currently shown.
      * @returns true only for a fresh confirmed text-only verdict.
      */
     private verdictFor;
     /**
      * Ask the host whether the current model is text-only, and cache the answer
-     * per Session. A 404 means the host route is off, so the client stands down
-     * entirely instead of swallowing pastes into a dead endpoint.
+     * per Session and selector label. A model switch changes the label, which
+     * changes the cache key, so a stale verdict never outlives the model it
+     * described. A 404 simply leaves the verdict unconfirmed; the next focus or
+     * paste retries.
      * @param sessionId - the live Session to ask about.
+     * @param modelLabel - the model-selector label currently shown.
      */
-    refreshVerdict(sessionId: string): void;
+    refreshVerdict(sessionId: string, modelLabel: string): void;
     handlePaste(event: ClipboardEvent): boolean;
     remove(sessionId: string, occurrence: PasteOccurrence): void;
     private upload;

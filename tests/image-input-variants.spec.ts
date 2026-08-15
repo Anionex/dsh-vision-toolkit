@@ -301,6 +301,127 @@ describe('ImageInputVariantAdapter', () => {
       text: expect.stringContaining('wire description'),
     })
   })
+
+  it('carries context, output caps, and reasoning metadata through resolveModel', async () => {
+    const upstreamInfo = {
+      provider: 'up', id: 'plain', name: 'Plain', inputModalities: ['text'],
+      context: { contextWindow: 65536 },
+      defaultMaxTokens: 4096,
+      reasoning: {
+        efforts: [{ id: 'high', name: 'High' }],
+        defaultEffort: 'high',
+      },
+    }
+    const ctx = {
+      llm: llmStub({ resolveModelInfo: vi.fn(async () => upstreamInfo) }),
+    } as never
+    const adapter = new ImageInputVariantAdapter(ctx, ctx.llm, 'up', 'Upstream', () => undefined, new EvidenceCache(4))
+    const resolved = await adapter.resolveModel('vision-toolkit-up', 'plain')
+    expect(resolved).toMatchObject({
+      provider: 'vision-toolkit-up',
+      inputModalities: ['text', 'image'],
+      context: { contextWindow: 65536 },
+      defaultMaxTokens: 4096,
+      reasoning: { efforts: [{ id: 'high', name: 'High' }], defaultEffort: 'high' },
+    })
+  })
+
+  it('streams a deep-frozen request without mutating it and delegates a fresh object', async () => {
+    const glance = vi.fn(async () => glanceResult('frozen wire'))
+    const attachments = { readImage: vi.fn(async () => ({ ref: attachment('a'), data: Uint8Array.of(1) })) }
+    const delegated: GenerateOptions[] = []
+    const upstreamStream = vi.fn(async function* (options: GenerateOptions): AsyncGenerator<StreamChunk> {
+      delegated.push(options)
+      yield { type: 'finish', reason: { kind: 'stop' } }
+    })
+    const ctx = {
+      get: (name: string) => name === 'attachments' ? attachments : undefined,
+      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(), stream: upstreamStream },
+    } as never
+    const adapter = new ImageInputVariantAdapter(ctx, ctx.llm, 'up', 'Upstream', () => runtimeStub(glance), new EvidenceCache(4))
+    const frozen: GenerateOptions = Object.freeze({
+      provider: 'vision-toolkit-up',
+      model: 'plain',
+      messages: Object.freeze([message('m1', [imageBlock('a')])]),
+    })
+    for await (const _chunk of adapter.stream(frozen)) { /* drain */ }
+    expect(delegated).toHaveLength(1)
+    expect(delegated[0]).not.toBe(frozen)
+    expect(delegated[0]?.provider).toBe('up')
+  })
+
+  it('lets a caller abort mid-conversion while the cached read completes for the retry', async () => {
+    let release: () => void = () => {}
+    const gate = new Promise<void>(resolve => { release = resolve })
+    const glance = vi.fn(async () => { await gate; return glanceResult('slow read') })
+    const attachments = { readImage: vi.fn(async () => ({ ref: attachment('a'), data: Uint8Array.of(1) })) }
+    const upstreamStream = vi.fn(async function* (): AsyncGenerator<StreamChunk> {
+      yield { type: 'finish', reason: { kind: 'stop' } }
+    })
+    const ctx = {
+      get: (name: string) => name === 'attachments' ? attachments : undefined,
+      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(), stream: upstreamStream },
+    } as never
+    const cache = new EvidenceCache(4)
+    const adapter = new ImageInputVariantAdapter(ctx, ctx.llm, 'up', 'Upstream', () => runtimeStub(glance), cache)
+    const controller = new AbortController()
+    const options: GenerateOptions = {
+      provider: 'vision-toolkit-up',
+      model: 'plain',
+      messages: [message('m1', [imageBlock('a')])],
+      signal: controller.signal,
+    }
+    const draining = (async () => {
+      const chunks: StreamChunk[] = []
+      try {
+        for await (const chunk of adapter.stream(options)) chunks.push(chunk)
+        return chunks
+      } catch (error) {
+        return error
+      }
+    })()
+    // Wait until the conversion reached the (blocked) glance call, then abort.
+    await vi.waitFor(() => { expect(glance).toHaveBeenCalledTimes(1) })
+    controller.abort()
+    const outcome = await draining
+    expect(outcome).toBeInstanceOf(Error)
+    // The underlying read is not cancelled: it completes and lands in the cache.
+    release()
+    const cached = await cache.read('a', async () => { throw new Error('must not recompute') })
+    expect(cached).toEqual({ type: 'text', text: '[Image described by the Vision Toolkit]\nslow read' })
+  })
+
+  it('clears the description cache when the runtime instance changes', async () => {
+    const first = runtimeStub(vi.fn(async () => glanceResult('first provider')))
+    const second = runtimeStub(vi.fn(async () => glanceResult('second provider')))
+    const attachments = { readImage: vi.fn(async () => ({ ref: attachment('a'), data: Uint8Array.of(1) })) }
+    const delegated: GenerateOptions[] = []
+    const upstreamStream = vi.fn(async function* (options: GenerateOptions): AsyncGenerator<StreamChunk> {
+      delegated.push(options)
+      yield { type: 'finish', reason: { kind: 'stop' } }
+    })
+    const ctx = {
+      get: (name: string) => name === 'attachments' ? attachments : undefined,
+      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(), stream: upstreamStream },
+    } as never
+    let current: ReturnType<typeof runtimeStub> = first
+    const cache = new EvidenceCache(4)
+    const adapter = new ImageInputVariantAdapter(ctx, ctx.llm, 'up', 'Upstream', () => current, cache)
+    const options: GenerateOptions = {
+      provider: 'vision-toolkit-up',
+      model: 'plain',
+      messages: [message('m1', [imageBlock('a')])],
+    }
+    for await (const _chunk of adapter.stream(options)) { /* drain */ }
+    expect(first.glance).toHaveBeenCalledTimes(1)
+    for await (const _chunk of adapter.stream(options)) { /* drain */ }
+    expect(first.glance).toHaveBeenCalledTimes(1)
+    // A reconfigured runtime is a new instance: the stale description is gone.
+    current = second
+    for await (const _chunk of adapter.stream(options)) { /* drain */ }
+    expect(second.glance).toHaveBeenCalledTimes(1)
+    expect(delegated).toHaveLength(3)
+  })
 })
 
 describe('sessionPasteTakeover', () => {
@@ -345,6 +466,56 @@ describe('sessionPasteTakeover', () => {
       get: (name: string) => name === 'llm' ? failing.llm : undefined,
     } as never
     expect(await sessionPasteTakeover(failing, 's1')).toBe(false)
+  })
+
+  it('resolves the verdict from the model-selector label before the session header', async () => {
+    const models = [
+      { provider: 'deepseek-official', id: 'plain', name: 'DeepSeek V4 Flash', inputModalities: ['text'] },
+      { provider: 'vision-toolkit-deepseek-official', id: 'plain', name: 'DeepSeek V4 Flash (Vision Toolkit)', inputModalities: ['text', 'image'] },
+    ]
+    const ctx = {
+      sessions: { get: () => undefined },
+      llm: {
+        listProviders: vi.fn(() => [{ id: 'deepseek-official', name: 'DeepSeek' }, { id: 'vision-toolkit-deepseek-official', name: 'DeepSeek (Vision Toolkit)' }]),
+        listModels: vi.fn(async () => models),
+        resolveModelInfo: vi.fn(),
+      },
+      get: (name: string) => name === 'llm' ? ctx.llm : undefined,
+    } as never
+    // The variant label names an image-capable entry: native, never takeover.
+    expect(await sessionPasteTakeover(ctx, 's1', 'Current model: DeepSeek V4 Flash (Vision Toolkit)')).toBe(false)
+    // The plain label names only the text-only entry: takeover.
+    expect(await sessionPasteTakeover(ctx, 's1', 'Current model: DeepSeek V4 Flash')).toBe(true)
+    expect(ctx.llm.resolveModelInfo).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the session header when the label matches nothing', async () => {
+    const ctx = {
+      sessions: {
+        get: () => ({ requestHeader: () => ({ config: { provider: 'deepseek-official', model: 'plain' } }) }),
+      },
+      llm: {
+        listProviders: vi.fn(() => [{ id: 'deepseek-official', name: 'DeepSeek' }]),
+        listModels: vi.fn(async () => [{ provider: 'deepseek-official', id: 'plain', name: 'Plain', inputModalities: ['text'] }]),
+        resolveModelInfo: vi.fn(async () => ({ provider: 'deepseek-official', id: 'plain', name: 'Plain', inputModalities: ['text'] })),
+      },
+      get: (name: string) => name === 'llm' ? ctx.llm : undefined,
+    } as never
+    expect(await sessionPasteTakeover(ctx, 's1', 'Unrelated label prose')).toBe(true)
+    expect(ctx.llm.resolveModelInfo).toHaveBeenCalledTimes(1)
+  })
+
+  it('vetoes the takeover when the label names an unconfirmed model', async () => {
+    const ctx = {
+      sessions: { get: () => undefined },
+      llm: {
+        listProviders: vi.fn(() => [{ id: 'up', name: 'Up' }]),
+        listModels: vi.fn(async () => [{ provider: 'up', id: 'mystery', name: 'Mystery' }]),
+        resolveModelInfo: vi.fn(),
+      },
+      get: (name: string) => name === 'llm' ? ctx.llm : undefined,
+    } as never
+    expect(await sessionPasteTakeover(ctx, 's1', 'Current: Mystery')).toBe(false)
   })
 })
 
@@ -447,6 +618,61 @@ describe('installImageInputVariants', () => {
     await vi.waitFor(() => { expect(registrations.has('vision-toolkit-deepseek-official')).toBe(true) })
     providers = []
     expect(listeners).toHaveLength(1)
+    listeners[0]?.()
+    await vi.waitFor(() => { expect(registrations.size).toBe(0) })
+    installer.dispose()
+  })
+
+  it('releases wrappers when the route restriction narrows', async () => {
+    const { ctx, registrations } = harness({
+      llm: {
+        listProviders: vi.fn(() => [
+          { id: 'deepseek-official', name: 'DeepSeek' },
+          { id: 'glm', name: 'GLM' },
+        ]),
+        listModels: vi.fn(async (provider: string) => [
+          { provider, id: 'plain', name: 'Plain', inputModalities: ['text'] },
+        ]),
+        registerAdapter: vi.fn((ids: string[]) => {
+          const dispose = vi.fn(() => { for (const id of ids) registrations.delete(id) })
+          for (const id of ids) registrations.set(id, dispose)
+          return dispose
+        }),
+      },
+    })
+    let restrict: string[] = []
+    const installer = installImageInputVariants(ctx, () => config({ providers: restrict }), () => undefined)
+    await vi.waitFor(() => {
+      expect(registrations.has('vision-toolkit-deepseek-official')).toBe(true)
+      expect(registrations.has('vision-toolkit-glm')).toBe(true)
+    })
+    restrict = ['glm']
+    installer.reconcile()
+    await vi.waitFor(() => {
+      expect(registrations.has('vision-toolkit-deepseek-official')).toBe(false)
+      expect(registrations.has('vision-toolkit-glm')).toBe(true)
+    })
+    installer.dispose()
+  })
+
+  it('releases wrappers whose route lost every eligible model', async () => {
+    let models: Array<{ provider: string; id: string; name: string; inputModalities: string[] }> = [
+      { provider: 'deepseek-official', id: 'plain', name: 'Plain', inputModalities: ['text'] },
+    ]
+    const { ctx, registrations, listeners } = harness({
+      llm: {
+        listProviders: vi.fn(() => [{ id: 'deepseek-official', name: 'DeepSeek' }]),
+        listModels: vi.fn(async () => models),
+        registerAdapter: vi.fn((ids: string[]) => {
+          const dispose = vi.fn(() => { for (const id of ids) registrations.delete(id) })
+          for (const id of ids) registrations.set(id, dispose)
+          return dispose
+        }),
+      },
+    })
+    const installer = installImageInputVariants(ctx, () => config(), () => undefined)
+    await vi.waitFor(() => { expect(registrations.has('vision-toolkit-deepseek-official')).toBe(true) })
+    models = [{ provider: 'deepseek-official', id: 'vision', name: 'Vision', inputModalities: ['text', 'image'] }]
     listeners[0]?.()
     await vi.waitFor(() => { expect(registrations.size).toBe(0) })
     installer.dispose()

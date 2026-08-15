@@ -356,37 +356,44 @@ export class VisionToolkitWebBackend {
 /**
  * Same-origin policy handler for the paste route: whether the browser should
  * turn a paste into workspace paths instead of the native attachment flow.
- * Answers false for every unresolved route — native paste is the safe default.
+ * The optional `model` query carries the model-selector label the client
+ * currently shows, which is the authoritative route fact (the Session header
+ * only updates on a request). Unresolvable routes answer false — native paste
+ * is the safe default.
  * @param takeover - resolves one live Session's paste verdict.
  * @returns the HTTP handler.
  */
 export function createPastePolicyHandler(
-  takeover: (sessionId: string) => Promise<boolean>,
+  takeover: (sessionId: string, modelLabel?: string) => Promise<boolean>,
 ): (req: IncomingMessage, res: ServerResponse) => void {
   return (req, res) => {
     void (async () => {
-      if (req.method !== 'GET') {
-        requestError(res, 405, 'method-not-allowed', 'Use GET')
-        return
-      }
-      if (!sameOriginRequest(req)) {
-        requestError(res, 403, 'origin-rejected', 'The request must originate from this DSH Web application')
-        return
-      }
-      let sessionId: string
       try {
-        const url = new URL(req.url ?? PASTE_POLICY_ROUTE, 'http://dsh.internal')
-        const values = url.searchParams.getAll('sessionId')
-        if (values.length !== 1 || values[0] === undefined || values[0] === '') {
-          throw new TypeError('sessionId is required exactly once')
+        if (req.method !== 'GET') {
+          requestError(res, 405, 'method-not-allowed', 'Use GET')
+          return
         }
-        sessionId = values[0]!
-      } catch (error) {
-        requestError(res, 400, 'invalid-request', publicMessage(error))
-        return
-      }
-      try {
-        const takeOver = await takeover(sessionId)
+        if (!sameOriginRequest(req)) {
+          requestError(res, 403, 'origin-rejected', 'The request must originate from this DSH Web application')
+          return
+        }
+        let sessionId: string
+        let modelLabel: string | undefined
+        try {
+          const url = new URL(req.url ?? PASTE_POLICY_ROUTE, 'http://dsh.internal')
+          const sessions = url.searchParams.getAll('sessionId')
+          if (sessions.length !== 1 || sessions[0] === undefined || sessions[0] === '') {
+            throw new TypeError('sessionId is required exactly once')
+          }
+          sessionId = sessions[0]!
+          const models = url.searchParams.getAll('model')
+          if (models.length > 1) throw new TypeError('model may be given at most once')
+          modelLabel = models[0]
+        } catch (error) {
+          requestError(res, 400, 'invalid-request', publicMessage(error))
+          return
+        }
+        const takeOver = await takeover(sessionId, modelLabel)
         responseJson(res, 200, { ok: true, value: { takeOver } })
       } catch (error) {
         requestError(res, 500, 'policy-failed', publicMessage(error))
@@ -401,14 +408,14 @@ export function createPastePolicyHandler(
  * @param backend - Settings handler.
  * @param artifacts - signed Artifact handler.
  * @param pastedImages - pasted-image workspace handler.
- * @param pastePolicy - paste-takeover verdict resolver.
+ * @param pastePolicy - paste-takeover verdict resolver (sessionId, modelLabel).
  */
 export function installVisionToolkitWeb(
   ctx: Context,
   backend: VisionToolkitWebBackend,
   artifacts: ArtifactAccessController,
   pastedImages: PastedImageBackend,
-  pastePolicy: (sessionId: string) => Promise<boolean>,
+  pastePolicy: (sessionId: string, modelLabel?: string) => Promise<boolean>,
 ): void {
   ctx.inject(['webServer'], (webCtx) => {
     webCtx.effect(() => {

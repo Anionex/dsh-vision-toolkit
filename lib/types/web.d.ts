@@ -68,18 +68,21 @@ export declare class VisionToolkitWebBackend {
 /**
  * Same-origin policy handler for the paste route: whether the browser should
  * turn a paste into workspace paths instead of the native attachment flow.
- * Answers false for every unresolved route — native paste is the safe default.
+ * The optional `model` query carries the model-selector label the client
+ * currently shows, which is the authoritative route fact (the Session header
+ * only updates on a request). Unresolvable routes answer false — native paste
+ * is the safe default.
  * @param takeover - resolves one live Session's paste verdict.
  * @returns the HTTP handler.
  */
-export declare function createPastePolicyHandler(takeover: (sessionId: string) => Promise<boolean>): (req: IncomingMessage, res: ServerResponse) => void;
+export declare function createPastePolicyHandler(takeover: (sessionId: string, modelLabel?: string) => Promise<boolean>): (req: IncomingMessage, res: ServerResponse) => void;
 /**
  * Attach optional Web routes whenever a webServer service is present.
  * @param ctx - plugin context owning route effects.
  * @param backend - Settings handler.
  * @param artifacts - signed Artifact handler.
  * @param pastedImages - pasted-image workspace handler.
- * @param pastePolicy - paste-takeover verdict resolver.
+ * @param pastePolicy - paste-takeover verdict resolver (sessionId, modelLabel).
  */
-export declare function installVisionToolkitWeb(ctx: Context, backend: VisionToolkitWebBackend, artifacts: ArtifactAccessController, pastedImages: PastedImageBackend, pastePolicy: (sessionId: string) => Promise<boolean>): void;
+export declare function installVisionToolkitWeb(ctx: Context, backend: VisionToolkitWebBackend, artifacts: ArtifactAccessController, pastedImages: PastedImageBackend, pastePolicy: (sessionId: string, modelLabel?: string) => Promise<boolean>): void;
 //# sourceMappingURL=web.d.ts.map
