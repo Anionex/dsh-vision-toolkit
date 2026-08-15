@@ -632,6 +632,9 @@ describe('clipboard image client', () => {
     selector.setAttribute('aria-label', 'Select model, current DeepSeek V4 Flash (Vision Toolkit)')
     document.dispatchEvent(new Event('focusin'))
     await vi.waitFor(() => { expect(policy).toHaveBeenCalledTimes(3) })
+    // Let the veto response land before pasting, so the native path is the
+    // host's verdict, not the unconfirmed default.
+    await new Promise(resolve => setTimeout(resolve, 0))
     const nativeAgain = vi.fn()
     textarea.addEventListener('paste', nativeAgain)
     textarea.dispatchEvent(clipboardEvent('', [file('two.png', 'image/png', [2])]))

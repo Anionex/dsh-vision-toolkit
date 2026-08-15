@@ -534,10 +534,12 @@ describe('sessionPasteTakeover', () => {
         resolveModelInfo: vi.fn(),
       },
       get: (name: string) => name === 'llm' ? ctx.llm : undefined,
+      logger: { warn: vi.fn() },
     } as never
     // The text-only match alone would confirm, but the unreadable route could
     // be hiding an image-capable twin of the same name: native wins.
     expect(await sessionPasteTakeover(ctx, 's1', 'Current model: Plain Text Model')).toBe(false)
+    expect(ctx.logger.warn).toHaveBeenCalled()
   })
 })
 
@@ -716,6 +718,61 @@ describe('installImageInputVariants', () => {
       expect(registrations.has('vision-toolkit-deepseek-official')).toBe(false)
       expect(registrations.has('vision-toolkit-glm')).toBe(true)
     })
+    installer.dispose()
+  })
+
+  it('coalesces a burst of topology notifications into one follow-up sweep', async () => {
+    const { ctx, registrations, listeners, llm } = harness({
+      llm: {
+        listProviders: vi.fn(() => [{ id: 'deepseek-official', name: 'DeepSeek' }]),
+        listModels: vi.fn(async () => [
+          { provider: 'deepseek-official', id: 'plain', name: 'Plain', inputModalities: ['text'] },
+        ]),
+        registerAdapter: vi.fn((ids: string[]) => {
+          const dispose = vi.fn(() => { for (const id of ids) registrations.delete(id) })
+          for (const id of ids) registrations.set(id, dispose)
+          return dispose
+        }),
+      },
+    })
+    const installer = installImageInputVariants(ctx, () => config(), () => undefined)
+    await vi.waitFor(() => { expect(registrations.has('vision-toolkit-deepseek-official')).toBe(true) })
+    const probesBefore = llm.listModels.mock.calls.length
+    for (let index = 0; index < 5; index += 1) listeners[0]?.()
+    await new Promise(resolve => setTimeout(resolve, 30))
+    // Five notifications in one synchronous burst cost one follow-up pass,
+    // not five.
+    expect(llm.listModels.mock.calls.length - probesBefore).toBeLessThanOrEqual(2)
+    installer.dispose()
+  })
+
+  it('re-arms a follow-up sweep when a notification arrives mid-sweep', async () => {
+    let release: () => void = () => {}
+    const gate = new Promise<void>(resolve => { release = resolve })
+    let probes = 0
+    const { ctx, registrations, listeners, llm } = harness({
+      llm: {
+        listProviders: vi.fn(() => [{ id: 'deepseek-official', name: 'DeepSeek' }]),
+        listModels: vi.fn(async () => {
+          probes += 1
+          if (probes === 1) await gate
+          return [{ provider: 'deepseek-official', id: 'plain', name: 'Plain', inputModalities: ['text'] }]
+        }),
+        registerAdapter: vi.fn((ids: string[]) => {
+          const dispose = vi.fn(() => { for (const id of ids) registrations.delete(id) })
+          for (const id of ids) registrations.set(id, dispose)
+          return dispose
+        }),
+      },
+    })
+    const installer = installImageInputVariants(ctx, () => config(), () => undefined)
+    await vi.waitFor(() => { expect(probes).toBe(1) })
+    // A notification during the in-flight sweep queues exactly one follow-up.
+    listeners[0]?.()
+    release()
+    await vi.waitFor(() => { expect(probes).toBeGreaterThanOrEqual(2) })
+    await new Promise(resolve => setTimeout(resolve, 30))
+    expect(probes).toBe(2)
     installer.dispose()
   })
 

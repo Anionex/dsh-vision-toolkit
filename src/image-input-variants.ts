@@ -38,7 +38,12 @@ export const VARIANT_SUFFIX = ' (Vision Toolkit)'
 /** Promise-cache bound for image descriptions, so a long-lived Web profile cannot hoard evidence text. */
 const EVIDENCE_CACHE_LIMIT = 64
 
-/** Media types the Vision Toolkit glance pipeline accepts, by declared media type. */
+/**
+ * Media types the Vision Toolkit glance pipeline accepts, by declared media
+ * type. Narrower than the paste-to-workspace route (which stores any image
+ * type): a paste of an unsupported type on a variant session degrades loudly
+ * on the wire instead of being described.
+ */
 const MEDIA_EXTENSIONS: Readonly<Record<string, string>> = {
   'image/png': '.png',
   'image/jpeg': '.jpg',
@@ -409,10 +414,18 @@ export async function labelTakeoverVerdict(ctx: Context, label: string): Promise
     let models: readonly LlmModelInfo[]
     try {
       models = await llm.listModels(provider.id)
-    } catch {
+    } catch (error) {
       // An unreadable route cannot vote — and it is exactly where an
       // image-capable twin could hide (a variant route probes its upstream).
-      // A label match on a half-read catalog must not confirm a takeover.
+      // A label match on a half-read catalog must not confirm a takeover, so
+      // the verdict is vetoed for THIS label; the session header fallback is
+      // deliberately not used here because it may still describe a previous
+      // model after a switch. Loud, so a broken provider is diagnosable.
+      ctx.logger.warn(
+        'dsh-vision-toolkit: paste verdict could not read route "%s"; native paste wins for this label. %s',
+        provider.id,
+        messageOf(error),
+      )
       return false
     }
     for (const model of models) {
