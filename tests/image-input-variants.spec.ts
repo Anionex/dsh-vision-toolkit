@@ -9,6 +9,7 @@ import {
   convertImagesToEvidence,
   EvidenceCache,
   ImageInputVariantAdapter,
+  createPasteTakeoverResolver,
   installImageInputVariants,
   sessionPasteTakeover,
   shouldWrapModel,
@@ -516,6 +517,69 @@ describe('sessionPasteTakeover', () => {
       get: (name: string) => name === 'llm' ? ctx.llm : undefined,
     } as never
     expect(await sessionPasteTakeover(ctx, 's1', 'Current: Mystery')).toBe(false)
+  })
+
+  it('vetoes the takeover when any route catalog cannot be read', async () => {
+    const ctx = {
+      sessions: { get: () => undefined },
+      llm: {
+        listProviders: vi.fn(() => [
+          { id: 'broken', name: 'Broken' },
+          { id: 'deepseek-official', name: 'DeepSeek' },
+        ]),
+        listModels: vi.fn(async (provider: string) => {
+          if (provider === 'broken') throw new Error('catalog unreachable')
+          return [{ provider: 'deepseek-official', id: 'plain', name: 'Plain Text Model', inputModalities: ['text'] }]
+        }),
+        resolveModelInfo: vi.fn(),
+      },
+      get: (name: string) => name === 'llm' ? ctx.llm : undefined,
+    } as never
+    // The text-only match alone would confirm, but the unreadable route could
+    // be hiding an image-capable twin of the same name: native wins.
+    expect(await sessionPasteTakeover(ctx, 's1', 'Current model: Plain Text Model')).toBe(false)
+  })
+})
+
+describe('createPasteTakeoverResolver', () => {
+  function resolverCtx() {
+    const listeners: Array<() => void> = []
+    const ctx = {
+      sessions: { get: () => undefined },
+      llm: {
+        listProviders: vi.fn(() => [{ id: 'deepseek-official', name: 'DeepSeek' }]),
+        listModels: vi.fn(async () => [
+          { provider: 'deepseek-official', id: 'plain', name: 'Plain', inputModalities: ['text'] },
+        ]),
+        resolveModelInfo: vi.fn(),
+      },
+      get: (name: string) => name === 'llm' ? ctx.llm : undefined,
+      on: vi.fn((_event: string, listener: () => void) => { listeners.push(listener) }),
+    }
+    return { ctx: ctx as never, listeners, llm: ctx.llm }
+  }
+
+  it('caches decisive and miss verdicts by label and falls back per call', async () => {
+    const { ctx, llm } = resolverCtx()
+    const resolve = createPasteTakeoverResolver(ctx)
+    expect(await resolve('s1', 'Current model: Plain')).toBe(true)
+    expect(await resolve('s1', 'Current model: Plain')).toBe(true)
+    expect(llm.listModels).toHaveBeenCalledTimes(1)
+    // A label matching nothing is cached too; the header fallback still runs.
+    expect(await resolve('s1', 'No such model here')).toBe(false)
+    expect(await resolve('s1', 'No such model here')).toBe(false)
+    expect(llm.listModels).toHaveBeenCalledTimes(2)
+  })
+
+  it('drops the label cache on topology changes', async () => {
+    const { ctx, listeners, llm } = resolverCtx()
+    const resolve = createPasteTakeoverResolver(ctx)
+    await resolve('s1', 'Current model: Plain')
+    expect(llm.listModels).toHaveBeenCalledTimes(1)
+    expect(listeners).toHaveLength(1)
+    listeners[0]?.()
+    await resolve('s1', 'Current model: Plain')
+    expect(llm.listModels).toHaveBeenCalledTimes(2)
   })
 })
 

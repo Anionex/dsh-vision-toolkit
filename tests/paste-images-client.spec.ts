@@ -589,24 +589,35 @@ describe('clipboard image client', () => {
     const nativePaste = vi.fn()
     textarea.addEventListener('paste', nativePaste)
     textarea.dispatchEvent(clipboardEvent('', [file('one.png', 'image/png', [1])]))
-
+    // The paste re-asks and gets the same 404: native, no reference inserted.
+    await new Promise(resolve => setTimeout(resolve, 0))
     expect(nativePaste).toHaveBeenCalledTimes(1)
-    // The focus prefetch and the paste each re-ask while the route is down.
+    expect(bench.input.state.getSnapshot().occurrences).toEqual([])
     expect(policySpy).toHaveBeenCalledTimes(2)
     // The route comes back: the next focus re-asks instead of standing down
-    // for the page lifetime.
-    policySpy.mockResolvedValueOnce(policyResponse(true))
+    // for the page lifetime, and the following paste is taken over.
+    policySpy.mockResolvedValue(policyResponse(true))
     document.dispatchEvent(new Event('focusin'))
-    await vi.waitFor(() => { expect(policySpy).toHaveBeenCalledTimes(2) })
+    await vi.waitFor(() => { expect(policySpy).toHaveBeenCalledTimes(3) })
+    // Let the recovered verdict land before pasting.
+    await new Promise(resolve => setTimeout(resolve, 0))
+    const nativeAfter = vi.fn()
+    textarea.addEventListener('paste', nativeAfter)
+    textarea.dispatchEvent(clipboardEvent('', [file('two.png', 'image/png', [2])]))
+    expect(nativeAfter).not.toHaveBeenCalled()
+    expect(bench.input.state.getSnapshot().occurrences).toHaveLength(1)
     bench.dispose()
   })
 
-  it('treats a model-selector switch as a new verdict key, so a variant paste stays native', async () => {
+  it('keeps the paste native when the host vetoes the variant label', async () => {
     const bench = fakeClient('')
-    const policy = vi.fn(async () => policyResponse(true))
+    const policy = vi.fn(async (url: string) => {
+      const label = new URL(String(url), 'http://localhost').searchParams.get('model') ?? ''
+      return policyResponse(!label.includes('(Vision Toolkit)'))
+    })
     vi.stubGlobal('fetch', policy)
     const selector = document.createElement('button')
-    selector.setAttribute('aria-label', 'Current model: DeepSeek V4 Flash')
+    selector.setAttribute('aria-label', 'Select model, current DeepSeek V4 Flash')
     document.body.appendChild(selector)
     document.dispatchEvent(new Event('focusin'))
     await vi.waitFor(() => { expect(policy).toHaveBeenCalledTimes(1) })
@@ -616,13 +627,16 @@ describe('clipboard image client', () => {
     textarea.addEventListener('paste', nativePaste)
     textarea.dispatchEvent(clipboardEvent('', [file('one.png', 'image/png', [1])]))
     expect(nativePaste).not.toHaveBeenCalled()
-    // The user switches to the image-input variant: the label changes, the
-    // cached takeover verdict no longer applies, and the paste goes native.
-    selector.setAttribute('aria-label', 'Current model: DeepSeek V4 Flash (Vision Toolkit)')
+    // Switching to the image-input variant: the host vetoes the takeover and
+    // the paste goes native — no reference, no prevented default.
+    selector.setAttribute('aria-label', 'Select model, current DeepSeek V4 Flash (Vision Toolkit)')
+    document.dispatchEvent(new Event('focusin'))
+    await vi.waitFor(() => { expect(policy).toHaveBeenCalledTimes(3) })
     const nativeAgain = vi.fn()
     textarea.addEventListener('paste', nativeAgain)
     textarea.dispatchEvent(clipboardEvent('', [file('two.png', 'image/png', [2])]))
     expect(nativeAgain).toHaveBeenCalledTimes(1)
+    expect(bench.input.state.getSnapshot().occurrences).toHaveLength(1)
     selector.remove()
     bench.dispose()
   })

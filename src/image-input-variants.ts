@@ -391,8 +391,11 @@ export async function sessionHeaderTakeover(ctx: Context, sessionId: string): Pr
  * Resolve the takeover verdict from a model-selector label alone. Every model
  * whose name or id appears in the label votes: any image-capable (or unknown-
  * capability) match vetoes the takeover, and at least one positively text-only
- * match confirms it. The label carries no provider id, so no picking is
- * attempted — the answer is decisive only when every match agrees.
+ * match confirms it. A route whose catalog cannot be read also vetoes — the
+ * unreadable route is exactly where an image-capable twin could hide, so a
+ * label match on a half-read catalog must not confirm a takeover. The label
+ * carries no provider id, so no picking is attempted: the answer is decisive
+ * only when the whole catalog was walkable and every match agrees.
  * @param ctx - plugin context with the `llm` service.
  * @param label - the selector label the browser shows.
  * @returns true (take over), false (native), or undefined when nothing matched.
@@ -407,7 +410,10 @@ export async function labelTakeoverVerdict(ctx: Context, label: string): Promise
     try {
       models = await llm.listModels(provider.id)
     } catch {
-      continue
+      // An unreadable route cannot vote — and it is exactly where an
+      // image-capable twin could hide (a variant route probes its upstream).
+      // A label match on a half-read catalog must not confirm a takeover.
+      return false
     }
     for (const model of models) {
       for (const candidate of [model.name, model.id]) {
@@ -443,7 +449,7 @@ const LABEL_VERDICT_CAP = 32
 export function createPasteTakeoverResolver(
   ctx: Context,
 ): (sessionId: string, modelLabel?: string) => Promise<boolean> {
-  const verdicts = new Map<string, { takeOver: boolean; at: number }>()
+  const verdicts = new Map<string, { takeOver: boolean | undefined; at: number }>()
   if (typeof ctx.on === 'function') {
     ctx.on('llm/adapters-updated', () => { verdicts.clear() })
   }
@@ -451,18 +457,18 @@ export function createPasteTakeoverResolver(
     if (modelLabel !== undefined && modelLabel.trim() !== '') {
       const cached = verdicts.get(modelLabel)
       if (cached !== undefined && Date.now() - cached.at <= LABEL_VERDICT_TTL_MS) {
-        return cached.takeOver
+        return cached.takeOver ?? sessionHeaderTakeover(ctx, sessionId)
       }
       const verdict = await labelTakeoverVerdict(ctx, modelLabel)
-      if (verdict !== undefined) {
-        verdicts.set(modelLabel, { takeOver: verdict, at: Date.now() })
-        while (verdicts.size > LABEL_VERDICT_CAP) {
-          const oldest = verdicts.keys().next().value
-          if (oldest === undefined) break
-          verdicts.delete(oldest)
-        }
-        return verdict
+      // A decisive answer AND a miss are both cached: a label that matches
+      // nothing would otherwise pay a full catalog walk on every paste.
+      verdicts.set(modelLabel, { takeOver: verdict, at: Date.now() })
+      while (verdicts.size > LABEL_VERDICT_CAP) {
+        const oldest = verdicts.keys().next().value
+        if (oldest === undefined) break
+        verdicts.delete(oldest)
       }
+      return verdict ?? sessionHeaderTakeover(ctx, sessionId)
     }
     return sessionHeaderTakeover(ctx, sessionId)
   }
@@ -487,6 +493,9 @@ export function installImageInputVariants(
   // Serialize sweeps: a registration itself announces llm/adapters-updated,
   // and two interleaved sweeps must never probe the same route concurrently.
   let sweeping: Promise<void> = Promise.resolve()
+  // Coalesce bursts: a sweep triggered while one is pending is one extra pass,
+  // not one per notification (a single registration emits a notification).
+  let sweepQueued = false
 
   const releaseAll = (): void => {
     for (const dispose of [...registrations.values()]) dispose()
@@ -494,7 +503,12 @@ export function installImageInputVariants(
   }
 
   const sweep = (): void => {
-    sweeping = sweeping.then(sweepOnce, sweepOnce)
+    if (sweepQueued) return
+    sweepQueued = true
+    queueMicrotask(() => {
+      sweepQueued = false
+      sweeping = sweeping.then(sweepOnce, sweepOnce)
+    })
   }
 
   const sweepOnce = async (): Promise<void> => {
@@ -517,6 +531,9 @@ export function installImageInputVariants(
       for (const provider of providers) {
         const upstream = provider.id
         if (restrict.size > 0 && !restrict.has(upstream)) continue
+        // Our own variant routes declare image input and are never wrapped;
+        // probing them would just re-probe their upstream route.
+        if (upstream.startsWith(VARIANT_PROVIDER_PREFIX)) continue
         let models: readonly LlmModelInfo[]
         try {
           models = await llm.listModels(upstream)

@@ -301,6 +301,9 @@ describe('paste policy route', () => {
     const missing = await fetch(route, { headers: { Origin: base } })
     expect(missing.status).toBe(400)
 
+    const duplicated = await fetch(`${route}?sessionId=s1&model=a&model=b`, { headers: { Origin: base } })
+    expect(duplicated.status).toBe(400)
+
     expect(takeover).not.toHaveBeenCalled()
   })
 

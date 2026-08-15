@@ -114,8 +114,11 @@ export declare function sessionHeaderTakeover(ctx: Context, sessionId: string): 
  * Resolve the takeover verdict from a model-selector label alone. Every model
  * whose name or id appears in the label votes: any image-capable (or unknown-
  * capability) match vetoes the takeover, and at least one positively text-only
- * match confirms it. The label carries no provider id, so no picking is
- * attempted — the answer is decisive only when every match agrees.
+ * match confirms it. A route whose catalog cannot be read also vetoes — the
+ * unreadable route is exactly where an image-capable twin could hide, so a
+ * label match on a half-read catalog must not confirm a takeover. The label
+ * carries no provider id, so no picking is attempted: the answer is decisive
+ * only when the whole catalog was walkable and every match agrees.
  * @param ctx - plugin context with the `llm` service.
  * @param label - the selector label the browser shows.
  * @returns true (take over), false (native), or undefined when nothing matched.
