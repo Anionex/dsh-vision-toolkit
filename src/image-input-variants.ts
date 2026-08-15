@@ -424,7 +424,7 @@ export async function labelTakeoverVerdict(ctx: Context, label: string): Promise
       ctx.logger.warn(
         'dsh-vision-toolkit: paste verdict could not read route "%s"; native paste wins for this label. %s',
         provider.id,
-        messageOf(error),
+        messageOf(error).slice(0, 300),
       )
       return false
     }

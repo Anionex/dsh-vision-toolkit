@@ -539,7 +539,11 @@ describe('sessionPasteTakeover', () => {
     // The text-only match alone would confirm, but the unreadable route could
     // be hiding an image-capable twin of the same name: native wins.
     expect(await sessionPasteTakeover(ctx, 's1', 'Current model: Plain Text Model')).toBe(false)
-    expect(ctx.logger.warn).toHaveBeenCalled()
+    expect(ctx.logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('could not read route "%s"'),
+      'broken',
+      expect.any(String),
+    )
   })
 })
 
@@ -740,9 +744,9 @@ describe('installImageInputVariants', () => {
     const probesBefore = llm.listModels.mock.calls.length
     for (let index = 0; index < 5; index += 1) listeners[0]?.()
     await new Promise(resolve => setTimeout(resolve, 30))
-    // Five notifications in one synchronous burst cost one follow-up pass,
-    // not five.
-    expect(llm.listModels.mock.calls.length - probesBefore).toBeLessThanOrEqual(2)
+    // Five notifications in one synchronous burst cost exactly one follow-up
+    // pass (which re-probes the registered route for eligibility).
+    expect(llm.listModels.mock.calls.length).toBe(probesBefore + 1)
     installer.dispose()
   })
 
