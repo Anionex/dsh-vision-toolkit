@@ -169,7 +169,6 @@ const requiredFiles = [
   '.github/ISSUE_TEMPLATE/feature_request.yml',
   '.github/ISSUE_TEMPLATE/question.yml',
   '.github/workflows/ci.yml',
-  '.github/workflows/pages.yml',
   'index.html',
   'cordis.patch.yml',
   'pnpm-lock.yaml',

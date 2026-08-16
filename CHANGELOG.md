@@ -17,6 +17,12 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 - Removed the stale single-image restriction from the public Groq vision proxy; one request can now forward up to five images in their original order.
 
+### Removed
+
+- Removed the GitHub Pages workflow: the public project website is
+  `agent-vision.anionex.me` and the repository has no Pages site enabled, so the
+  job always failed at the Pages configuration step.
+
 ## [0.1.17] - 2026-08-16
 
 ### Changed
