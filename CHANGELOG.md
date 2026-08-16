@@ -2,6 +2,13 @@
 
 All notable user-facing changes to DSH Vision Toolkit are documented in this file. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and uses semantic version tags.
 
+## [0.1.12] - 2026-08-16
+
+### Fixed
+
+- Kept persisted v0.1.10 Moondream free-provider settings on the built-in `api_key="free"` path after upgrading, so existing installations do not require a DSH Credential.
+- Aligned direct `point` and `detect` task coordinates with the toolkit's 0-1000 grid and rejected malformed structured locations instead of returning false-success responses.
+
 ## [0.1.11] - 2026-08-16
 
 ### Changed
@@ -151,7 +158,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 - Runtime teardown cancels in-flight operations before removing Agent-scoped tools, the activation bootstrap, and the Skill.
 - The Web client is published through the current nested `dsh.client` manifest and loader-compatible built artifact required by DSH snapshot0810.
 
-[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.11...HEAD
+[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.12...HEAD
+[0.1.12]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.11...v0.1.12
 [0.1.11]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.10...v0.1.11
 [0.1.10]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.8...v0.1.9

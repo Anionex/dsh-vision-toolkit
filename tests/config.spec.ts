@@ -63,6 +63,18 @@ describe('resolveConfig', () => {
     expect(config.allowedDirs).toEqual(['~/Pictures'])
   })
 
+  it('keeps the v0.1.10 Moondream default recognized as the built-in free provider', () => {
+    const config = resolveConfig({
+      provider: {
+        baseUrl: BUILT_IN_FREE_VISION_BASE_URL,
+        credential: BUILT_IN_FREE_VISION_CREDENTIAL,
+        model: 'moondream-3.1',
+        protocol: 'openai',
+      },
+    })
+    expect(isBuiltInFreeVisionProvider(config.provider)).toBe(true)
+  })
+
   it('rejects a non-http baseUrl', () => {
     expect(() => resolveConfig({ provider: { baseUrl: 'ftp://x' } }))
       .toThrowError(/provider\.baseUrl/)

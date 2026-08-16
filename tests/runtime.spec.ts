@@ -119,6 +119,32 @@ describe('VisionToolkitRuntime', () => {
     expect(resolve).not.toHaveBeenCalled()
   })
 
+  it('keeps the v0.1.10 Moondream default on the bundled free credential path', async () => {
+    const ctx = new Context()
+    contexts.push(ctx)
+    const resolve = vi.fn(async () => undefined)
+    ctx.provide('credentials', { resolve } as unknown as Credentials)
+    const config = resolveConfig({
+      provider: {
+        baseUrl: 'https://vision.anionex.me/v1',
+        credential: 'ANIONEX_FREE_VISION',
+        model: 'moondream-3.1',
+        protocol: 'openai',
+      },
+      runtime: { mode: 'external', agentVisionToolkitPath: FIXTURE_UPSTREAM, python: 'python3' },
+    })
+    const adapter = new UpstreamAdapter(ctx, config, preparedFixture())
+    const runtime = new VisionToolkitRuntime(ctx, config, adapter)
+
+    await expect(runtime.resolveVisionEnv()).resolves.toMatchObject({
+      VISION_API_KEY: 'free',
+      VISION_BASE_URL: 'https://vision.anionex.me/v1',
+      VISION_MODEL: 'moondream-3.1',
+      VISION_API_PROTOCOL: 'chat_completions',
+    })
+    expect(resolve).not.toHaveBeenCalled()
+  })
+
   it('glance describes an image', async () => {
     const { runtime } = await setup()
     const workspace = await tempWorkspace()

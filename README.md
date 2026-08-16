@@ -12,7 +12,7 @@
   <a href="https://dshfind.com/en/plugins/Anionex/dsh-vision-toolkit"><img src="https://img.shields.io/badge/recommended%20by-dshfind-FFD700?style=flat-square" alt="Recommended by dshfind" /></a>
   <a href="https://dshfind.com/en/plugins/Anionex/dsh-vision-toolkit"><img src="https://img.shields.io/badge/dshfind%20score-94%20%7C%20highest--rated%20plugin-5B4CF0?style=flat-square" alt="dshfind score: 94 — highest-rated plugin" /></a>
   <a href="https://x.com/anion_ex"><img src="https://img.shields.io/badge/-@anion__ex-000000?style=flat-square&amp;logo=x&amp;logoColor=white" alt="X: @anion_ex" /></a>
-  <a href="https://github.com/Anionex/dsh-vision-toolkit/releases/tag/v0.1.11"><img src="https://img.shields.io/badge/release-v0.1.11-5B4CF0?style=flat-square" alt="Release v0.1.11" /></a>
+  <a href="https://github.com/Anionex/dsh-vision-toolkit/releases/tag/v0.1.12"><img src="https://img.shields.io/badge/release-v0.1.12-5B4CF0?style=flat-square" alt="Release v0.1.12" /></a>
   <a href="tests"><img src="https://img.shields.io/badge/verified-233%20tests-2EA44F?style=flat-square" alt="Verified: 233 tests" /></a>
 </p>
 
@@ -249,7 +249,7 @@ dsh plugin --profile web remove @dsh-external/dsh-vision-toolkit
 dsh plugin --profile web add @anionex/dsh-vision-toolkit
 ```
 
-After restarting, Settings → Vision should report plugin version **0.1.11**. The built-in free provider is selected automatically; custom providers still use the configured DSH Credential.
+After restarting, Settings → Vision should report plugin version **0.1.12**. The built-in free provider is selected automatically; custom providers still use the configured DSH Credential.
 
 For a registry installation, update the dependency through the profile package manager:
 
@@ -442,7 +442,7 @@ Update the upstream snapshot only through `pnpm run upstream:sync -- <checkout>`
 
 ## Project status and scope
 
-Version `0.1.11` is the current public npm release. The product focuses on screenshot understanding, visual grounding, OCR, asset extraction, UI restoration, and pixel-level verification in DSH Web and Headless profiles. Web upload, drag-and-drop, camera/video/audio/document ingestion, interactive box editing, automatic GUI clicking, service clusters, model routing, model voting, and cross-session vision caches remain outside the current product.
+Version `0.1.12` is the current public npm release. The product focuses on screenshot understanding, visual grounding, OCR, asset extraction, UI restoration, and pixel-level verification in DSH Web and Headless profiles. Web upload, drag-and-drop, camera/video/audio/document ingestion, interactive box editing, automatic GUI clicking, service clusters, model routing, model voting, and cross-session vision caches remain outside the current product.
 
 <details>
 <summary><strong>Maintainer scope note</strong></summary>
