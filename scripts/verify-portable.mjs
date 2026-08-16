@@ -218,7 +218,7 @@ for (const markdownPath of ['README.md', 'README.zh.md', 'CONTRIBUTING.md', 'SUP
 }
 
 const imageExpectations = new Map([
-  ['assets/hero.png', { width: 1600, height: 720 }],
+  ['assets/hero.png', { width: 1672, height: 941 }],
   ['assets/social-preview.png', { width: 1280, height: 640 }],
 ])
 for (const [path, expected] of imageExpectations) {
