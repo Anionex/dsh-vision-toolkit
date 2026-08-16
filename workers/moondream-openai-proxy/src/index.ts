@@ -7,14 +7,38 @@ import {
   tokenUsage,
   type MoondreamOutput,
 } from './protocol'
+import { materializeImage } from './image'
+import { normalizeClientAddress } from './identity'
 
 const CORS_HEADERS = {
-  'access-control-allow-headers': 'authorization, content-type',
+  'access-control-allow-headers': 'authorization, content-type, openai-organization, openai-project, x-stainless-arch, x-stainless-async, x-stainless-helper-method, x-stainless-lang, x-stainless-os, x-stainless-package-version, x-stainless-read-timeout, x-stainless-retry-count, x-stainless-runtime, x-stainless-runtime-version, x-stainless-timeout',
   'access-control-allow-methods': 'GET, POST, OPTIONS',
   'access-control-allow-origin': '*',
   'access-control-expose-headers': 'retry-after, x-ratelimit-limit-requests, x-ratelimit-remaining-requests, x-request-id',
   'access-control-max-age': '86400',
 } as const
+
+interface QuotaReservation {
+  clientHash: string
+  day: string
+  limit: number
+  remaining: number
+}
+
+export function preflightHeaders(request: Request): Headers {
+  const headers = new Headers(CORS_HEADERS)
+  const requestedHeaders = request.headers.get('access-control-request-headers')
+  if (requestedHeaders) {
+    const safeHeaders = requestedHeaders
+      .split(',')
+      .map(header => header.trim().toLowerCase())
+      .filter(header => /^[!#$%&'*+.^_`|~0-9a-z-]+$/.test(header))
+    if (safeHeaders.length > 0) headers.set('access-control-allow-headers', safeHeaders.join(', '))
+  }
+  headers.set('cache-control', 'no-store')
+  headers.set('vary', 'access-control-request-headers')
+  return headers
+}
 
 function jsonResponse(value: unknown, init?: ResponseInit): Response {
   const headers = new Headers(init?.headers)
@@ -82,7 +106,13 @@ async function readBoundedJson(request: Request, maxBytes: number): Promise<unkn
 }
 
 async function clientHash(request: Request, secret: string): Promise<string> {
-  const clientIp = request.headers.get('cf-connecting-ip') ?? 'unknown'
+  if (typeof secret !== 'string' || secret.length < 32) {
+    throw new ProtocolError('Service quota configuration is unavailable', {
+      code: 'service_configuration_error',
+      status: 503,
+    })
+  }
+  const clientIp = normalizeClientAddress(request.headers.get('cf-connecting-ip') ?? 'unknown')
   const key = await crypto.subtle.importKey(
     'raw',
     new TextEncoder().encode(secret),
@@ -92,6 +122,20 @@ async function clientHash(request: Request, secret: string): Promise<string> {
   )
   const digest = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(clientIp))
   return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')
+}
+
+async function releaseCounters(env: Env, day: string, keys: string[]): Promise<void> {
+  const statements = keys.flatMap(key => [
+    env.USAGE_DB.prepare(
+      'DELETE FROM usage_daily WHERE day = ?1 AND client_hash = ?2 AND request_count = 1',
+    ).bind(day, key),
+    env.USAGE_DB.prepare(`
+      UPDATE usage_daily
+      SET request_count = request_count - 1, updated_at = ?3
+      WHERE day = ?1 AND client_hash = ?2 AND request_count > 1
+    `).bind(day, key, new Date().toISOString()),
+  ])
+  await env.USAGE_DB.batch(statements)
 }
 
 async function consumeCounter(
@@ -113,7 +157,7 @@ async function consumeCounter(
   return row?.request_count ?? null
 }
 
-async function consumeDailyQuota(env: Env, hash: string): Promise<{ limit: number; remaining: number }> {
+async function consumeDailyQuota(env: Env, hash: string): Promise<QuotaReservation> {
   const clientLimit = Number(env.DAILY_LIMIT)
   const globalLimit = Number(env.GLOBAL_DAILY_LIMIT)
   const now = new Date().toISOString()
@@ -127,6 +171,14 @@ async function consumeDailyQuota(env: Env, hash: string): Promise<{ limit: numbe
   }
   const globalCount = await consumeCounter(env, day, '__global__', globalLimit, now)
   if (globalCount === null) {
+    try {
+      await releaseCounters(env, day, [hash])
+    } catch (error) {
+      console.error(JSON.stringify({
+        error: error instanceof Error ? error.message : String(error),
+        event: 'quota_rollback_failed',
+      }))
+    }
     throw new ProtocolError('The public free service has reached today\'s capacity', {
       code: 'global_daily_limit_exceeded',
       status: 429,
@@ -134,9 +186,21 @@ async function consumeDailyQuota(env: Env, hash: string): Promise<{ limit: numbe
   }
   if (globalCount === 1) {
     const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
-    await env.USAGE_DB.prepare('DELETE FROM usage_daily WHERE day < ?1').bind(cutoff).run()
+    try {
+      await env.USAGE_DB.prepare('DELETE FROM usage_daily WHERE day < ?1').bind(cutoff).run()
+    } catch (error) {
+      console.error(JSON.stringify({
+        error: error instanceof Error ? error.message : String(error),
+        event: 'quota_cleanup_failed',
+      }))
+    }
   }
-  return { limit: clientLimit, remaining: Math.max(0, clientLimit - clientCount) }
+  return {
+    clientHash: hash,
+    day,
+    limit: clientLimit,
+    remaining: Math.max(0, clientLimit - clientCount),
+  }
 }
 
 function authorizationError(): Response {
@@ -169,6 +233,7 @@ async function chatCompletion(request: Request, env: Env): Promise<Response> {
 
   const requestId = request.headers.get('cf-ray') ?? crypto.randomUUID()
   const startedAt = Date.now()
+  let quota: QuotaReservation | undefined
   try {
     const body = await readBoundedJson(request, Number(env.MAX_REQUEST_BYTES))
     const completion = parseChatCompletionRequest(body, Number(env.MAX_IMAGE_BYTES))
@@ -182,10 +247,11 @@ async function chatCompletion(request: Request, env: Env): Promise<Response> {
         type: 'rate_limit_error',
       })
     }
-    const quota = await consumeDailyQuota(env, hash)
+    quota = await consumeDailyQuota(env, hash)
+    const image = await materializeImage(completion.image, Number(env.MAX_IMAGE_BYTES))
     const maxTokens = Math.min(completion.maxTokens ?? 512, Number(env.MAX_OUTPUT_TOKENS))
     const modelInput: Record<string, unknown> = {
-      image: completion.image,
+      image,
       max_tokens: maxTokens,
       reasoning: false,
       stream: false,
@@ -236,6 +302,17 @@ async function chatCompletion(request: Request, env: Env): Promise<Response> {
       usage,
     }, { headers })
   } catch (error) {
+    if (quota) {
+      try {
+        await releaseCounters(env, quota.day, [quota.clientHash, '__global__'])
+      } catch (rollbackError) {
+        console.error(JSON.stringify({
+          error: rollbackError instanceof Error ? rollbackError.message : String(rollbackError),
+          event: 'quota_rollback_failed',
+          requestId,
+        }))
+      }
+    }
     if (error instanceof ProtocolError) {
       const headers = new Headers({ 'x-request-id': requestId })
       if (error.code === 'daily_rate_limit_exceeded' || error.code === 'global_daily_limit_exceeded') {
@@ -269,7 +346,7 @@ async function chatCompletion(request: Request, env: Env): Promise<Response> {
 }
 
 async function fetchHandler(request: Request, env: Env): Promise<Response> {
-  if (request.method === 'OPTIONS') return new Response(null, { headers: CORS_HEADERS, status: 204 })
+  if (request.method === 'OPTIONS') return new Response(null, { headers: preflightHeaders(request), status: 204 })
   const url = new URL(request.url)
 
   if (request.method === 'GET' && url.pathname === '/health') {

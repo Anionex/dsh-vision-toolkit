@@ -146,25 +146,7 @@ function extractImage(content: unknown, param: string): string[] {
   return images
 }
 
-function validateImage(image: string, maxImageBytes: number): string {
-  const dataUri = SUPPORTED_IMAGE_DATA_URI.exec(image)
-  if (dataUri) {
-    const encoded = dataUri[2] ?? ''
-    if (encoded.length % 4 !== 0) {
-      throw new ProtocolError('image_url contains invalid base64 image data', { param: 'messages' })
-    }
-    const padding = encoded.endsWith('==') ? 2 : encoded.endsWith('=') ? 1 : 0
-    const decodedBytes = Math.floor((encoded.length * 3) / 4) - padding
-    if (decodedBytes <= 0 || decodedBytes > maxImageBytes) {
-      throw new ProtocolError(`Decoded image must be between 1 and ${maxImageBytes} bytes`, {
-        code: 'image_too_large',
-        param: 'messages',
-        status: decodedBytes > maxImageBytes ? 413 : 400,
-      })
-    }
-    return image
-  }
-
+export function validatePublicHttpsImageUrl(image: string): string {
   let url: URL
   try {
     url = new URL(image)
@@ -187,7 +169,29 @@ function validateImage(image: string, maxImageBytes: number): string {
       param: 'messages',
     })
   }
-  return image
+  return url.toString()
+}
+
+function validateImage(image: string, maxImageBytes: number): string {
+  const dataUri = SUPPORTED_IMAGE_DATA_URI.exec(image)
+  if (dataUri) {
+    const encoded = dataUri[2] ?? ''
+    if (encoded.length % 4 !== 0) {
+      throw new ProtocolError('image_url contains invalid base64 image data', { param: 'messages' })
+    }
+    const padding = encoded.endsWith('==') ? 2 : encoded.endsWith('=') ? 1 : 0
+    const decodedBytes = Math.floor((encoded.length * 3) / 4) - padding
+    if (decodedBytes <= 0 || decodedBytes > maxImageBytes) {
+      throw new ProtocolError(`Decoded image must be between 1 and ${maxImageBytes} bytes`, {
+        code: 'image_too_large',
+        param: 'messages',
+        status: decodedBytes > maxImageBytes ? 413 : 400,
+      })
+    }
+    return image
+  }
+
+  return validatePublicHttpsImageUrl(image)
 }
 
 export function parseChatCompletionRequest(value: unknown, maxImageBytes: number): ParsedCompletionRequest {
@@ -220,6 +224,7 @@ export function parseChatCompletionRequest(value: unknown, maxImageBytes: number
 
   const textSegments: string[] = []
   const images: string[] = []
+  let lastUserText = ''
   for (const [index, rawMessage] of input.messages.entries()) {
     const message = requireRecord(rawMessage, `messages[${index}]`)
     const role = message.role
@@ -232,6 +237,7 @@ export function parseChatCompletionRequest(value: unknown, maxImageBytes: number
     if (text.length > 0) {
       const label = role === 'user' ? 'User' : role === 'assistant' ? 'Assistant' : 'Instructions'
       textSegments.push(`${label}: ${text.join('\n')}`)
+      if (role === 'user') lastUserText = text.join('\n')
     }
     if (role === 'user') images.push(...extractImage(message.content, `messages[${index}].content`))
   }
@@ -257,9 +263,13 @@ export function parseChatCompletionRequest(value: unknown, maxImageBytes: number
       param: 'caption_length',
     })
   }
-  const target = input.target === undefined ? question : input.target
-  if (typeof target !== 'string' || target.trim().length === 0 || target.length > 500) {
-    throw new ProtocolError('target must be a non-empty string up to 500 characters', { param: 'target' })
+  let target = 'person'
+  if (taskValue === 'point' || taskValue === 'detect') {
+    const targetValue = (input.target ?? lastUserText) || 'person'
+    if (typeof targetValue !== 'string' || targetValue.trim().length === 0 || targetValue.length > 500) {
+      throw new ProtocolError('target must be a non-empty string up to 500 characters', { param: 'target' })
+    }
+    target = targetValue.trim()
   }
 
   return {
@@ -267,7 +277,7 @@ export function parseChatCompletionRequest(value: unknown, maxImageBytes: number
     image: validateImage(images[0] ?? '', maxImageBytes),
     maxTokens: readOptionalInteger(input, 'max_tokens', 1, 28_672),
     question,
-    target: target.trim(),
+    target,
     task: taskValue as MoondreamTask,
     temperature: readOptionalNumber(input, 'temperature', 0, 2),
     topP: readOptionalNumber(input, 'top_p', 0, 1),

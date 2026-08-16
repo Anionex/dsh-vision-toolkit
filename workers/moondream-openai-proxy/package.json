@@ -6,7 +6,8 @@
   "packageManager": "pnpm@11.7.0",
   "scripts": {
     "check": "pnpm run types:check && pnpm run typecheck && pnpm test",
-    "deploy": "wrangler deploy --minify",
+    "deploy": "node scripts/deploy.mjs",
+    "deploy:check": "node scripts/deploy.mjs --dry-run",
     "deploy:dry-run": "wrangler deploy --dry-run --minify",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json",

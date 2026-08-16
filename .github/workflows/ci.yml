@@ -10,6 +10,39 @@ permissions:
   contents: read
 
 jobs:
+  moondream-openai-proxy:
+    if: github.event.repository.visibility == 'public'
+    name: Moondream OpenAI proxy
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: workers/moondream-openai-proxy
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.19.0
+          cache: pnpm
+          cache-dependency-path: workers/moondream-openai-proxy/pnpm-lock.yaml
+
+      - name: Install Worker dependencies
+        run: pnpm install --frozen-lockfile --trust-lockfile --registry=https://registry.npmjs.org
+
+      - name: Check Worker types and tests
+        run: pnpm run check
+
+      - name: Validate Worker bundle
+        run: pnpm run deploy:dry-run
+
   portable-package:
     if: github.event.repository.visibility == 'public'
     name: Portable package (Node ${{ matrix.node }})

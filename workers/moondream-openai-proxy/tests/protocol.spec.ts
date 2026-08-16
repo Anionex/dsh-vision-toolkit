@@ -48,9 +48,24 @@ describe('parseChatCompletionRequest', () => {
     }), 1024)
     expect(parsed).toMatchObject({
       captionLength: 'long',
-      target: 'User: person wearing red',
+      target: 'person wearing red',
       task: 'detect',
     })
+  })
+
+  it('does not apply the detect target limit to a normal long query', () => {
+    const text = 'x'.repeat(600)
+    const parsed = parseChatCompletionRequest(request({
+      messages: [{
+        content: [
+          { text, type: 'text' },
+          { image_url: { url: tinyPng }, type: 'image_url' },
+        ],
+        role: 'user',
+      }],
+    }), 1024)
+    expect(parsed.question).toContain(text)
+    expect(parsed.target).toBe('person')
   })
 
   it.each([
