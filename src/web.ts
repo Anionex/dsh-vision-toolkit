@@ -13,7 +13,13 @@ import { SettingsConflictError, type SettingsDescriptor } from '@deepseek-ai/dsh
 // Type-only import activates the optional webServer Context declaration.
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import { ArtifactAccessController, ARTIFACT_ROUTE_PREFIX } from './artifact-access.ts'
-import { PastedImageBackend, PASTE_IMAGES_ROUTE, PASTE_POLICY_ROUTE } from './paste-images.ts'
+import {
+  PastedImageBackend,
+  PASTE_IMAGES_ROUTE,
+  PASTE_POLICY_ROUTE,
+  type PasteSelectionQuery,
+  type PasteVerdict,
+} from './paste-images.ts'
 import {
   resolveConfig,
   VISION_TOOLKIT_SETTINGS_NAMESPACE,
@@ -355,16 +361,18 @@ export class VisionToolkitWebBackend {
 
 /**
  * Same-origin policy handler for the paste route: whether the browser should
- * turn a paste into workspace paths instead of the native attachment flow.
- * The optional `model` query carries the model-selector label the client
- * currently shows, which is the authoritative route fact (the Session header
- * only updates on a request). Unresolvable routes answer false — native paste
- * is the safe default.
- * @param takeover - resolves one live Session's paste verdict.
+ * take a paste over into workspace paths, or let it flow natively after an
+ * optional automatic switch to the image-input variant. The optional `model`
+ * query carries the model-selector label the client currently shows; the
+ * optional `provider`/`modelId`/`reasoningEffort` queries carry the exact
+ * route the client read from the live model catalog, which the resolver
+ * prefers (a label alone cannot pick a provider). Unresolvable routes answer
+ * native — the safe default.
+ * @param resolve - resolves one live Session's paste verdict.
  * @returns the HTTP handler.
  */
 export function createPastePolicyHandler(
-  takeover: (sessionId: string, modelLabel?: string) => Promise<boolean>,
+  resolve: (sessionId: string, selection?: PasteSelectionQuery, modelLabel?: string) => Promise<PasteVerdict>,
 ): (req: IncomingMessage, res: ServerResponse) => void {
   return (req, res) => {
     void (async () => {
@@ -379,6 +387,7 @@ export function createPastePolicyHandler(
         }
         let sessionId: string
         let modelLabel: string | undefined
+        let selection: PasteSelectionQuery | undefined
         try {
           const url = new URL(req.url ?? PASTE_POLICY_ROUTE, 'http://dsh.internal')
           const sessions = url.searchParams.getAll('sessionId')
@@ -389,12 +398,27 @@ export function createPastePolicyHandler(
           const models = url.searchParams.getAll('model')
           if (models.length > 1) throw new TypeError('model may be given at most once')
           modelLabel = models[0]
+          const providers = url.searchParams.getAll('provider')
+          if (providers.length > 1) throw new TypeError('provider may be given at most once')
+          const modelIds = url.searchParams.getAll('modelId')
+          if (modelIds.length > 1) throw new TypeError('modelId may be given at most once')
+          const efforts = url.searchParams.getAll('reasoningEffort')
+          if (efforts.length > 1) throw new TypeError('reasoningEffort may be given at most once')
+          const provider = providers[0]
+          const modelId = modelIds[0]
+          if (provider !== undefined && modelId !== undefined && provider !== '' && modelId !== '') {
+            selection = {
+              provider,
+              model: modelId,
+              ...(efforts[0] === undefined || efforts[0] === '' ? {} : { reasoningEffort: efforts[0] }),
+            }
+          }
         } catch (error) {
           requestError(res, 400, 'invalid-request', publicMessage(error))
           return
         }
-        const takeOver = await takeover(sessionId, modelLabel)
-        responseJson(res, 200, { ok: true, value: { takeOver } })
+        const verdict = await resolve(sessionId, selection, modelLabel)
+        responseJson(res, 200, { ok: true, value: verdict })
       } catch (error) {
         requestError(res, 500, 'policy-failed', publicMessage(error))
       }
@@ -408,14 +432,14 @@ export function createPastePolicyHandler(
  * @param backend - Settings handler.
  * @param artifacts - signed Artifact handler.
  * @param pastedImages - pasted-image workspace handler.
- * @param pastePolicy - paste-takeover verdict resolver (sessionId, modelLabel).
+ * @param pastePolicy - paste-policy verdict resolver (sessionId, selection, modelLabel).
  */
 export function installVisionToolkitWeb(
   ctx: Context,
   backend: VisionToolkitWebBackend,
   artifacts: ArtifactAccessController,
   pastedImages: PastedImageBackend,
-  pastePolicy: (sessionId: string, modelLabel?: string) => Promise<boolean>,
+  pastePolicy: (sessionId: string, selection?: PasteSelectionQuery, modelLabel?: string) => Promise<PasteVerdict>,
 ): void {
   ctx.inject(['webServer'], (webCtx) => {
     webCtx.effect(() => {

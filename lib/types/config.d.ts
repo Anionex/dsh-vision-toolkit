@@ -59,6 +59,14 @@ export interface VisionToolkitConfig {
         enabled?: boolean;
         /** Restrict wrapped upstream routes by provider id; empty wraps every eligible route. */
         providers?: string[];
+        /**
+         * Whether the browser paste integration automatically switches the Session
+         * to the image-input variant of a text-only model before the paste, so
+         * pasted images keep the native attachment flow with no manual model
+         * change. Off means a text-only model keeps the path takeover (default
+         * true).
+         */
+        autoSwitch?: boolean;
     };
 }
 /** Configuration schema with the documented P0 defaults. */
@@ -87,6 +95,7 @@ export interface ResolvedVisionToolkitConfig {
     imageInputVariants: {
         enabled: boolean;
         providers: string[];
+        autoSwitch: boolean;
     };
 }
 /**

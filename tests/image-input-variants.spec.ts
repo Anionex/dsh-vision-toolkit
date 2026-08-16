@@ -565,27 +565,114 @@ describe('createPasteTakeoverResolver', () => {
     return { ctx: ctx as never, listeners, llm: ctx.llm }
   }
 
+  const config = (overrides: Partial<ResolvedVisionToolkitConfig['imageInputVariants']> = {}): ResolvedVisionToolkitConfig =>
+    resolveConfig({ imageInputVariants: overrides })
+
   it('caches decisive and miss verdicts by label and falls back per call', async () => {
     const { ctx, llm } = resolverCtx()
-    const resolve = createPasteTakeoverResolver(ctx)
-    expect(await resolve('s1', 'Current model: Plain')).toBe(true)
-    expect(await resolve('s1', 'Current model: Plain')).toBe(true)
+    const resolve = createPasteTakeoverResolver(ctx, () => config())
+    expect(await resolve('s1', undefined, 'Current model: Plain')).toEqual({ takeOver: true })
+    expect(await resolve('s1', undefined, 'Current model: Plain')).toEqual({ takeOver: true })
     expect(llm.listModels).toHaveBeenCalledTimes(1)
     // A label matching nothing is cached too; the header fallback still runs.
-    expect(await resolve('s1', 'No such model here')).toBe(false)
-    expect(await resolve('s1', 'No such model here')).toBe(false)
+    expect(await resolve('s1', undefined, 'No such model here')).toEqual({ takeOver: false })
+    expect(await resolve('s1', undefined, 'No such model here')).toEqual({ takeOver: false })
     expect(llm.listModels).toHaveBeenCalledTimes(2)
   })
 
   it('drops the label cache on topology changes', async () => {
     const { ctx, listeners, llm } = resolverCtx()
-    const resolve = createPasteTakeoverResolver(ctx)
-    await resolve('s1', 'Current model: Plain')
+    const resolve = createPasteTakeoverResolver(ctx, () => config())
+    await resolve('s1', undefined, 'Current model: Plain')
     expect(llm.listModels).toHaveBeenCalledTimes(1)
     expect(listeners).toHaveLength(1)
     listeners[0]?.()
-    await resolve('s1', 'Current model: Plain')
+    await resolve('s1', undefined, 'Current model: Plain')
     expect(llm.listModels).toHaveBeenCalledTimes(2)
+  })
+
+  it('answers an auto-switch route for a text-only model with a registered variant', async () => {
+    const { ctx, llm } = resolverCtx()
+    llm.resolveModelInfo.mockResolvedValue({
+      provider: 'deepseek-official', id: 'plain', name: 'Plain', inputModalities: ['text'],
+    })
+    llm.listProviders.mockReturnValue([
+      { id: 'deepseek-official', name: 'DeepSeek' },
+      { id: 'vision-toolkit-deepseek-official', name: 'DeepSeek (Vision Toolkit)' },
+    ])
+    llm.listModels.mockImplementation(async (provider: string) => provider === 'vision-toolkit-deepseek-official'
+      ? [{ provider, id: 'plain', name: 'Plain (Vision Toolkit)', inputModalities: ['text', 'image'] }]
+      : [{ provider: 'deepseek-official', id: 'plain', name: 'Plain', inputModalities: ['text'] }])
+    const resolve = createPasteTakeoverResolver(ctx, () => config())
+    const verdict = await resolve('s1', { provider: 'deepseek-official', model: 'plain' })
+    expect(verdict).toEqual({
+      takeOver: false,
+      autoSwitch: {
+        provider: 'vision-toolkit-deepseek-official',
+        model: 'plain',
+        label: 'Plain (Vision Toolkit)',
+      },
+    })
+  })
+
+  it('carries the reasoning effort into the auto-switch route', async () => {
+    const { ctx, llm } = resolverCtx()
+    llm.resolveModelInfo.mockResolvedValue({
+      provider: 'deepseek-official', id: 'plain', name: 'Plain', inputModalities: ['text'],
+    })
+    llm.listProviders.mockReturnValue([
+      { id: 'deepseek-official', name: 'DeepSeek' },
+      { id: 'vision-toolkit-deepseek-official', name: 'DeepSeek (Vision Toolkit)' },
+    ])
+    llm.listModels.mockImplementation(async (provider: string) => provider === 'vision-toolkit-deepseek-official'
+      ? [{ provider, id: 'plain', name: 'Plain (Vision Toolkit)', inputModalities: ['text', 'image'] }]
+      : [{ provider: 'deepseek-official', id: 'plain', name: 'Plain', inputModalities: ['text'] }])
+    const resolve = createPasteTakeoverResolver(ctx, () => config())
+    const verdict = await resolve('s1', { provider: 'deepseek-official', model: 'plain', reasoningEffort: 'high' })
+    expect(verdict.autoSwitch?.reasoningEffort).toBe('high')
+  })
+
+  it('keeps the path takeover for a text-only model without a variant route', async () => {
+    const { ctx, llm } = resolverCtx()
+    llm.resolveModelInfo.mockResolvedValue({
+      provider: 'deepseek-official', id: 'plain', name: 'Plain', inputModalities: ['text'],
+    })
+    const resolve = createPasteTakeoverResolver(ctx, () => config())
+    expect(await resolve('s1', { provider: 'deepseek-official', model: 'plain' })).toEqual({ takeOver: true })
+  })
+
+  it('keeps the native flow for image-capable and unresolvable routes', async () => {
+    const { ctx, llm } = resolverCtx()
+    llm.resolveModelInfo.mockResolvedValue({
+      provider: 'deepseek-official', id: 'vision', name: 'Vision', inputModalities: ['text', 'image'],
+    })
+    const resolve = createPasteTakeoverResolver(ctx, () => config())
+    expect(await resolve('s1', { provider: 'deepseek-official', model: 'vision' })).toEqual({ takeOver: false })
+    llm.resolveModelInfo.mockRejectedValue(new Error('no route'))
+    expect(await resolve('s1', { provider: 'deepseek-official', model: 'gone' })).toEqual({ takeOver: false })
+  })
+
+  it('keeps the path takeover when auto-switch is disabled', async () => {
+    const { ctx, llm } = resolverCtx()
+    llm.resolveModelInfo.mockResolvedValue({
+      provider: 'deepseek-official', id: 'plain', name: 'Plain', inputModalities: ['text'],
+    })
+    const resolve = createPasteTakeoverResolver(ctx, () => config({ autoSwitch: false }))
+    expect(await resolve('s1', { provider: 'deepseek-official', model: 'plain' })).toEqual({ takeOver: true })
+  })
+
+  it('caches exact-route verdicts and clears them on topology changes', async () => {
+    const { ctx, listeners, llm } = resolverCtx()
+    llm.resolveModelInfo.mockResolvedValue({
+      provider: 'deepseek-official', id: 'plain', name: 'Plain', inputModalities: ['text'],
+    })
+    const resolve = createPasteTakeoverResolver(ctx, () => config())
+    await resolve('s1', { provider: 'deepseek-official', model: 'plain' })
+    await resolve('s1', { provider: 'deepseek-official', model: 'plain' })
+    expect(llm.resolveModelInfo).toHaveBeenCalledTimes(1)
+    listeners[0]?.()
+    await resolve('s1', { provider: 'deepseek-official', model: 'plain' })
+    expect(llm.resolveModelInfo).toHaveBeenCalledTimes(2)
   })
 })
 

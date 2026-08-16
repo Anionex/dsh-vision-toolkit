@@ -150,9 +150,9 @@ Health checks, connection testing, and plugin/upstream version inspection are ad
 
 Text-only model routes get sibling model-selector entries named `<model> (Vision Toolkit)` under a matching provider group. A variant declares image input, so pasted images keep the native attachment flow — composer thumbnail, durable session image, and history rendering — and the plugin rewrites every image block into a Vision Toolkit description only on the wire to the model, before the request reaches the upstream route. The session log is untouched; replay and the UI keep the real image.
 
-A variant is registered automatically for every model the host positively declares text-only (for example the DeepSeek chat family). Select the variant in the model selector, then paste normally. The plugin's paste-to-path interception asks the host before taking a paste over and only intercepts when the current model is confirmed text-only, so variant models and any image-capable model keep the native flow. The verdict uses the model-selector label the browser shows; when no label is readable it falls back to the session's last requested route, which is stale until the next model request — the rare first paste right after a switch may therefore still use the old route's verdict.
+A variant is registered automatically for every model the host positively declares text-only (for example the DeepSeek chat family). Paste handling is automatic: when the current model is confirmed text-only and its variant exists, the browser integration switches the session to the variant by itself (a short notice names the new model) and the paste then keeps the native flow; no manual model change is needed. The host's verdict uses the exact model route the browser read from the live model catalog, with the selector label as fallback; unconfirmed or image-capable routes always keep the native flow, and a text-only model without a variant (for example when variants are disabled) keeps the paste-to-path takeover, which copies the image into the session workspace and inserts its path as text.
 
-Description conversion needs the configured vision provider and its credential; when the runtime is not ready or a read fails, the wire block degrades to an explanatory note instead of failing the turn. Disable variants with `imageInputVariants.enabled: false`, or restrict the wrapped routes with `imageInputVariants.providers`.
+Description conversion needs the configured vision provider and its credential; when the runtime is not ready or a read fails, the wire block degrades to an explanatory note instead of failing the turn. Disable variants with `imageInputVariants.enabled: false`, restrict the wrapped routes with `imageInputVariants.providers`, or keep the paste-to-path behavior for text-only models with `imageInputVariants.autoSwitch: false`.
 
 ## Requirements
 
@@ -245,6 +245,7 @@ The bundle defaults to the managed runtime. A profile patch can override the pro
     imageInputVariants:
       enabled: true
       providers: []
+      autoSwitch: true
 ```
 
 ### Configuration fields
@@ -268,6 +269,7 @@ The bundle defaults to the managed runtime. A profile patch can override the pro
 | `allowedDirs` | `[]` | Additional realpath-resolved input roots; the session workspace is always allowed |
 | `imageInputVariants.enabled` | `true` | Register image-input variant entries for text-only model routes in the model selector |
 | `imageInputVariants.providers` | `[]` | Restrict wrapped upstream routes by provider id; empty wraps every eligible route |
+| `imageInputVariants.autoSwitch` | `true` | Automatically switch a text-only session to its image-input variant on paste, so the image keeps the native flow; `false` keeps the paste-to-path takeover for text-only models |
 
 ### Credentials
 
@@ -355,7 +357,7 @@ The committed evidence records an initial `6.04%` difference across six non-zero
 
 | Symptom | Resolution |
 |---|---|
-| `Model "..." does not support image input. (attachment-error)` | The image used DSH's native model-attachment channel, so a text-only model rejected the turn before the Skill or Vision Toolkit could run. Select the `<model> (Vision Toolkit)` variant in the model selector and paste again: the image then keeps its native thumbnail and is described on the wire. If variants are disabled, use DSH Paste Input's attachment button, paste, or drop flow so the file is copied into the session workspace and represented by a path, then invoke `/vision-tools`. Restart the Web profile and reload the page after installing or upgrading either browser plugin. |
+| `Model "..." does not support image input. (attachment-error)` | The image used DSH's native model-attachment channel, so a text-only model rejected the turn before the Skill or Vision Toolkit could run. With image-input variants enabled this is rare: pasting normally auto-switches the session to the `<model> (Vision Toolkit)` variant. If variants are disabled or auto-switch is off, use DSH Paste Input's attachment button, paste, or drop flow so the file is copied into the session workspace and represented by a path, then invoke `/vision-tools`. Restart the Web profile and reload the page after installing or upgrading either browser plugin. |
 | Credential reported missing | Paste the key into Web Settings **API key**, keep the advanced **Credential name** aligned with `provider.credential`, save, then rerun health. Headless deployments can provision the same reference in `$DSH_HOME/.credentials.yaml`. Local-only tools do not need it. |
 | Runtime preparation fails | Read the Settings runtime error, verify Python 3.11+, package-cache/network access, disk permissions, and the exact external pin. Save only after correcting the candidate; the active generation remains intact. |
 | Chrome is not found | Install Chrome, Chromium, or Edge or configure an environment where one is discoverable. Only `vision_html_screenshot` is unavailable. |

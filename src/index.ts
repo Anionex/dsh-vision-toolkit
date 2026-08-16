@@ -112,7 +112,7 @@ export async function apply(ctx: Context, config: VisionToolkitConfig = {}): Pro
     backend,
     artifacts,
     pastedImages,
-    createPasteTakeoverResolver(ctx),
+    createPasteTakeoverResolver(ctx, () => resolveConfig(settings.get())),
   )
   disposers.push(variants.dispose)
   disposers.push(settings.watch(async (next) => {

@@ -150,9 +150,9 @@ flowchart LR
 
 纯文本模型路由会获得同名的兄弟模型条目：`<模型名> (Vision Toolkit)`，挂在对应的提供方分组下。变体声明支持图片输入，因此粘贴的图片走原生附件流程——输入框缩略图、会话持久化图片与历史渲染全部保留——插件只在发往模型的请求链路上把每个图片块改写成 Vision Toolkit 描述文本，再转交上游路由。会话日志不被改动；回放与 UI 看到的始终是真实图片。
 
-插件会自动为宿主明确声明为纯文本的每个模型注册变体（例如 DeepSeek 对话家族）。在模型选择器里选中变体后正常粘贴即可。插件的"粘贴转路径"拦截会先询问宿主，只有在当前模型被确认为纯文本时才接管粘贴；因此变体模型以及任何支持图片的模型都保持原生流程。判定依据是浏览器当前显示的模型选择器标签；当标签不可读时回退到会话最后一次请求的路由——该路由在发出下一条模型请求前是陈旧的，因此切换模型后紧接着的第一次粘贴仍可能使用旧路由的判定结果。
+插件会自动为宿主明确声明为纯文本的每个模型注册变体（例如 DeepSeek 对话家族）。粘贴处理是全自动的：当当前模型被确认为纯文本、且它的变体已注册时，浏览器端集成会自动把会话切换到变体（会有一条简短提示说明新模型名），随后粘贴走原生流程，无需手动切换模型。宿主依据浏览器从实时模型目录读到的精确模型路由来裁决，模型选择器标签作为兜底；无法确认或支持图片的路由一律保持原生流程，而"纯文本但没有变体"的模型（例如变体被关闭时）继续走"粘贴转路径"：图片被复制进会话工作区，输入框里插入的是它的路径文本。
 
-描述转换需要已配置的视觉提供方及其 Credential；当运行时未就绪或读取失败时，请求链路上的图片块降级为说明文本，而不是让整轮失败。用 `imageInputVariants.enabled: false` 关闭变体，或用 `imageInputVariants.providers` 限制被包装的路由。
+描述转换需要已配置的视觉提供方及其 Credential；当运行时未就绪或读取失败时，请求链路上的图片块降级为说明文本，而不是让整轮失败。用 `imageInputVariants.enabled: false` 关闭变体，用 `imageInputVariants.providers` 限制被包装的路由，或用 `imageInputVariants.autoSwitch: false` 让纯文本模型继续走"粘贴转路径"。
 
 ## 运行要求
 
@@ -245,6 +245,7 @@ Bundle 默认使用 managed 运行时。Profile patch 可以覆盖提供方与�
     imageInputVariants:
       enabled: true
       providers: []
+      autoSwitch: true
 ```
 
 ### 配置字段
@@ -268,6 +269,7 @@ Bundle 默认使用 managed 运行时。Profile patch 可以覆盖提供方与�
 | `allowedDirs` | `[]` | 额外的 realpath 解析输入根目录；会话工作区始终允许 |
 | `imageInputVariants.enabled` | `true` | 为纯文本模型路由在模型选择器中注册图片输入变体条目 |
 | `imageInputVariants.providers` | `[]` | 按提供方 id 限制被包装的上游路由；为空时包装所有符合条件的路由 |
+| `imageInputVariants.autoSwitch` | `true` | 粘贴时自动把纯文本会话切换到其图片输入变体，让图片保持原生流程；`false` 时纯文本模型继续走"粘贴转路径" |
 
 ### Credential
 
@@ -355,7 +357,7 @@ npm run example:ui-restoration:write
 
 | 症状 | 解决方法 |
 |---|---|
-| `Model "..." does not support image input. (attachment-error)` | 图片走了 DSH 的模型原生附件通道，纯文本模型会在 Skill 或 Vision Toolkit 运行前拒绝该轮。请在模型选择器中选择 `<模型名> (Vision Toolkit)` 变体后重新粘贴：图片会保留原生缩略图，并在请求链路上自动转成描述文本。若已关闭变体，请使用 DSH Paste Input 的附件按钮、粘贴或拖放流程，让文件先复制到会话工作区并以路径形式进入消息，再调用 `/vision-tools`。安装或升级任一浏览器插件后，需要重启 Web Profile 并刷新页面。 |
+| `Model "..." does not support image input. (attachment-error)` | 图片走了 DSH 的模型原生附件通道，纯文本模型会在 Skill 或 Vision Toolkit 运行前拒绝该轮。启用图片输入变体时这很少发生：粘贴会自动把会话切换到 `<模型名> (Vision Toolkit)` 变体。若变体被关闭或自动切换被禁用，请使用 DSH Paste Input 的附件按钮、粘贴或拖放流程，让文件先复制到会话工作区并以路径形式进入消息，再调用 `/vision-tools`。安装或升级任一浏览器插件后，需要重启 Web Profile 并刷新页面。 |
 | Credential 显示缺失 | 在 Web 设置页的 **API 密钥** 中粘贴密钥，确认高级设置中的 **凭据名称** 与 `provider.credential` 一致，保存后重新运行健康检查。Headless 部署可以在 `$DSH_HOME/.credentials.yaml` 中预置同名引用。本地工具不需要它。 |
 | 运行时准备失败 | 查看 Settings 中的运行时错误，检查 Python 3.11+、软件包缓存/网络、磁盘权限和精确 external 固定版本。修正候选后再保存；当前 generation 不受影响。 |
 | 找不到 Chrome | 安装 Chrome、Chromium 或 Edge，或让其中一个可被运行环境发现。只有 `vision_html_screenshot` 不可用。 |

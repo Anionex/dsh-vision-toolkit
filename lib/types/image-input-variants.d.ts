@@ -11,6 +11,7 @@ import type { Context } from '@deepseek-ai/cordis';
 import LlmService, { LlmAdapter } from '@deepseek-ai/dsh-llm';
 import type { ContentBlock, GenerateOptions, LlmModelInfo, LlmProviderInfo, LlmResolvedModelInfo, Message, StreamChunk } from '@deepseek-ai/dsh-llm';
 import type { ResolvedVisionToolkitConfig } from './config.ts';
+import type { PasteSelectionQuery, PasteVerdict } from './paste-images.ts';
 import type { VisionToolkitRuntime } from './runtime.ts';
 /** Provider-id prefix for the variant routes this plugin registers. */
 export declare const VARIANT_PROVIDER_PREFIX = "vision-toolkit-";
@@ -125,14 +126,17 @@ export declare function sessionHeaderTakeover(ctx: Context, sessionId: string): 
  */
 export declare function labelTakeoverVerdict(ctx: Context, label: string): Promise<boolean | undefined>;
 /**
- * Paste-takeover resolver with a short label-keyed cache. The label is the
- * live fact (the client re-reads it per paste), and the host catalog only
- * changes on topology events, so a brief cache is safe; every
- * `llm/adapters-updated` notification empties it.
+ * Paste-policy resolver with a short cache. The exact route is the live fact
+ * (the browser re-reads it per paste), and the host catalog only changes on
+ * topology events, so a brief cache is safe; every `llm/adapters-updated`
+ * notification empties it — including the sweep that registers a variant
+ * after the first sweep, so a stale "no variant" verdict cannot outlive the
+ * route it described.
  * @param ctx - plugin context with the `llm` service.
+ * @param getConfig - resolves the current plugin configuration per verdict.
  * @returns the cached verdict resolver for the Web paste-policy route.
  */
-export declare function createPasteTakeoverResolver(ctx: Context): (sessionId: string, modelLabel?: string) => Promise<boolean>;
+export declare function createPasteTakeoverResolver(ctx: Context, getConfig: () => ResolvedVisionToolkitConfig): (sessionId: string, selection?: PasteSelectionQuery, modelLabel?: string) => Promise<PasteVerdict>;
 /**
  * Register and maintain one variant route per eligible upstream route. Routes
  * that later vanish are released; routes that gain eligible models later are

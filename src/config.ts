@@ -66,6 +66,14 @@ export interface VisionToolkitConfig {
     enabled?: boolean
     /** Restrict wrapped upstream routes by provider id; empty wraps every eligible route. */
     providers?: string[]
+    /**
+     * Whether the browser paste integration automatically switches the Session
+     * to the image-input variant of a text-only model before the paste, so
+     * pasted images keep the native attachment flow with no manual model
+     * change. Off means a text-only model keeps the path takeover (default
+     * true).
+     */
+    autoSwitch?: boolean
   }
 }
 
@@ -93,6 +101,7 @@ export const Config: Schema<VisionToolkitConfig> = z.object({
   imageInputVariants: z.object({
     enabled: z.boolean().default(true),
     providers: z.array(z.string()).default([]),
+    autoSwitch: z.boolean().default(true),
   }),
 })
 
@@ -120,6 +129,7 @@ export interface ResolvedVisionToolkitConfig {
   imageInputVariants: {
     enabled: boolean
     providers: string[]
+    autoSwitch: boolean
   }
 }
 
@@ -228,6 +238,7 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
     imageInputVariants: {
       enabled: imageInputVariants.enabled ?? true,
       providers: variantProviders,
+      autoSwitch: imageInputVariants.autoSwitch ?? true,
     },
   }
 }

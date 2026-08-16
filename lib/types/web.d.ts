@@ -7,7 +7,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Context } from '@deepseek-ai/cordis';
 import { ArtifactAccessController } from './artifact-access.ts';
-import { PastedImageBackend } from './paste-images.ts';
+import { PastedImageBackend, type PasteSelectionQuery, type PasteVerdict } from './paste-images.ts';
 import { type VisionToolkitConfig } from './config.ts';
 import { VisionToolkitRuntimeManager, type PreparedRuntimeGeneration, type RuntimeManagerStatus } from './runtime-manager.ts';
 /** Exact route used by the browser Settings page. */
@@ -67,22 +67,24 @@ export declare class VisionToolkitWebBackend {
 }
 /**
  * Same-origin policy handler for the paste route: whether the browser should
- * turn a paste into workspace paths instead of the native attachment flow.
- * The optional `model` query carries the model-selector label the client
- * currently shows, which is the authoritative route fact (the Session header
- * only updates on a request). Unresolvable routes answer false — native paste
- * is the safe default.
- * @param takeover - resolves one live Session's paste verdict.
+ * take a paste over into workspace paths, or let it flow natively after an
+ * optional automatic switch to the image-input variant. The optional `model`
+ * query carries the model-selector label the client currently shows; the
+ * optional `provider`/`modelId`/`reasoningEffort` queries carry the exact
+ * route the client read from the live model catalog, which the resolver
+ * prefers (a label alone cannot pick a provider). Unresolvable routes answer
+ * native — the safe default.
+ * @param resolve - resolves one live Session's paste verdict.
  * @returns the HTTP handler.
  */
-export declare function createPastePolicyHandler(takeover: (sessionId: string, modelLabel?: string) => Promise<boolean>): (req: IncomingMessage, res: ServerResponse) => void;
+export declare function createPastePolicyHandler(resolve: (sessionId: string, selection?: PasteSelectionQuery, modelLabel?: string) => Promise<PasteVerdict>): (req: IncomingMessage, res: ServerResponse) => void;
 /**
  * Attach optional Web routes whenever a webServer service is present.
  * @param ctx - plugin context owning route effects.
  * @param backend - Settings handler.
  * @param artifacts - signed Artifact handler.
  * @param pastedImages - pasted-image workspace handler.
- * @param pastePolicy - paste-takeover verdict resolver (sessionId, modelLabel).
+ * @param pastePolicy - paste-policy verdict resolver (sessionId, selection, modelLabel).
  */
-export declare function installVisionToolkitWeb(ctx: Context, backend: VisionToolkitWebBackend, artifacts: ArtifactAccessController, pastedImages: PastedImageBackend, pastePolicy: (sessionId: string, modelLabel?: string) => Promise<boolean>): void;
+export declare function installVisionToolkitWeb(ctx: Context, backend: VisionToolkitWebBackend, artifacts: ArtifactAccessController, pastedImages: PastedImageBackend, pastePolicy: (sessionId: string, selection?: PasteSelectionQuery, modelLabel?: string) => Promise<PasteVerdict>): void;
 //# sourceMappingURL=web.d.ts.map

@@ -31,6 +31,20 @@ interface PasteBatch {
   unsubscribe?: (() => void) | undefined
 }
 
+/** One model route the host asks the browser to switch to before the native paste flow. */
+interface PasteSwitchRoute {
+  provider: string
+  model: string
+  label: string
+  reasoningEffort?: string
+}
+
+/** A fresh host verdict for one Session and model label. */
+interface PasteVerdictValue {
+  takeOver: boolean
+  autoSwitch?: PasteSwitchRoute
+}
+
 interface PasteResponse {
   ok: boolean
   value?: { absolutePath?: string }
@@ -155,7 +169,14 @@ export class PasteImageController {
   private readonly records = new Map<string, PasteRecord>()
   private readonly listeners = new Set<() => void>()
   private revision = 0
-  private readonly verdicts = new Map<string, { takeOver: boolean; at: number; pending: boolean }>()
+  private readonly verdicts = new Map<string, {
+    takeOver: boolean
+    autoSwitch?: PasteSwitchRoute
+    at: number
+    pending: boolean
+  }>()
+  /** Guards the synthetic replay paste from re-entering capture interception. */
+  private replaying = false
 
   constructor(private readonly ctx: ClientContext) {}
 
@@ -259,25 +280,59 @@ export class PasteImageController {
   }
 
   /**
-   * Whether to take a paste over for one Session and selector label, from the
-   * host's cached verdict. Unconfirmed or stale answers false, so the native
-   * attachment flow is the default; the host refreshes in the background.
+   * The host's verdict for one Session and selector label, when fresh. The
+   * last CONFIRMED answer is authoritative while a background refresh is in
+   * flight (the paste acts on what the host last said; the refresh only
+   * covers the next paste). A label that changed since the confirmation
+   * answers undefined, so the native attachment flow stays the default.
    * @param sessionId - the live Session the paste belongs to.
    * @param modelLabel - the model-selector label currently shown.
-   * @returns true only for a fresh confirmed text-only verdict.
+   * @returns the fresh confirmed verdict, or undefined when unconfirmed.
    */
-  private verdictFor(sessionId: string, modelLabel: string): boolean {
+  private verdictFor(sessionId: string, modelLabel: string): PasteVerdictValue | undefined {
     const entry = this.verdicts.get(verdictKey(sessionId, modelLabel))
-    if (entry === undefined || entry.at === 0 || !entry.takeOver) return false
-    return Date.now() - entry.at <= VERDICT_MAX_AGE_MS
+    if (entry === undefined || entry.at === 0) return undefined
+    if (Date.now() - entry.at > VERDICT_MAX_AGE_MS) return undefined
+    return { takeOver: entry.takeOver, ...(entry.autoSwitch === undefined ? {} : { autoSwitch: entry.autoSwitch }) }
   }
 
   /**
-   * Ask the host whether the current model is text-only, and cache the answer
-   * per Session and selector label. A model switch changes the label, which
-   * changes the cache key, so a stale verdict never outlives the model it
-   * described. A 404 simply leaves the verdict unconfirmed; the next focus or
-   * paste retries.
+   * The exact model route the live model catalog reports for one Session.
+   * Unreadable routes answer undefined, so the verdict falls back to the
+   * selector label alone.
+   * @param sessionId - the live Session id.
+   * @returns the current provider/model selection, when readable.
+   */
+  private async readSelection(sessionId: string): Promise<{ provider: string; model: string; reasoningEffort?: string } | undefined> {
+    const connection = this.ctx.get('connection') as { api: { sessions: {
+      models(request: { sessionId: string }): Promise<{ result: {
+        ok: true
+        value: { current?: { provider: string; model: string; reasoningEffort?: string } | null }
+      } | { ok: false; error: { code: string; message: string } } }>
+    } } } | undefined
+    if (connection === undefined) return undefined
+    try {
+      const { result } = await connection.api.sessions.models({ sessionId })
+      if (!result.ok) return undefined
+      const current = result.value.current
+      if (current === undefined || current === null || current.provider === '' || current.model === '') return undefined
+      return {
+        provider: current.provider,
+        model: current.model,
+        ...(current.reasoningEffort === undefined ? {} : { reasoningEffort: current.reasoningEffort }),
+      }
+    } catch {
+      return undefined
+    }
+  }
+
+  /**
+   * Ask the host what to do with a paste for the current model, and cache the
+   * answer per Session and selector label. A model switch changes the label,
+   * which changes the cache key, so a stale verdict never outlives the model
+   * it described. The exact selection rides along when the live model catalog
+   * is readable, so the host can answer with an auto-switch route; a 404
+   * simply leaves the verdict unconfirmed; the next focus or paste retries.
    * @param sessionId - the live Session to ask about.
    * @param modelLabel - the model-selector label currently shown.
    */
@@ -287,44 +342,202 @@ export class PasteImageController {
     // Dedupe only on an in-flight request, never on freshness: the host's
     // model route can change under an unchanged Session id.
     if (cached?.pending) return
-    const entry = { pending: true, takeOver: cached ? cached.takeOver : false, at: cached ? cached.at : 0 }
+    const entry = {
+      pending: true,
+      takeOver: cached ? cached.takeOver : false,
+      at: cached ? cached.at : 0,
+      ...(cached?.autoSwitch === undefined ? {} : { autoSwitch: cached.autoSwitch }),
+    }
     this.verdicts.set(key, entry)
-    const query = new URLSearchParams({ sessionId })
-    if (modelLabel !== '') query.set('model', modelLabel)
-    let request: Promise<Response>
-    try {
-      request = fetch(`${PASTE_POLICY_ROUTE}?${query.toString()}`)
-    } catch {
-      // No fetch surface (test runtime, pre-fetch bootstrap): leave the
-      // verdict unconfirmed rather than letting the paste listener die.
-      entry.pending = false
+    void (async () => {
+      const selection = await this.readSelection(sessionId)
+      const query = new URLSearchParams({ sessionId })
+      if (modelLabel !== '') query.set('model', modelLabel)
+      if (selection !== undefined) {
+        query.set('provider', selection.provider)
+        query.set('modelId', selection.model)
+        if (selection.reasoningEffort !== undefined) query.set('reasoningEffort', selection.reasoningEffort)
+      }
+      let request: Promise<Response>
+      try {
+        request = fetch(`${PASTE_POLICY_ROUTE}?${query.toString()}`)
+      } catch {
+        // No fetch surface (test runtime, pre-fetch bootstrap): leave the
+        // verdict unconfirmed rather than letting the paste listener die.
+        entry.pending = false
+        return
+      }
+      request
+        .then((response) => {
+          if (response.status === 404) {
+            // Route not mounted yet (plugin load race, hot reload): forget every
+            // verdict and retry on the next focus or paste instead of standing
+            // down for the page lifetime.
+            this.verdicts.clear()
+            return null
+          }
+          if (!response.ok) throw new Error(`paste policy ${response.status}`)
+          return response.json() as Promise<{ ok: true; value: PasteVerdictValue }>
+        })
+        .then((body) => {
+          entry.pending = false
+          if (body !== null) {
+            entry.takeOver = body.value.takeOver === true
+            if (body.value.autoSwitch !== undefined) entry.autoSwitch = body.value.autoSwitch
+            else delete entry.autoSwitch
+            entry.at = Date.now()
+          }
+        })
+        .catch(() => {
+          entry.pending = false
+        })
+    })()
+  }
+
+  /**
+   * Switch one Session to the route the host validated, through the same
+   * model-directory seat the selector uses when present (so the shared UI
+   * state moves with the session), falling back to the raw RPC.
+   * @param sessionId - the live Session id.
+   * @param route - the validated variant route.
+   */
+  private async switchModel(sessionId: string, route: PasteSwitchRoute): Promise<void> {
+    const directories = this.ctx.get('modelDirectories') as {
+      directoryFor(id: string): { select(selection: { provider: string; model: string; reasoningEffort?: string }): Promise<void> }
+    } | undefined
+    if (directories !== undefined) {
+      // The label is a display hint; the seat only needs the exact route.
+      await directories.directoryFor(sessionId).select({
+        provider: route.provider,
+        model: route.model,
+        ...(route.reasoningEffort === undefined ? {} : { reasoningEffort: route.reasoningEffort }),
+      })
       return
     }
-    request
-      .then((response) => {
-        if (response.status === 404) {
-          // Route not mounted yet (plugin load race, hot reload): forget every
-          // verdict and retry on the next focus or paste instead of standing
-          // down for the page lifetime.
-          this.verdicts.clear()
-          return null
-        }
-        if (!response.ok) throw new Error(`paste policy ${response.status}`)
-        return response.json() as Promise<{ ok: true; value: { takeOver: boolean } }>
+    const connection = this.ctx.get('connection') as { api: { sessions: {
+      selectModel(request: {
+        sessionId: string
+        provider: string
+        model: string
+        reasoningEffort?: string
+      }): Promise<{ result: { ok: boolean; error?: { code: string; message: string } } }>
+    } } } | undefined
+    if (connection === undefined) throw new Error('No model switch channel is available in this Web application')
+    const { result } = await connection.api.sessions.selectModel({
+      sessionId,
+      provider: route.provider,
+      model: route.model,
+      ...(route.reasoningEffort === undefined ? {} : { reasoningEffort: route.reasoningEffort }),
+    })
+    if (!result.ok) throw new Error(`${result.error?.code ?? 'select-model-failed'}: ${result.error?.message ?? 'unknown error'}`)
+  }
+
+  /**
+   * Replay a swallowed paste as a synthetic clipboard event so the composer's
+   * own intake (limits, thumbnails, keyboard) runs with the captured files.
+   * @returns false when the environment cannot construct a clipboard payload.
+   */
+  private replayPaste(target: HTMLTextAreaElement, files: readonly File[], text: string): boolean {
+    let data: DataTransfer
+    try {
+      data = new DataTransfer()
+      for (const file of files) data.items.add(file)
+      if (text !== '') data.setData('text/plain', text)
+    } catch {
+      return false
+    }
+    let event: ClipboardEvent
+    try {
+      event = new ClipboardEvent('paste', {
+        clipboardData: data,
+        bubbles: true,
+        cancelable: true,
+      } as ClipboardEventInit)
+    } catch {
+      return false
+    }
+    if (event.clipboardData === null || event.clipboardData.files.length === 0) return false
+    this.replaying = true
+    try {
+      target.dispatchEvent(event)
+    } finally {
+      this.replaying = false
+    }
+    return true
+  }
+
+  /**
+   * Auto-switch flow: switch the Session to the image-input variant, announce
+   * it, then replay the paste into the composer's native intake. A failed
+   * switch, or an environment that cannot replay clipboard bytes, degrades to
+   * the path takeover with the same files.
+   * @param sessionId - the live Session id.
+   * @param target - the composer textarea the paste landed on.
+   * @param files - the captured image files.
+   * @param text - same-paste text, replayed alongside the files.
+   * @param route - the validated variant route to switch to.
+   */
+  private async autoSwitchPaste(
+    sessionId: string,
+    target: HTMLTextAreaElement,
+    files: readonly File[],
+    text: string,
+    route: PasteSwitchRoute,
+  ): Promise<void> {
+    const input = this.inputFor(sessionId)
+    try {
+      await this.switchModel(sessionId, route)
+      input.notify('info', `Switched to ${route.label || `${route.model} (Vision Toolkit)`}; pasted images now keep the native attachment flow`)
+    } catch (error) {
+      input.notify('error', `Model switch failed; images will be sent as workspace paths: ${message(error)}`)
+      this.takeoverPaste(sessionId, target, files, text)
+      return
+    }
+    // Replaying lets the composer's own intake run (thumbnail, limits,
+    // keyboard); if the environment cannot replay clipboard bytes, the
+    // images still land as workspace paths.
+    const before = input.state.getSnapshot().imageIds.length
+    const replayed = this.replayPaste(target, files, text)
+    const after = input.state.getSnapshot().imageIds.length
+    if (!replayed || after <= before) {
+      this.takeoverPaste(sessionId, target, files, text)
+    }
+  }
+
+  /**
+   * Path-takeover flow: insert the same-paste text and every image as a text
+   * reference that serializes to the image's workspace path on send.
+   * @param sessionId - the live Session id.
+   * @param target - the composer textarea the paste landed on.
+   * @param files - the captured image files.
+   * @param text - same-paste text.
+   */
+  private takeoverPaste(
+    sessionId: string,
+    target: HTMLTextAreaElement,
+    files: readonly File[],
+    text: string,
+  ): void {
+    const input = this.inputFor(sessionId)
+    const snapshot = input.state.getSnapshot()
+    if (snapshot.phase !== 'plain') return
+    const start = Math.max(0, Math.min(target.selectionStart ?? snapshot.draft.length, snapshot.draft.length))
+    const end = Math.max(start, Math.min(target.selectionEnd ?? start, snapshot.draft.length))
+    try {
+      let cursor = this.insertText(input, text, start, end)
+      validateImages(files)
+      cursor = this.insertRecords(sessionId, input, files, cursor)
+      requestAnimationFrame(() => {
+        target.focus({ preventScroll: true })
+        target.setSelectionRange(cursor, cursor)
       })
-      .then((body) => {
-        entry.pending = false
-        if (body !== null) {
-          entry.takeOver = body.value.takeOver === true
-          entry.at = Date.now()
-        }
-      })
-      .catch(() => {
-        entry.pending = false
-      })
+    } catch (error) {
+      input.notify('error', message(error))
+    }
   }
 
   handlePaste(event: ClipboardEvent): boolean {
+    if (this.replaying) return false
     const files = imageFiles(event.clipboardData)
     if (files.length === 0) return false
     const target = event.target
@@ -334,34 +547,30 @@ export class PasteImageController {
     if (sessionId === undefined) return false
     const modelLabel = currentModelLabel()
     this.refreshVerdict(sessionId, modelLabel)
-    // Only a host-confirmed text-only model gets the path flow; image-capable
-    // models (including the image-input variants) keep the native attachment
-    // flow, which is what preserves the composer thumbnail and the durable
-    // session image.
-    if (!this.verdictFor(sessionId, modelLabel)) return false
+    // Only a fresh host verdict acts; the native attachment flow stays the
+    // default while the host is unconfirmed.
+    const verdict = this.verdictFor(sessionId, modelLabel)
+    if (verdict === undefined) return false
+    // An image-capable model (the variant routes included) keeps its native
+    // paste: no switch, no takeover.
+    if (verdict.takeOver === false && verdict.autoSwitch === undefined) return false
 
     event.preventDefault()
     event.stopPropagation()
     event.stopImmediatePropagation()
 
     const input = this.inputFor(sessionId)
-    const snapshot = input.state.getSnapshot()
-    if (snapshot.phase !== 'plain') return true
+    if (input.state.getSnapshot().phase !== 'plain') return true
 
-    const start = Math.max(0, Math.min(target.selectionStart ?? snapshot.draft.length, snapshot.draft.length))
-    const end = Math.max(start, Math.min(target.selectionEnd ?? start, snapshot.draft.length))
     const text = (event.clipboardData?.getData('text/plain') ?? '').replaceAll('\uFFFC', '')
-    try {
-      let cursor = this.insertText(input, text, start, end)
-      validateImages(files)
-      cursor = this.insertRecords(String(sessionId), input, files, cursor)
-      requestAnimationFrame(() => {
-        target.focus({ preventScroll: true })
-        target.setSelectionRange(cursor, cursor)
-      })
-    } catch (error) {
-      input.notify('error', message(error))
+    if (verdict.autoSwitch !== undefined) {
+      // The text-only model has an image-input variant: switch first, then
+      // let the paste flow natively so the thumbnail and durable session
+      // image are preserved.
+      void this.autoSwitchPaste(sessionId, target, files, text, verdict.autoSwitch)
+      return true
     }
+    this.takeoverPaste(sessionId, target, files, text)
     return true
   }
 
