@@ -13,7 +13,7 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ### Added
 
-- Added a **Plugin updates** Settings card that checks the configured npm registry, installs an explicitly confirmed release into the current registry-backed DSH profile, verifies it, and can restart an explicitly opted-in unsupervised POSIX DSH Web process through an independent readiness/rollback helper. Local/workspace/git/URL and otherwise unsafe-to-replace installs remain read-only; Windows and manager-owned processes keep restart ownership outside the plugin.
+- Added a **Plugin updates** Settings card that checks the configured npm registry, installs an explicitly confirmed release into the current registry-backed DSH profile, verifies it, and can restart an explicitly opted-in fixed-port POSIX DSH Web process through an independent readiness/rollback helper. Token-owned cross-process locking, pre-update manifest/lockfile backups, bounded rollback commands, and exact-version recovery protect the Profile across failed installs and restart handoff. Local/workspace/git/URL and otherwise unsafe-to-replace installs remain read-only; Windows, dynamic-port, and manager-owned processes keep restart ownership outside the plugin.
 
 ### Changed
 

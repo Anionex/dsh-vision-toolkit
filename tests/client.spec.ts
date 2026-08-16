@@ -420,6 +420,12 @@ describe('Vision Toolkit client plugin', () => {
     fireEvent.change(screen.getByLabelText('baseUrl'), { target: { value: 'https://changed.example/v1' } })
     expect(updateButton.disabled).toBe(true)
     expect(screen.getByText('updateSaveFirst')).toBeTruthy()
+
+    fireEvent.change(screen.getByLabelText('baseUrl'), { target: { value: 'https://api.inferera.com/v1' } })
+    const keyInput = screen.getByLabelText('apiKey') as HTMLInputElement
+    expect(keyInput.disabled).toBe(false)
+    fireEvent.change(keyInput, { target: { value: 'unsaved-secret' } })
+    expect(updateButton.disabled).toBe(true)
   })
 
   it('unlocks API key input when the built-in provider changes to a custom endpoint', async () => {

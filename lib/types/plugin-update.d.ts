@@ -8,7 +8,7 @@
  */
 import type { Context } from '@deepseek-ai/cordis';
 export declare const VISION_TOOLKIT_PACKAGE = "@anionex/dsh-vision-toolkit";
-export type PluginUpdateUnavailableReason = 'profile-not-found' | 'not-direct-dependency' | 'unsupported-install-source' | 'profile-read-only' | 'pnpm-unavailable' | 'unsupported-platform' | 'restart-unmanaged';
+export type PluginUpdateUnavailableReason = 'profile-not-found' | 'not-direct-dependency' | 'unsupported-install-source' | 'profile-read-only' | 'pnpm-unavailable' | 'unsupported-platform' | 'restart-unmanaged' | 'restart-address-unavailable';
 export interface PluginUpdateCapability {
     supported: boolean;
     checkSupported?: boolean;
@@ -40,12 +40,17 @@ export interface RestartRequest {
     cwd: string;
     logPath: string;
     lockPath: string;
+    lockToken: string;
+    backupDir: string;
     profileDir: string;
     pnpmPath: string;
     packageName: string;
     fromVersion: string;
     toVersion: string;
     healthUrl: string;
+    rollbackTimeoutMs: number;
+    processKillGraceMs: number;
+    readinessTimeoutMs: number;
 }
 export interface PluginUpdateServiceOptions {
     packageRoot?: string;

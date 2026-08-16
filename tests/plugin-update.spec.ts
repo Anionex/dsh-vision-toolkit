@@ -3,7 +3,7 @@ import { once } from 'node:events'
 import { createServer } from 'node:http'
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { SubprocessHandle, SubprocessOutputRead, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -128,6 +128,23 @@ describe('VisionToolkitPluginUpdateService', () => {
       reason: 'restart-unmanaged',
     })
     expect(subprocess.resolveExecutable).toHaveBeenCalledWith('pnpm')
+  })
+
+  it('disables automatic restart when DSH Web uses a dynamically allocated port', async () => {
+    const fixture = await profileFixture()
+    const subprocess = new FakeSubprocess(async () => ({ stdout: '' }))
+    const service = new VisionToolkitPluginUpdateService(host(subprocess), '0.1.0', {
+      profileDir: fixture.profileDir,
+      packageRoot: fixture.installedDir,
+      argv: ['web', '--port', '0'],
+      allowDetachedRestart: true,
+    })
+
+    await expect(service.capability()).resolves.toMatchObject({
+      supported: false,
+      checkSupported: true,
+      reason: 'restart-address-unavailable',
+    })
   })
 
   it('does not advertise the POSIX restart handoff on Windows', async () => {
@@ -297,7 +314,8 @@ describe('VisionToolkitPluginUpdateService', () => {
     const fixture = await profileFixture()
     const subprocess = new FakeSubprocess(async () => ({
       exitCode: 1,
-      stderr: 'GET https://alice:secret@registry.example/ failed npm_supersecret _authToken=token-value',
+      stderr: 'GET https://alice:secret@registry.example/?token=query-secret failed '
+        + 'https://single-secret@registry.example/ npm_supersecret _authToken=token-value',
     }))
     const service = new VisionToolkitPluginUpdateService(host(subprocess), '0.1.0', {
       profileDir: fixture.profileDir,
@@ -313,16 +331,61 @@ describe('VisionToolkitPluginUpdateService', () => {
     expect(message).not.toContain('secret')
     expect(message).not.toContain('supersecret')
     expect(message).not.toContain('token-value')
+    expect(message).not.toContain('query-secret')
+    expect(message).not.toContain('single-secret')
     expect(message).toContain('***')
+  })
+
+  it('restores the original manifest and lockfile after pnpm partially changes the profile then fails', async () => {
+    const fixture = await profileFixture('^0.1.0')
+    const manifestPath = join(fixture.profileDir, 'package.json')
+    const lockfilePath = join(fixture.profileDir, 'pnpm-lock.yaml')
+    const originalManifest = await readFile(manifestPath)
+    const originalLockfile = Buffer.from('lockfileVersion: 9\noriginal: true\n')
+    await writeFile(lockfilePath, originalLockfile)
+    let addCalls = 0
+    const subprocess = new FakeSubprocess(async (spec) => {
+      if (spec.argv.includes('view')) return { stdout: '"0.2.0"\n' }
+      addCalls += 1
+      if (addCalls === 1) {
+        await writeFile(manifestPath, JSON.stringify({ dependencies: { [VISION_TOOLKIT_PACKAGE]: '0.2.0' } }))
+        await writeFile(lockfilePath, 'partially-updated: true\n')
+        await writeFile(join(fixture.installedDir, 'package.json'), JSON.stringify({
+          name: VISION_TOOLKIT_PACKAGE,
+          version: '0.2.0',
+        }))
+        return { exitCode: 1, stderr: 'late lifecycle failure' }
+      }
+      await writeFile(join(fixture.installedDir, 'package.json'), JSON.stringify({
+        name: VISION_TOOLKIT_PACKAGE,
+        version: '0.1.0',
+      }))
+      return { stdout: 'restored\n' }
+    })
+    const service = new VisionToolkitPluginUpdateService(host(subprocess), '0.1.0', {
+      profileDir: fixture.profileDir,
+      packageRoot: fixture.installedDir,
+      argv: ['web'],
+      allowDetachedRestart: true,
+      healthUrl: 'http://127.0.0.1:3080/_dsh/vision-toolkit/settings',
+    })
+
+    await expect(service.installAndRestart('0.2.0')).rejects.toMatchObject({ code: 'update-failed' })
+    expect(addCalls).toBe(2)
+    expect(await readFile(manifestPath)).toEqual(originalManifest)
+    expect(await readFile(lockfilePath)).toEqual(originalLockfile)
+    await expect(readFile(join(fixture.profileDir, '.dsh-vision-toolkit-update.lock')))
+      .rejects.toMatchObject({ code: 'ENOENT' })
   })
 
   it('refuses to restart when pnpm did not install the exact confirmed version', async () => {
     const fixture = await profileFixture()
     const subprocess = new FakeSubprocess(async (spec) => {
       if (spec.argv.includes('view')) return { stdout: '"0.2.0"\n' }
+      const target = spec.argv.find(value => value.startsWith(`${VISION_TOOLKIT_PACKAGE}@`))
       await writeFile(join(fixture.installedDir, 'package.json'), JSON.stringify({
         name: VISION_TOOLKIT_PACKAGE,
-        version: '0.3.0',
+        version: target?.endsWith('@0.1.0') === true ? '0.1.0' : '0.3.0',
       }))
       return { stdout: 'updated\n' }
     })
@@ -347,10 +410,18 @@ describe('plugin restart helper', () => {
     const statePath = join(root, 'version.txt')
     const pidPath = join(root, 'server.pid')
     const lockPath = join(root, '.update.lock')
+    const lockToken = 'restart-helper-token'
+    const backupDir = join(root, '.update-backup')
     const appPath = join(root, 'fake-dsh.cjs')
     const pnpmPath = join(root, 'fake-pnpm.cjs')
     await writeFile(statePath, '0.2.0')
-    await writeFile(lockPath, 'locked')
+    await writeFile(lockPath, JSON.stringify({ pid: process.pid, token: lockToken }))
+    await mkdir(backupDir)
+    await writeFile(join(backupDir, 'package.json'), JSON.stringify({
+      name: 'dsh-profile-web',
+      dependencies: { [VISION_TOOLKIT_PACKAGE]: '0.1.0' },
+    }))
+    await writeFile(join(backupDir, 'metadata.json'), JSON.stringify({ hadLockfile: false, manifestMode: 0o644 }))
     await writeFile(appPath, `
 const { readFileSync, writeFileSync } = require('node:fs')
 const { createServer } = require('node:http')
@@ -392,12 +463,17 @@ writeFileSync(process.env.DVT_RESTART_STATE, target.slice(target.lastIndexOf('@'
       cwd: root,
       logPath: join(root, 'restart.log'),
       lockPath,
+      lockToken,
+      backupDir,
       profileDir: root,
       pnpmPath,
       packageName: VISION_TOOLKIT_PACKAGE,
       fromVersion: '0.1.0',
       toVersion: '0.2.0',
       healthUrl: `http://127.0.0.1:${port}/_dsh/vision-toolkit/settings`,
+      rollbackTimeoutMs: 5_000,
+      processKillGraceMs: 100,
+      readinessTimeoutMs: 5_000,
     })).toString('base64url')
     const helper = spawn(process.execPath, ['-e', PLUGIN_RESTART_HELPER_SOURCE, payload], {
       cwd: root,
@@ -422,5 +498,77 @@ writeFileSync(process.env.DVT_RESTART_STATE, target.slice(target.lastIndexOf('@'
     await vi.waitFor(async () => {
       await expect(readFile(lockPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
     })
+    await expect(readFile(join(backupDir, 'metadata.json'))).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('keeps the helper-owned profile lock and times out a hung rollback pnpm process', async () => {
+    const fixture = await profileFixture()
+    const root = dirname(dirname(fixture.profileDir))
+    const statePath = join(root, 'version.txt')
+    const lockPath = join(fixture.profileDir, '.dsh-vision-toolkit-update.lock')
+    const lockToken = 'handoff-token'
+    const backupDir = join(fixture.profileDir, '.update-backup')
+    const appPath = join(root, 'exit-immediately.cjs')
+    const pnpmPath = join(root, 'hung-pnpm.cjs')
+    const originalManifest = await readFile(join(fixture.profileDir, 'package.json'))
+    await writeFile(statePath, '0.2.0')
+    await writeFile(lockPath, JSON.stringify({ pid: 999_999, token: lockToken }))
+    await mkdir(backupDir)
+    await writeFile(join(backupDir, 'package.json'), originalManifest)
+    await writeFile(join(backupDir, 'metadata.json'), JSON.stringify({ hadLockfile: false, manifestMode: 0o644 }))
+    await writeFile(appPath, 'process.exit(1)\n')
+    await writeFile(pnpmPath, `#!/bin/sh
+trap '' TERM
+while :; do sleep 1; done
+`)
+    await chmod(pnpmPath, 0o755)
+
+    const payload = Buffer.from(JSON.stringify({
+      pid: 999_999,
+      execPath: process.execPath,
+      args: [appPath],
+      cwd: root,
+      logPath: join(root, 'restart.log'),
+      lockPath,
+      lockToken,
+      backupDir,
+      profileDir: fixture.profileDir,
+      pnpmPath,
+      packageName: VISION_TOOLKIT_PACKAGE,
+      fromVersion: '0.1.0',
+      toVersion: '0.2.0',
+      healthUrl: 'http://127.0.0.1:1/_dsh/vision-toolkit/settings',
+      rollbackTimeoutMs: 100,
+      processKillGraceMs: 50,
+      readinessTimeoutMs: 100,
+    })).toString('base64url')
+    const helper = spawn(process.execPath, ['-e', PLUGIN_RESTART_HELPER_SOURCE, payload], {
+      cwd: root,
+      env: process.env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    let stderr = ''
+    helper.stderr?.on('data', chunk => { stderr += String(chunk) })
+
+    await vi.waitFor(async () => {
+      const owner = JSON.parse(await readFile(lockPath, 'utf8')) as { pid: number; token: string }
+      expect(owner).toMatchObject({ pid: helper.pid, token: lockToken })
+    })
+    const secondSubprocess = new FakeSubprocess(async () => ({ stdout: '"0.2.0"\n' }))
+    const second = new VisionToolkitPluginUpdateService(host(secondSubprocess), '0.1.0', {
+      profileDir: fixture.profileDir,
+      packageRoot: fixture.installedDir,
+      argv: ['web'],
+      allowDetachedRestart: true,
+      healthUrl: 'http://127.0.0.1:3080/_dsh/vision-toolkit/settings',
+    })
+    await expect(second.installAndRestart('0.2.0')).rejects.toMatchObject({ code: 'update-in-progress' })
+    expect(secondSubprocess.spawns).toHaveLength(0)
+
+    const [code] = await once(helper, 'exit') as [number | null]
+    expect(code, stderr).toBe(1)
+    expect(stderr).toContain('rollback pnpm timed out')
+    expect(await readFile(join(fixture.profileDir, 'package.json'))).toEqual(originalManifest)
+    await expect(readFile(lockPath)).rejects.toMatchObject({ code: 'ENOENT' })
   })
 })

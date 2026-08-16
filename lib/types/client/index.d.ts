@@ -85,6 +85,7 @@ declare const en: {
     readonly updateReasonPnpm: "pnpm is unavailable in the DSH execution environment.";
     readonly updateReasonPlatform: "Automatic restart is unavailable on this operating system.";
     readonly updateReasonRestartUnmanaged: "Detached self-restart is disabled. Use a supported process manager, or explicitly opt in with DSH_VISION_TOOLKIT_ALLOW_DETACHED_RESTART=1 for an unsupervised Web process.";
+    readonly updateReasonRestartAddress: "Automatic restart is unavailable when DSH Web uses an unknown or dynamically allocated port. Start it with a fixed --port value.";
     readonly updateSaveFirst: "Save or discard the current Settings and API key changes before updating the plugin.";
     readonly restartTimedOut: "DSH Web did not return with the target plugin version. Check the restart log and restart the Web profile through its original process manager.";
     readonly restartRolledBack: "The new plugin did not become ready, so the previous version was restored. Check the restart log before trying again.";
@@ -231,7 +232,7 @@ interface SettingsValue {
     };
     allowedDirs?: string[];
 }
-type PluginUpdateUnavailableReason = 'profile-not-found' | 'not-direct-dependency' | 'unsupported-install-source' | 'profile-read-only' | 'pnpm-unavailable' | 'unsupported-platform' | 'restart-unmanaged';
+type PluginUpdateUnavailableReason = 'profile-not-found' | 'not-direct-dependency' | 'unsupported-install-source' | 'profile-read-only' | 'pnpm-unavailable' | 'unsupported-platform' | 'restart-unmanaged' | 'restart-address-unavailable';
 interface PluginUpdateCapability {
     supported: boolean;
     checkSupported?: boolean;
