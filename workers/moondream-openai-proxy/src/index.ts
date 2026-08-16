@@ -251,13 +251,13 @@ async function chatCompletion(request: Request, env: Env): Promise<Response> {
     const body = await readBoundedJson(request, Number(env.MAX_REQUEST_BYTES))
     const completion = parseChatCompletionRequest(body, Number(env.MAX_IMAGE_BYTES))
     quota = await consumeDailyQuota(env, hash)
-    const image = await materializeImage(
-      completion.image,
+    const images = await Promise.all(completion.images.map(image => materializeImage(
+      image,
       Number(env.MAX_IMAGE_BYTES),
       Number(env.MAX_IMAGE_PIXELS),
-    )
+    )))
     const maxTokens = Math.min(completion.maxTokens ?? 512, Number(env.MAX_OUTPUT_TOKENS))
-    const modelInput = buildVisionInput(completion, image, maxTokens)
+    const modelInput = buildVisionInput(completion, images, maxTokens)
 
     inferenceStarted = true
     const output: VisionOutput = await runGroqCompletion(modelInput, env, requestId)

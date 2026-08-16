@@ -30,7 +30,7 @@ function request(overrides: Record<string, unknown> = {}): Record<string, unknow
 describe('parseChatCompletionRequest', () => {
   it('maps a standard OpenAI vision request to the Gemma vision task', () => {
     expect(parseChatCompletionRequest(request(), 1024)).toMatchObject({
-      image: tinyPng,
+      images: [tinyPng],
       question: 'User: Describe this image.',
       task: 'query',
     })
@@ -83,16 +83,26 @@ describe('parseChatCompletionRequest', () => {
     }), 1024)).toThrow(message)
   })
 
-  it('rejects multiple images instead of silently dropping one', () => {
-    expect(() => parseChatCompletionRequest(request({
+  it('accepts up to five images and preserves their order', () => {
+    const parsed = parseChatCompletionRequest(request({
       messages: [{
         content: [
           { image_url: { url: tinyPng }, type: 'image_url' },
-          { image_url: { url: tinyPng }, type: 'image_url' },
+          { image_url: { url: 'https://images.example.com/second.png' }, type: 'image_url' },
         ],
         role: 'user',
       }],
-    }), 1024)).toThrow('Exactly one user image_url is required')
+    }), 1024)
+    expect(parsed.images).toEqual([tinyPng, 'https://images.example.com/second.png'])
+  })
+
+  it('rejects requests with more than five images', () => {
+    expect(() => parseChatCompletionRequest(request({
+      messages: [{
+        content: Array.from({ length: 6 }, () => ({ image_url: { url: tinyPng }, type: 'image_url' })),
+        role: 'user',
+      }],
+    }), 1024)).toThrow('At most 5 user image_url values are supported')
   })
 
   it('rejects oversized decoded image data', () => {
@@ -163,7 +173,7 @@ describe('response mapping', () => {
 
   it('builds Cloudflare Gemma chat input with the validated image data URI', () => {
     const completion = parseChatCompletionRequest(request({ task: 'query', temperature: 0.2, top_p: 0.8 }), 1024)
-    expect(buildGemmaInput(completion, tinyPng, 256)).toEqual({
+    expect(buildGemmaInput(completion, [tinyPng], 256)).toEqual({
       messages: [{
         content: [
           { text: 'User: Describe this image.', type: 'text' },

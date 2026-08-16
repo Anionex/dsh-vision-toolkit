@@ -229,6 +229,7 @@ This is a shared zero-configuration entry point, not an unlimited private endpoi
 | Per client | 100 requests per UTC day |
 | Whole service | 3,000 requests per UTC day |
 | Burst | 60 requests per 60 seconds |
+| Images per request | Up to 5 |
 | Image size | 4 MiB per image |
 | Decoded pixels | 20,000,000 per image |
 | Output | 512 tokens per request |

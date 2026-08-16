@@ -4,6 +4,10 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+### Fixed
+
+- Removed the stale single-image restriction from the public Groq vision proxy; one request can now forward up to five images in their original order.
+
 ## [0.1.17] - 2026-08-16
 
 ### Changed
