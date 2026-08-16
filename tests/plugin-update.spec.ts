@@ -113,7 +113,7 @@ describe('VisionToolkitPluginUpdateService', () => {
     expect(subprocess.resolveExecutable).toHaveBeenCalledWith('pnpm')
   })
 
-  it('requires an explicit opt-in for detached restart ownership', async () => {
+  it('supports installing from a detached Web process and leaves restart to the user', async () => {
     const fixture = await profileFixture()
     const subprocess = new FakeSubprocess(async () => ({ stdout: '' }))
     const service = new VisionToolkitPluginUpdateService(host(subprocess), '0.1.0', {
@@ -123,14 +123,13 @@ describe('VisionToolkitPluginUpdateService', () => {
     })
 
     await expect(service.capability()).resolves.toMatchObject({
-      supported: false,
+      supported: true,
       profile: 'web',
-      reason: 'restart-unmanaged',
     })
     expect(subprocess.resolveExecutable).toHaveBeenCalledWith('pnpm')
   })
 
-  it('disables automatic restart when DSH Web uses a dynamically allocated port', async () => {
+  it('still supports installation when DSH Web uses a dynamically allocated port', async () => {
     const fixture = await profileFixture()
     const subprocess = new FakeSubprocess(async () => ({ stdout: '' }))
     const service = new VisionToolkitPluginUpdateService(host(subprocess), '0.1.0', {
@@ -140,14 +139,10 @@ describe('VisionToolkitPluginUpdateService', () => {
       allowDetachedRestart: true,
     })
 
-    await expect(service.capability()).resolves.toMatchObject({
-      supported: false,
-      checkSupported: true,
-      reason: 'restart-address-unavailable',
-    })
+    await expect(service.capability()).resolves.toMatchObject({ supported: true, checkSupported: true })
   })
 
-  it('fails closed when the active WebServer port was not supplied explicitly', async () => {
+  it('falls back to manual restart when the active WebServer port cannot be reproduced', async () => {
     const fixture = await profileFixture()
     const subprocess = new FakeSubprocess(async () => ({ stdout: '' }))
     const service = new VisionToolkitPluginUpdateService(host(subprocess), '0.1.0', {
@@ -158,10 +153,7 @@ describe('VisionToolkitPluginUpdateService', () => {
     })
 
     service.configureWebServer('0.0.0.0', 8080)
-    await expect(service.capability()).resolves.toMatchObject({
-      supported: false,
-      reason: 'restart-address-unavailable',
-    })
+    await expect(service.capability()).resolves.toMatchObject({ supported: true })
   })
 
   it('uses the active WebServer address when it matches an explicit fixed port', async () => {
@@ -178,7 +170,7 @@ describe('VisionToolkitPluginUpdateService', () => {
     await expect(service.capability()).resolves.toMatchObject({ supported: true })
   })
 
-  it('does not advertise the POSIX restart handoff on Windows', async () => {
+  it('supports installation on Windows even though automatic restart is unavailable', async () => {
     const fixture = await profileFixture()
     const subprocess = new FakeSubprocess(async () => ({ stdout: '' }))
     const service = new VisionToolkitPluginUpdateService(host(subprocess), '0.1.0', {
@@ -189,11 +181,38 @@ describe('VisionToolkitPluginUpdateService', () => {
       platform: 'win32',
     })
 
-    await expect(service.capability()).resolves.toMatchObject({
-      supported: false,
-      profile: 'web',
-      reason: 'unsupported-platform',
+    await expect(service.capability()).resolves.toMatchObject({ supported: true, profile: 'web' })
+  })
+
+  it('installs successfully without automatic restart and reports that a manual restart is required', async () => {
+    const fixture = await profileFixture()
+    const subprocess = new FakeSubprocess(async (spec) => {
+      if (spec.argv.includes('view')) return { stdout: '"0.2.0"\n' }
+      await writeFile(join(fixture.installedDir, 'package.json'), JSON.stringify({
+        name: VISION_TOOLKIT_PACKAGE,
+        version: '0.2.0',
+      }))
+      return { stdout: 'updated\n' }
     })
+    const prepareRestart = vi.fn()
+    const schedule = vi.fn()
+    const service = new VisionToolkitPluginUpdateService(host(subprocess), '0.1.0', {
+      profileDir: fixture.profileDir,
+      packageRoot: fixture.installedDir,
+      argv: ['web'],
+      prepareRestart,
+      schedule,
+    })
+
+    await expect(service.installAndRestart('0.2.0')).resolves.toEqual({
+      fromVersion: '0.1.0',
+      toVersion: '0.2.0',
+      profile: 'web',
+      restarting: false,
+      manualRestartRequired: true,
+    })
+    expect(prepareRestart).not.toHaveBeenCalled()
+    expect(schedule).not.toHaveBeenCalled()
   })
 
   it('checks the configured registry through pnpm without mutating the profile', async () => {

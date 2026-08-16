@@ -22,13 +22,20 @@ export interface PluginUpdateCheck extends PluginUpdateCapability {
     updateAvailable: boolean;
     checkedAt: string;
 }
-export interface PluginUpdateResult {
+interface PluginUpdateResultBase {
     fromVersion: string;
     toVersion: string;
     profile: string;
-    restarting: true;
-    retryAfterMs: number;
 }
+export type PluginUpdateResult = PluginUpdateResultBase & ({
+    restarting: true;
+    manualRestartRequired?: false;
+    retryAfterMs: number;
+} | {
+    restarting: false;
+    manualRestartRequired: true;
+    retryAfterMs?: undefined;
+});
 export declare class PluginUpdateError extends Error {
     readonly code: string;
     constructor(code: string, message: string, options?: ErrorOptions);
@@ -105,7 +112,8 @@ export declare class VisionToolkitPluginUpdateService {
     private acquireLock;
     /** Query the configured npm registry without mutating the profile. */
     check(): Promise<PluginUpdateCheck>;
-    /** Install the currently published version, then restart this DSH process. */
+    /** Install the currently published version, then restart when this process can do so safely. */
     installAndRestart(expectedVersion: string): Promise<PluginUpdateResult>;
 }
+export {};
 //# sourceMappingURL=plugin-update.d.ts.map
