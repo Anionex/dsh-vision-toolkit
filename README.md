@@ -5,8 +5,8 @@
 [![Recommended by dshfind](https://img.shields.io/badge/recommended%20by-dshfind-FFD700?style=flat-square)](https://dshfind.com/en/plugins/Anionex/dsh-vision-toolkit)
 [![dshfind score: 94 — highest-rated plugin](https://img.shields.io/badge/dshfind%20score-94%20%7C%20highest--rated%20plugin-5B4CF0?style=flat-square)](https://dshfind.com/en/plugins/Anionex/dsh-vision-toolkit)
 [![X (Twitter)](https://img.shields.io/badge/-@anion__ex-000000?style=flat-square&logo=x&logoColor=white)](https://x.com/anion_ex)
-[![Release v0.1.9](https://img.shields.io/badge/release-v0.1.9-5B4CF0?style=flat-square)](https://github.com/Anionex/dsh-vision-toolkit/releases/tag/v0.1.9)
-[![Verified: 230 tests](https://img.shields.io/badge/verified-230%20tests-2EA44F?style=flat-square)](tests)
+[![Release v0.1.10](https://img.shields.io/badge/release-v0.1.10-5B4CF0?style=flat-square)](https://github.com/Anionex/dsh-vision-toolkit/releases/tag/v0.1.10)
+[![Verified: 233 tests](https://img.shields.io/badge/verified-233%20tests-2EA44F?style=flat-square)](tests)
 [![License: MIT](https://img.shields.io/badge/license-MIT-0B7285?style=flat-square)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-%5E22.19%20%7C%20%3E%3D24-339933?style=flat-square&logo=nodedotjs&logoColor=white)](package.json)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)](runtime/requirements.lock)
@@ -101,7 +101,7 @@ dsh --profile headless --dump-config | grep vision-toolkit
 
 Legacy profiles must use `nodeLinker: hoisted` and `autoInstallPeers: false` in their `pnpm-workspace.yaml`. An updated DSH launcher repairs these owned settings before `dsh plugin` runs; when using an older launcher, set them before installation so pnpm does not assemble a second Harness dependency graph inside the profile.
 
-Restart a running Web profile, open **Settings → Vision Toolkit**, select a DSH Credential for remote tools, run **Test API connection**, and then run **Test vision model** to verify one real image request. In a conversation, make an image available as a workspace path, invoke `/vision-tools`, and ask the Agent to call a specific `vision_*` tool. Local crop, trace, pixel, color, foreground, and HTML operations do not require a visual API credential.
+Restart a running Web profile, open **Settings → Vision Toolkit**, and run **Test API connection** followed by **Test vision model**. New installations use the built-in free Moondream provider automatically, so no API key or DSH Credential is required. To use another provider, edit the endpoint/model/protocol and provide its DSH Credential. In a conversation, make an image available as a workspace path, invoke `/vision-tools`, and ask the Agent to call a specific `vision_*` tool. Local crop, trace, pixel, color, foreground, and HTML operations do not require a visual API credential.
 
 ## Community Group
 
@@ -168,7 +168,7 @@ Description conversion needs the configured vision provider and its credential; 
 - DeepSeek Harness with a Web or Headless profile and `pnpm` available to `dsh plugin`.
 - Python 3.11 or newer. Managed mode creates an isolated environment, so users do not install the upstream CLI or Python packages manually.
 - Network access on the first managed-runtime activation unless the exact packages in `runtime/requirements.lock` are already available in the configured package cache.
-- An OpenAI-compatible or Anthropic vision endpoint and DSH Credential for `vision_glance`, `vision_ground`, `vision_detect`, and non-split-only long-screenshot OCR. Local tools remain usable without that credential.
+- The built-in free Moondream provider is ready for `vision_glance`, `vision_ground`, `vision_detect`, and non-split-only long-screenshot OCR. A DSH Credential is required only when a custom OpenAI-compatible or Anthropic endpoint is configured. Local tools remain usable without either provider.
 - Chrome, Chromium, or Edge only for `vision_html_screenshot`; all other tools remain available when no supported browser is installed.
 - PNG, JPEG, GIF, or WebP inputs inside the session workspace or an explicitly configured `allowedDirs` root.
 
@@ -209,7 +209,7 @@ dsh plugin --profile web remove @dsh-external/dsh-vision-toolkit
 dsh plugin --profile web add @anionex/dsh-vision-toolkit
 ```
 
-After restarting, Settings → Vision should report plugin version **0.1.9**.
+After restarting, Settings → Vision should report plugin version **0.1.10**. The built-in free provider is selected automatically; custom providers still use the configured DSH Credential.
 
 For a registry installation, update the dependency through the profile package manager:
 
@@ -237,16 +237,16 @@ The bundle defaults to the managed runtime. A profile patch can override the pro
 - id: vision-toolkit
   config:
     provider:
-      baseUrl: https://api.inferera.com/v1
-      credential: VISION_API_KEY
-      model: gemini-3.6-flash
+      baseUrl: https://vision.anionex.me/v1
+      credential: ANIONEX_FREE_VISION
+      model: moondream-3.1
       protocol: openai
       anthropicThinking: omit
       userAgent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36
     language: zh
     timeoutMs: 60000
-    maxImageBytes: 10485760
-    maxImagePixels: 40000000
+    maxImageBytes: 4194304
+    maxImagePixels: 20000000
     concurrency: 4
     runtime:
       mode: managed
@@ -261,16 +261,16 @@ The bundle defaults to the managed runtime. A profile patch can override the pro
 
 | Field | Default | Contract |
 |---|---|---|
-| `provider.baseUrl` | `https://api.inferera.com/v1` | Provider API base URL, normalized without trailing slashes; for Anthropic use a base ending in `/v1`, not the full `/messages` URL |
-| `provider.credential` | `VISION_API_KEY` | DSH Credential reference, never a secret value |
-| `provider.model` | `gemini-3.6-flash` | Multimodal model name sent to remote tools |
+| `provider.baseUrl` | `https://vision.anionex.me/v1` | Built-in free OpenAI-compatible endpoint; custom providers may use another base URL, normalized without trailing slashes |
+| `provider.credential` | `ANIONEX_FREE_VISION` | Read-only built-in reference for the free service; custom providers use a DSH Credential reference, never a secret value |
+| `provider.model` | `moondream-3.1` | Multimodal model name sent to remote tools |
 | `provider.protocol` | `openai` | `openai` sends Chat Completions requests; `anthropic` sends native Messages requests |
 | `provider.anthropicThinking` | `omit` | Anthropic thinking field. `omit` sends no thinking field and has the broadest compatibility. Use `disabled` or `adaptive` only when the selected model documents that mode; restore `omit` first if the provider returns HTTP 400. |
 | `provider.userAgent` | browser-compatible default | User-Agent sent by vision requests and explicit connection tests; override it for provider or proxy compatibility |
 | `language` | `zh` | Vision output language: `zh` or `en` |
 | `timeoutMs` | `60000` | Whole-operation deadline, 1000-600000 ms; each tool may request a narrower override |
-| `maxImageBytes` | `10485760` | Encoded-byte limit per input image |
-| `maxImagePixels` | `40000000` | Decoded-pixel limit per input image |
+| `maxImageBytes` | `4194304` | Encoded-byte limit per input image; the built-in free service accepts up to 4 MiB |
+| `maxImagePixels` | `20000000` | Decoded-pixel limit per input image; the built-in free service accepts up to 20,000,000 pixels |
 | `concurrency` | `4` | In-flight operations per session, 1-16 |
 | `runtime.mode` | `managed` | `managed` uses the packaged snapshot; `external` accepts only the exact pin |
 | `runtime.agentVisionToolkitPath` | unset | Required in `external` mode; exported exact snapshot or clean pinned Git checkout |
@@ -282,9 +282,22 @@ The bundle defaults to the managed runtime. A profile patch can override the pro
 
 ### Credentials
 
-The Web Settings page accepts the actual value in its write-only **API key** field. Leave that field blank to retain an existing key; saving a non-empty value writes it under the advanced **Credential name** reference, which defaults to `VISION_API_KEY`. Headless deployments can pre-provision the same reference in `$DSH_HOME/.credentials.yaml`.
+The built-in free provider uses the fixed `ANIONEX_FREE_VISION` reference and does not accept or store a user API key. If you change the endpoint, model, or protocol to a custom provider, the write-only **API key** field unlocks; saving a non-empty value writes it under the advanced **Credential name** reference. Headless deployments can pre-provision that custom reference in `$DSH_HOME/.credentials.yaml`.
 
 Settings store only the reference, never the value. The browser does not receive a stored value, and a successful save clears the field instead of echoing it. Remote operations resolve the reference once per call and inject the value only into that subprocess environment. The plugin excludes user `.env` files, checkout `.env` files, `PYTHONPATH`, `PYTHONHOME`, `VIRTUAL_ENV`, and user site-packages so ambient Python or upstream configuration cannot override the selected DSH provider. Logs, errors, tool results, Artifact metadata, and Settings responses never contain the secret.
+
+### Built-in free service limits
+
+The public service is shared and intended as a zero-configuration default, not an unlimited private endpoint. Limits are enforced by the proxy and returned as OpenAI-style errors with a reason code and readable message; rate-limit responses also include `Retry-After` and request-quota headers.
+
+| Limit | Current value |
+|---|---:|
+| Per client | 30 requests per UTC day |
+| Global service | 120 requests per UTC day |
+| Burst | 6 requests per 60 seconds |
+| Image bytes | 4 MiB per image |
+| Decoded pixels | 20,000,000 per image |
+| Output | 512 tokens maximum |
 
 ### Managed and external runtimes
 
@@ -385,7 +398,7 @@ Update the upstream snapshot only through `pnpm run upstream:sync -- <checkout>`
 
 ## Project status and scope
 
-Version `0.1.9` is the current public npm release. P0 and P1 are product commitments in this package. P2 is a design threshold: no stable `ctx.visionToolkit` service, capability-discovery API, or provider ecosystem is published until at least one independent plugin consumes the internal capability shape. Web upload, drag-and-drop, camera/video/audio/document ingestion, interactive box editing, automatic GUI clicking, service clusters, model routing, model voting, and cross-session vision caches remain outside the current product.
+Version `0.1.10` is the current public npm release. P0 and P1 are product commitments in this package. P2 is a design threshold: no stable `ctx.visionToolkit` service, capability-discovery API, or provider ecosystem is published until at least one independent plugin consumes the internal capability shape. Web upload, drag-and-drop, camera/video/audio/document ingestion, interactive box editing, automatic GUI clicking, service clusters, model routing, model voting, and cross-session vision caches remain outside the current product.
 
 ## Community and About
 

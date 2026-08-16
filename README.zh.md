@@ -5,8 +5,8 @@
 [![由 dshfind 推荐](https://img.shields.io/badge/%E7%94%B1%20dshfind-%E6%8E%A8%E8%8D%90-FFD700?style=flat-square)](https://dshfind.com/zh/plugins/Anionex/dsh-vision-toolkit)
 [![dshfind 评分：94——最高分插件](https://img.shields.io/badge/dshfind%20%E8%AF%84%E5%88%86-94%20%7C%20%E6%9C%80%E9%AB%98%E5%88%86%E6%8F%92%E4%BB%B6-5B4CF0?style=flat-square)](https://dshfind.com/zh/plugins/Anionex/dsh-vision-toolkit)
 [![X (Twitter)](https://img.shields.io/badge/-@anion__ex-000000?style=flat-square&logo=x&logoColor=white)](https://x.com/anion_ex)
-[![Release v0.1.9](https://img.shields.io/badge/release-v0.1.9-5B4CF0?style=flat-square)](https://github.com/Anionex/dsh-vision-toolkit/releases/tag/v0.1.9)
-[![Verified: 230 tests](https://img.shields.io/badge/verified-230%20tests-2EA44F?style=flat-square)](tests)
+[![Release v0.1.10](https://img.shields.io/badge/release-v0.1.10-5B4CF0?style=flat-square)](https://github.com/Anionex/dsh-vision-toolkit/releases/tag/v0.1.10)
+[![Verified: 233 tests](https://img.shields.io/badge/verified-233%20tests-2EA44F?style=flat-square)](tests)
 [![License: MIT](https://img.shields.io/badge/license-MIT-0B7285?style=flat-square)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-%5E22.19%20%7C%20%3E%3D24-339933?style=flat-square&logo=nodedotjs&logoColor=white)](package.json)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)](runtime/requirements.lock)
@@ -101,7 +101,7 @@ dsh --profile headless --dump-config | grep vision-toolkit
 
 旧 Profile 的 `pnpm-workspace.yaml` 必须使用 `nodeLinker: hoisted` 和 `autoInstallPeers: false`。更新后的 DSH launcher 会在 `dsh plugin` 运行前修复这两个自有设置；使用旧 launcher 时，应在安装前手动设置，避免 pnpm 在 Profile 内组装第二套 Harness 依赖图。
 
-安装后重启正在运行的 Web Profile，打开 **设置 → 视觉工具**，为远程工具选择 DSH Credential，先执行**测试 API 连接**，再执行**测试视觉模型**以验证一次真实图片请求。在会话中把图片放进工作区路径，调用 `/vision-tools`，再让 Agent 使用明确的 `vision_*` 工具。本地裁剪、SVG、像素、颜色、前景和 HTML 操作不需要视觉 API Credential。
+安装后重启正在运行的 Web Profile，打开 **设置 → 视觉工具**，先执行**测试 API 连接**，再执行**测试视觉模型**。新安装会自动使用内置免费 Moondream 提供方，不需要 API Key 或 DSH Credential。若要使用其他提供方，请修改端点、模型或协议，并配置对应的 DSH Credential。在会话中把图片放进工作区路径，调用 `/vision-tools`，再让 Agent 使用明确的 `vision_*` 工具。本地裁剪、SVG、像素、颜色、前景和 HTML 操作不需要视觉 API Credential。
 
 ## 加入交流群
 
@@ -168,7 +168,7 @@ flowchart LR
 - 启用 Web 或 Headless Profile 的 DeepSeek Harness，并确保 `dsh plugin` 可以使用 `pnpm`。
 - Python 3.11 或更高版本。Managed 模式会创建隔离环境，用户无需手工安装上游 CLI（命令行界面）或 Python 包。
 - 首次启用 managed 运行时需要联网；如果配置的软件包缓存已有 `runtime/requirements.lock` 中的精确版本，则无需联网。
-- `vision_glance`、`vision_ground`、`vision_detect` 和非仅切分长截图 OCR 需要 OpenAI 兼容或 Anthropic 视觉端点及 DSH Credential。本地工具无需该 Credential 也可使用。
+- 内置免费 Moondream 提供方可直接用于 `vision_glance`、`vision_ground`、`vision_detect` 和非仅切分长截图 OCR。只有改用自定义 OpenAI 兼容或 Anthropic 端点时才需要 DSH Credential；本地工具不依赖任何远程提供方。
 - 只有 `vision_html_screenshot` 需要 Chrome、Chromium 或 Edge；未安装受支持浏览器时，其他工具保持可用。
 - 输入必须是会话工作区或显式 `allowedDirs` 根目录内的 PNG、JPEG、GIF 或 WebP。
 
@@ -209,7 +209,7 @@ dsh plugin --profile web remove @dsh-external/dsh-vision-toolkit
 dsh plugin --profile web add @anionex/dsh-vision-toolkit
 ```
 
-重启后，Settings → 视觉工具 应显示插件版本 **0.1.9**。
+重启后，Settings → 视觉工具 应显示插件版本 **0.1.10**。内置免费提供方会自动选中；自定义提供方仍使用配置的 DSH Credential。
 
 通过注册表安装时，使用 Profile 的包管理命令更新依赖：
 
@@ -237,16 +237,16 @@ Bundle 默认使用 managed 运行时。Profile patch 可以覆盖提供方与�
 - id: vision-toolkit
   config:
     provider:
-      baseUrl: https://api.inferera.com/v1
-      credential: VISION_API_KEY
-      model: gemini-3.6-flash
+      baseUrl: https://vision.anionex.me/v1
+      credential: ANIONEX_FREE_VISION
+      model: moondream-3.1
       protocol: openai
       anthropicThinking: omit
       userAgent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36
     language: zh
     timeoutMs: 60000
-    maxImageBytes: 10485760
-    maxImagePixels: 40000000
+    maxImageBytes: 4194304
+    maxImagePixels: 20000000
     concurrency: 4
     runtime:
       mode: managed
@@ -261,16 +261,16 @@ Bundle 默认使用 managed 运行时。Profile patch 可以覆盖提供方与�
 
 | 字段 | 默认值 | 契约 |
 |---|---|---|
-| `provider.baseUrl` | `https://api.inferera.com/v1` | 提供方 API 基础 URL；去除结尾斜杠后使用。Anthropic 应填写以 `/v1` 结尾的基础 URL，不要填写完整 `/messages` URL |
-| `provider.credential` | `VISION_API_KEY` | DSH Credential 引用，不是密钥值 |
-| `provider.model` | `gemini-3.6-flash` | 远程工具使用的多模态模型名 |
+| `provider.baseUrl` | `https://vision.anionex.me/v1` | 内置免费 OpenAI 兼容端点；自定义提供方可改用其他基础 URL，使用时会去除结尾斜杠 |
+| `provider.credential` | `ANIONEX_FREE_VISION` | 免费服务的只读内置引用；自定义提供方使用 DSH Credential 引用，而不是密钥值 |
+| `provider.model` | `moondream-3.1` | 远程工具使用的多模态模型名 |
 | `provider.protocol` | `openai` | `openai` 发送 Chat Completions 请求；`anthropic` 发送原生 Messages 请求 |
 | `provider.anthropicThinking` | `omit` | Anthropic thinking 字段。`omit` 不发送 thinking 字段，兼容性最好；仅当所选模型明确支持时使用 `disabled` 或 `adaptive`，提供方返回 HTTP 400 时应先恢复 `omit`。 |
 | `provider.userAgent` | 浏览器兼容默认值 | 视觉请求和显式连接测试发送的 User-Agent；可为提供方或代理兼容性覆盖 |
 | `language` | `zh` | 视觉输出语言：`zh` 或 `en` |
 | `timeoutMs` | `60000` | 完整操作截止时间，1000-600000 毫秒；每个工具可请求更窄的覆盖值 |
-| `maxImageBytes` | `10485760` | 每张输入图片的编码字节上限 |
-| `maxImagePixels` | `40000000` | 每张输入图片的解码像素上限 |
+| `maxImageBytes` | `4194304` | 每张输入图片的编码字节上限；内置免费服务最多接受 4 MiB |
+| `maxImagePixels` | `20000000` | 每张输入图片的解码像素上限；内置免费服务最多接受 20,000,000 像素 |
 | `concurrency` | `4` | 每个会话内的并发操作数，1-16 |
 | `runtime.mode` | `managed` | `managed` 使用打包快照；`external` 只接受精确固定版本 |
 | `runtime.agentVisionToolkitPath` | 未设置 | `external` 模式必填；必须是精确导出快照或固定 commit 的干净 Git checkout |
@@ -282,9 +282,22 @@ Bundle 默认使用 managed 运行时。Profile patch 可以覆盖提供方与�
 
 ### Credential
 
-Web 设置页的只写 **API 密钥** 输入框直接接收真实密钥。留空表示保留现有密钥；填写后保存，会把密钥写入高级设置中的 **凭据名称**，默认名称是 `VISION_API_KEY`。Headless 部署可以在 `$DSH_HOME/.credentials.yaml` 中预置同名引用。
+内置免费提供方使用固定的 `ANIONEX_FREE_VISION` 引用，不接受也不会保存用户 API Key。修改端点、模型或协议切换到自定义提供方后，只写的 **API 密钥** 输入框会自动解锁；填写后保存，会把密钥写入高级设置中的 **凭据名称** 引用。Headless 部署可以在 `$DSH_HOME/.credentials.yaml` 中预置该自定义引用。
 
 Settings 只保存引用，不保存值。浏览器不会读取已保存的密钥，保存成功后输入框也会立即清空而不是回显。每次远程操作都会重新解析引用，并只把值注入对应子进程环境。插件排除用户 `.env`、checkout `.env`、`PYTHONPATH`、`PYTHONHOME`、`VIRTUAL_ENV` 和用户 site-packages，避免环境中的 Python 或上游配置覆盖选定的 DSH 提供方。日志、错误、工具结果、产物元数据和 Settings 响应都不包含密钥。
+
+### 内置免费服务限制
+
+公开服务是共享的零配置默认入口，不是无限量私有端点。限制由代理执行，并以 OpenAI 风格错误返回明确的原因代码和可读提示；限流响应还会携带 `Retry-After` 与请求额度响应头。
+
+| 限制 | 当前值 |
+|---|---:|
+| 单客户端 | 每个 UTC 日 30 次 |
+| 全局服务 | 每个 UTC 日 120 次 |
+| 突发 | 60 秒内 6 次 |
+| 图片字节 | 每张最多 4 MiB |
+| 解码像素 | 每张最多 20,000,000 像素 |
+| 输出 | 最多 512 tokens |
 
 ### Managed 与 external 运行时
 
@@ -398,7 +411,7 @@ pnpm pack --dry-run
 
 ## 项目状态与范围
 
-版本 `0.1.9` 是当前公开 npm 发布。P0 和 P1 是本包的产品承诺。P2 是设计门槛：至少一个独立插件消费内部能力形态前，不发布稳定 `ctx.visionToolkit` 服务、能力发现 API 或提供方生态。Web 上传、拖拽、摄像头/视频/音频/文档输入、交互式标注框编辑、GUI 自动点击、远程服务集群、模型路由、模型投票和跨会话视觉缓存不属于当前产品范围。
+版本 `0.1.10` 是当前公开 npm 发布。P0 和 P1 是本包的产品承诺。P2 是设计门槛：至少一个独立插件消费内部能力形态前，不发布稳定 `ctx.visionToolkit` 服务、能力发现 API 或提供方生态。Web 上传、拖拽、摄像头/视频/音频/文档输入、交互式标注框编辑、GUI 自动点击、远程服务集群、模型路由、模型投票和跨会话视觉缓存不属于当前产品范围。
 
 ## 社区与关于
 

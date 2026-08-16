@@ -2,6 +2,22 @@
 
 All notable user-facing changes to DSH Vision Toolkit are documented in this file. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and uses semantic version tags.
 
+## [0.1.10] - 2026-08-16
+
+### Added
+
+- Added a built-in free Moondream vision provider at `https://vision.anionex.me/v1`, using the OpenAI Chat Completions protocol with `api_key="free"`. Fresh installations can use remote vision tools without configuring a DSH Credential.
+- Added an OpenAI-compatible Cloudflare Worker proxy for the bundled service, including bounded image validation, daily and burst quotas, and explicit rate-limit responses.
+
+### Changed
+
+- Changed the default provider to `moondream-3.1` with a 4 MiB per-image limit and a 20,000,000-pixel per-image limit.
+- Kept custom OpenAI-compatible and Anthropic providers supported; changing the endpoint, model, or protocol unlocks the API key field and restores normal DSH Credential handling.
+
+### Fixed
+
+- Prevented browser-side or same-origin credential writes from storing a user key under the read-only built-in free provider reference.
+
 ## [0.1.9] - 2026-08-16
 
 ### Added
@@ -126,7 +142,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 - Runtime teardown cancels in-flight operations before removing Agent-scoped tools, the activation bootstrap, and the Skill.
 - The Web client is published through the current nested `dsh.client` manifest and loader-compatible built artifact required by DSH snapshot0810.
 
-[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.9...HEAD
+[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.10...HEAD
+[0.1.10]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.6...v0.1.7
