@@ -12,7 +12,7 @@
 [![MIT](https://img.shields.io/badge/license-MIT-0B7285?style=flat-square)](LICENSE)
 [![DSH](https://img.shields.io/badge/DSH-Web%20%2B%20Headless-5B4CF0?style=flat-square)](cordis.patch.yml)
 
-**Give any text-only coding agent eyes: image Q&A, long-screenshot OCR, UI restoration, and GUI visual tasks in one toolkit and Skill.**
+**Give text-only DeepSeek Harness agents eyes: image Q&A, long-screenshot OCR, UI restoration, and GUI visual tasks in one toolkit and Skill.**
 
 🎯 Visual capability does not have to live inside the model. It can live in the harness.
 
