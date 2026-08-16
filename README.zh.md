@@ -7,19 +7,27 @@
 # DSH Vision Toolkit
 
 [![由 dshfind 推荐](https://img.shields.io/badge/%E7%94%B1%20dshfind-%E6%8E%A8%E8%8D%90-FFD700?style=flat-square)](https://dshfind.com/zh/plugins/Anionex/dsh-vision-toolkit)
+[![dshfind 评分：94——最高分插件](https://img.shields.io/badge/dshfind%20%E8%AF%84%E5%88%86-94%20%7C%20%E6%9C%80%E9%AB%98%E5%88%86%E6%8F%92%E4%BB%B6-5B4CF0?style=flat-square)](https://dshfind.com/zh/plugins/Anionex/dsh-vision-toolkit)
 [![npm](https://img.shields.io/npm/v/@anionex/dsh-vision-toolkit?style=flat-square&color=5B4CF0)](https://www.npmjs.com/package/@anionex/dsh-vision-toolkit)
 [![MIT](https://img.shields.io/badge/license-MIT-0B7285?style=flat-square)](LICENSE)
 [![DSH](https://img.shields.io/badge/DSH-Web%20%2B%20Headless-5B4CF0?style=flat-square)](cordis.patch.yml)
 
-**给 DSH 里的纯文本 Agent 装上眼睛：粘贴图片就能问，找到元素就能继续操作，还能把 UI 还原做到有数据可验。**
+**所想即所见——给任意纯文本 coding agent 装上眼睛：图片问答、长图 OCR、前端 UI 还原、GUI 视觉任务，一套视觉工具箱和一个 Skill。**
+
+🎯 视觉能力不一定长在模型上，也可以长在 harness 上。
 
 🌐 [English](README.md) ｜ **中文**
 
 </div>
 
-如果你在 DeepSeek Harness（DSH）里使用 DeepSeek 等纯文本模型，可能已经遇到过这些问题：模型看不到截图、只能得到一段泛泛的图片描述、找不到按钮的准确位置，或者还原出来的页面“看起来差不多”，却不知道到底差了多少。
+如果你在 DeepSeek Harness（DSH）里使用 DeepSeek 等纯文本模型，却遇到模型看不到截图、图片描述没有重点、按钮没有准确坐标，或者 UI 还原只能凭感觉调的问题，这个插件就是为你准备的。
 
-DSH Vision Toolkit 把 [`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit) 变成一个原生 DSH 插件。安装后，Agent 不只会“看图”，还会围绕当前任务读取、定位、裁剪、描摹、还原和验证图片。
+[`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit) 的视觉能力不只停留在图片描述：Agent 可以读取、定位、裁剪、描摹、还原和验证视觉内容。DSH Vision Toolkit 是这套工具箱面向 DeepSeek Harness 的原生接入，让它进入 Web 和 Headless Profile。
+
+本项目提供两层能力：
+
+1. **视觉工具和 Skill**：让 Agent 知道什么时候该看图、定位、OCR、裁剪、描摹或做像素对比。
+2. **DSH 原生接入**：把这些能力放进 Profile、会话、Settings、Artifacts 和 Web 界面，并提供安装即可使用的免费 Gemma 4 视觉服务。
 
 > **安装即可使用。** 默认接入内置免费 Gemma 4 视觉服务，不需要申请 API Key；裁图、像素对比、颜色分析、前景提取、SVG 描摹和网页截图等本地工具也不消耗视觉 API 请求。
 
@@ -33,7 +41,7 @@ dsh plugin --profile web add @anionex/dsh-vision-toolkit
 <summary><strong>目录</strong></summary>
 
 - [最近更新](#最近更新)
-- [它解决什么问题](#它解决什么问题)
+- [适合谁用](#适合谁用)
 - [实际效果](#实际效果)
 - [亮点](#亮点)
 - [快速开始：三步完成](#快速开始三步完成)
@@ -53,7 +61,9 @@ dsh plugin --profile web add @anionex/dsh-vision-toolkit
 - **2026-08-16 · 免费额度：** 单客户端、全局和突发额度分别提高到 `100/日`、`400/日` 和 `20/分钟`，解决早期用户容易撞限而共享额度闲置的问题。
 - **2026-08-16 · 真实模型测试：** Settings 新增完整图片请求测试，解决 `/models` 可访问却不能证明模型真的会看图的问题。
 
-## 它解决什么问题
+## 适合谁用
+
+如果你正在 DSH 里使用纯文本 Agent，并且需要处理截图、网页、UI、图标、长图或视觉差异，这个插件适合你。它尤其适合以下场景：
 
 | 你遇到的问题 | Vision Toolkit 给出的结果 |
 |---|---|
@@ -94,11 +104,11 @@ dsh plugin --profile web add @anionex/dsh-vision-toolkit
 
 ### 让“差不多”变成“可验证”
 
-仓库内置了一个可复现的 UI 还原示例：初版与参考图的差异为 **6.04%**，经过定位和修正后，在 `1200 × 720` 下达到 **0% 像素差异**。
+仓库内置了一个可复现的 UI 还原示例：Agent 会先渲染参考图和实现，再用差异区域、热力图和 JSON 报告指导下一轮修正。
 
 <p>
   <img src="examples/ui-restoration/assets/initial.png" width="49%" alt="像素对比前仍有布局和样式偏差的初版 UI" />
-  <img src="examples/ui-restoration/assets/implementation.png" width="49%" alt="经过视觉定位和像素对比后达到零差异的最终 UI" />
+  <img src="examples/ui-restoration/assets/implementation.png" width="49%" alt="经过视觉定位和像素对比后的 UI 实现" />
 </p>
 
 ## 亮点

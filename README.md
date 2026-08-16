@@ -7,19 +7,27 @@
 # DSH Vision Toolkit
 
 [![Recommended by dshfind](https://img.shields.io/badge/recommended%20by-dshfind-FFD700?style=flat-square)](https://dshfind.com/en/plugins/Anionex/dsh-vision-toolkit)
+[![dshfind score: 94 — highest-rated plugin](https://img.shields.io/badge/dshfind%20score-94%20%7C%20highest--rated%20plugin-5B4CF0?style=flat-square)](https://dshfind.com/en/plugins/Anionex/dsh-vision-toolkit)
 [![npm](https://img.shields.io/npm/v/@anionex/dsh-vision-toolkit?style=flat-square&color=5B4CF0)](https://www.npmjs.com/package/@anionex/dsh-vision-toolkit)
 [![MIT](https://img.shields.io/badge/license-MIT-0B7285?style=flat-square)](LICENSE)
 [![DSH](https://img.shields.io/badge/DSH-Web%20%2B%20Headless-5B4CF0?style=flat-square)](cordis.patch.yml)
 
-**Give text-only DSH agents eyes: paste an image, ask a question, locate exact elements, extract assets, and verify UI restoration with measurable results.**
+**Give any text-only coding agent eyes: image Q&A, long-screenshot OCR, UI restoration, and GUI visual tasks in one toolkit and Skill.**
+
+🎯 Visual capability does not have to live inside the model. It can live in the harness.
 
 🌐 **English** | [中文](README.zh.md)
 
 </div>
 
-When you run DeepSeek or another text-only model in DeepSeek Harness (DSH), familiar problems appear quickly: the model cannot see a screenshot, generic image descriptions miss the point, buttons have no usable coordinates, and a rebuilt page may look “close enough” without any way to measure the remaining difference.
+If you use DeepSeek or another text-only model in DeepSeek Harness (DSH), you may have run into the same problems: the model cannot see a screenshot, generic descriptions miss the point, buttons have no usable coordinates, and a rebuilt page can look “close enough” without a way to measure the remaining difference.
 
-DSH Vision Toolkit packages [`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit) as a native DSH plugin. It helps an agent do more than describe an image: the agent can read, locate, crop, trace, rebuild, and verify visual work around the task at hand.
+[`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit) gives an agent more than image captions: it can read, locate, crop, trace, rebuild, and verify visual work. DSH Vision Toolkit is its native DeepSeek Harness integration, bringing that workflow into Web and Headless Profiles.
+
+This project has two layers:
+
+1. **Visual tools and a Skill:** the agent learns when to inspect, ground, OCR, crop, trace, or compare pixels.
+2. **Native DSH integration:** those capabilities live inside Profiles, sessions, Settings, Artifacts, and the Web UI, with a free Gemma 4 vision service ready after installation.
 
 > **Install and use it immediately.** The default setup includes a free Gemma 4 vision service and requires no API key. Cropping, pixel diffing, color analysis, foreground extraction, SVG tracing, and HTML screenshots run locally without spending vision API requests.
 
@@ -33,7 +41,7 @@ dsh plugin --profile web add @anionex/dsh-vision-toolkit
 <summary><strong>Table of contents</strong></summary>
 
 - [Recent updates](#recent-updates)
-- [Problems it solves](#problems-it-solves)
+- [Who it is for](#who-it-is-for)
 - [See it in action](#see-it-in-action)
 - [Highlights](#highlights)
 - [Quick start: three steps](#quick-start-three-steps)
@@ -53,7 +61,9 @@ dsh plugin --profile web add @anionex/dsh-vision-toolkit
 - **2026-08-16 · Higher free quotas:** Raised per-client, global, and burst limits to `100/day`, `400/day`, and `20/minute`, reducing avoidable rate-limit failures while the shared capacity is lightly used.
 - **2026-08-16 · Real model test:** Added a full image-request test in Settings, fixing the false confidence caused by a successful `/models` request to a model that still cannot process images.
 
-## Problems it solves
+## Who it is for
+
+This plugin is for anyone using a text-only agent in DSH to work with screenshots, webpages, interfaces, icons, long images, or visual differences. It is especially useful when:
 
 | The problem | What Vision Toolkit delivers |
 |---|---|
@@ -94,11 +104,11 @@ dsh plugin --profile web add @anionex/dsh-vision-toolkit
 
 ### Turn “looks close” into a verifiable result
 
-The repository includes a reproducible UI-restoration example. The first implementation differs from the reference by **6.04%**. After the highlighted regions are corrected, the final `1200 × 720` render reaches **0% pixel difference**.
+The repository includes a reproducible UI-restoration example: the agent renders the reference and implementation, then uses difference regions, a heatmap, and a JSON report to guide the next correction.
 
 <p>
   <img src="examples/ui-restoration/assets/initial.png" width="49%" alt="Initial UI implementation with measurable layout and styling differences" />
-  <img src="examples/ui-restoration/assets/implementation.png" width="49%" alt="Final UI implementation after visual diagnosis, reaching zero pixel difference" />
+  <img src="examples/ui-restoration/assets/implementation.png" width="49%" alt="UI implementation after visual diagnosis and pixel comparison" />
 </p>
 
 ## Highlights
