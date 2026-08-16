@@ -1,16 +1,27 @@
-![DSH Vision Toolkit——面向纯文本 DeepSeek Harness Agent 的原生视觉工程能力](assets/hero.png)
+<p align="center">
+  <img src="assets/hero.png" alt="DSH Vision Toolkit——面向纯文本 DeepSeek Harness Agent 的原生视觉工程能力" />
+</p>
 
-# DSH Vision Toolkit
+<h1 align="center">DSH Vision Toolkit</h1>
 
-[![由 dshfind 推荐](https://img.shields.io/badge/%E7%94%B1%20dshfind-%E6%8E%A8%E8%8D%90-FFD700?style=flat-square)](https://dshfind.com/zh/plugins/Anionex/dsh-vision-toolkit)
-[![dshfind 评分：94——最高分插件](https://img.shields.io/badge/dshfind%20%E8%AF%84%E5%88%86-94%20%7C%20%E6%9C%80%E9%AB%98%E5%88%86%E6%8F%92%E4%BB%B6-5B4CF0?style=flat-square)](https://dshfind.com/zh/plugins/Anionex/dsh-vision-toolkit)
-[![X (Twitter)](https://img.shields.io/badge/-@anion__ex-000000?style=flat-square&logo=x&logoColor=white)](https://x.com/anion_ex)
-[![Release v0.1.10](https://img.shields.io/badge/release-v0.1.10-5B4CF0?style=flat-square)](https://github.com/Anionex/dsh-vision-toolkit/releases/tag/v0.1.10)
-[![Verified: 233 tests](https://img.shields.io/badge/verified-233%20tests-2EA44F?style=flat-square)](tests)
-[![License: MIT](https://img.shields.io/badge/license-MIT-0B7285?style=flat-square)](LICENSE)
-[![Node.js](https://img.shields.io/badge/Node.js-%5E22.19%20%7C%20%3E%3D24-339933?style=flat-square&logo=nodedotjs&logoColor=white)](package.json)
-[![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)](runtime/requirements.lock)
-[![DSH profiles](https://img.shields.io/badge/DSH-Web%20%2B%20Headless-5B4CF0?style=flat-square)](cordis.patch.yml)
+<p align="center">
+  <a href="https://github.com/Anionex/dsh-vision-toolkit/blob/main/README.md">English</a> | 中文
+</p>
+
+<p align="center">
+  <a href="https://dshfind.com/zh/plugins/Anionex/dsh-vision-toolkit"><img src="https://img.shields.io/badge/%E7%94%B1%20dshfind-%E6%8E%A8%E8%8D%90-FFD700?style=flat-square" alt="由 dshfind 推荐" /></a>
+  <a href="https://dshfind.com/zh/plugins/Anionex/dsh-vision-toolkit"><img src="https://img.shields.io/badge/dshfind%20%E8%AF%84%E5%88%86-94%20%7C%20%E6%9C%80%E9%AB%98%E5%88%86%E6%8F%92%E4%BB%B6-5B4CF0?style=flat-square" alt="dshfind 评分：94——最高分插件" /></a>
+  <a href="https://x.com/anion_ex"><img src="https://img.shields.io/badge/-@anion__ex-000000?style=flat-square&amp;logo=x&amp;logoColor=white" alt="X：@anion_ex" /></a>
+  <a href="https://github.com/Anionex/dsh-vision-toolkit/releases/tag/v0.1.10"><img src="https://img.shields.io/badge/release-v0.1.10-5B4CF0?style=flat-square" alt="Release v0.1.10" /></a>
+  <a href="tests"><img src="https://img.shields.io/badge/verified-233%20tests-2EA44F?style=flat-square" alt="已验证：233 项测试" /></a>
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-0B7285?style=flat-square" alt="许可证：MIT" /></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/Node.js-%5E22.19%20%7C%20%3E%3D24-339933?style=flat-square&amp;logo=nodedotjs&amp;logoColor=white" alt="Node.js ^22.19 或 >=24" /></a>
+  <a href="runtime/requirements.lock"><img src="https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&amp;logo=python&amp;logoColor=white" alt="Python 3.11+" /></a>
+  <a href="cordis.patch.yml"><img src="https://img.shields.io/badge/DSH-Web%20%2B%20Headless-5B4CF0?style=flat-square" alt="DSH Web 与 Headless Profile" /></a>
+</p>
 
 ## 让 DSH Agent 真正看见
 
@@ -25,8 +36,6 @@ dsh plugin --profile web add @anionex/dsh-vision-toolkit
 npm 包已经包含视觉工具快照，并默认使用托管运行时。**普通安装不需要下载源码，也不需要填写 `agentVisionToolkitPath`。**
 
 **上游工具箱：** [Anionex/agent-vision-toolkit](https://github.com/Anionex/agent-vision-toolkit) · **项目网站：** [agent-vision.anionex.me](https://agent-vision.anionex.me)
-
-[English](README.md) | 中文
 
 ## 你可以用它做什么
 

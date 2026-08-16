@@ -1,16 +1,27 @@
-![DSH Vision Toolkit — native visual engineering for text-only DeepSeek Harness agents](assets/hero.png)
+<p align="center">
+  <img src="assets/hero.png" alt="DSH Vision Toolkit — native visual engineering for text-only DeepSeek Harness agents" />
+</p>
 
-# DSH Vision Toolkit
+<h1 align="center">DSH Vision Toolkit</h1>
 
-[![Recommended by dshfind](https://img.shields.io/badge/recommended%20by-dshfind-FFD700?style=flat-square)](https://dshfind.com/en/plugins/Anionex/dsh-vision-toolkit)
-[![dshfind score: 94 — highest-rated plugin](https://img.shields.io/badge/dshfind%20score-94%20%7C%20highest--rated%20plugin-5B4CF0?style=flat-square)](https://dshfind.com/en/plugins/Anionex/dsh-vision-toolkit)
-[![X (Twitter)](https://img.shields.io/badge/-@anion__ex-000000?style=flat-square&logo=x&logoColor=white)](https://x.com/anion_ex)
-[![Release v0.1.10](https://img.shields.io/badge/release-v0.1.10-5B4CF0?style=flat-square)](https://github.com/Anionex/dsh-vision-toolkit/releases/tag/v0.1.10)
-[![Verified: 233 tests](https://img.shields.io/badge/verified-233%20tests-2EA44F?style=flat-square)](tests)
-[![License: MIT](https://img.shields.io/badge/license-MIT-0B7285?style=flat-square)](LICENSE)
-[![Node.js](https://img.shields.io/badge/Node.js-%5E22.19%20%7C%20%3E%3D24-339933?style=flat-square&logo=nodedotjs&logoColor=white)](package.json)
-[![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)](runtime/requirements.lock)
-[![DSH profiles](https://img.shields.io/badge/DSH-Web%20%2B%20Headless-5B4CF0?style=flat-square)](cordis.patch.yml)
+<p align="center">
+  English | <a href="https://github.com/Anionex/dsh-vision-toolkit/blob/main/README.zh.md">中文</a>
+</p>
+
+<p align="center">
+  <a href="https://dshfind.com/en/plugins/Anionex/dsh-vision-toolkit"><img src="https://img.shields.io/badge/recommended%20by-dshfind-FFD700?style=flat-square" alt="Recommended by dshfind" /></a>
+  <a href="https://dshfind.com/en/plugins/Anionex/dsh-vision-toolkit"><img src="https://img.shields.io/badge/dshfind%20score-94%20%7C%20highest--rated%20plugin-5B4CF0?style=flat-square" alt="dshfind score: 94 — highest-rated plugin" /></a>
+  <a href="https://x.com/anion_ex"><img src="https://img.shields.io/badge/-@anion__ex-000000?style=flat-square&amp;logo=x&amp;logoColor=white" alt="X: @anion_ex" /></a>
+  <a href="https://github.com/Anionex/dsh-vision-toolkit/releases/tag/v0.1.10"><img src="https://img.shields.io/badge/release-v0.1.10-5B4CF0?style=flat-square" alt="Release v0.1.10" /></a>
+  <a href="tests"><img src="https://img.shields.io/badge/verified-233%20tests-2EA44F?style=flat-square" alt="Verified: 233 tests" /></a>
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-0B7285?style=flat-square" alt="License: MIT" /></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/Node.js-%5E22.19%20%7C%20%3E%3D24-339933?style=flat-square&amp;logo=nodedotjs&amp;logoColor=white" alt="Node.js ^22.19 or >=24" /></a>
+  <a href="runtime/requirements.lock"><img src="https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&amp;logo=python&amp;logoColor=white" alt="Python 3.11+" /></a>
+  <a href="cordis.patch.yml"><img src="https://img.shields.io/badge/DSH-Web%20%2B%20Headless-5B4CF0?style=flat-square" alt="DSH Web and Headless profiles" /></a>
+</p>
 
 ## Give your DSH agent eyes
 
@@ -25,8 +36,6 @@ dsh plugin --profile web add @anionex/dsh-vision-toolkit
 The npm package includes the visual toolkit snapshot and uses a managed runtime by default. **Normal installation does not require a source checkout or an `agentVisionToolkitPath`.**
 
 **Upstream toolkit:** [Anionex/agent-vision-toolkit](https://github.com/Anionex/agent-vision-toolkit) · **Project website:** [agent-vision.anionex.me](https://agent-vision.anionex.me)
-
-English | [中文](README.zh.md)
 
 ## What you can do
 
