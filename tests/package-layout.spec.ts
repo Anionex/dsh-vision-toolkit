@@ -137,7 +137,7 @@ describe('package layout contract', () => {
         map: { sources: string[] }
       }>
     }
-    const outputLines = client.split('\n')
+    const outputLines = client.split(/\r?\n/u)
     expect(indexedMap.sections.length).toBeGreaterThan(1)
     for (const section of indexedMap.sections) {
       const source = section.map.sources[0]

@@ -2,11 +2,18 @@
 
 All notable user-facing changes to DSH Vision Toolkit are documented in this file. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and uses semantic version tags.
 
-## [0.1.12] - 2026-08-16
+## [Unreleased]
 
 ### Added
 
+- Added `fullPage=true` to `vision_html_screenshot`; the Chrome DevTools Protocol path preserves the requested layout viewport, captures the complete document, and reports `pageHeight` in CSS pixels while leaving fixed-viewport captures unchanged.
 - Added a **Plugin updates** Settings card that checks the configured npm registry, installs an explicitly confirmed release into the current registry-backed DSH profile, verifies it, and can restart an explicitly opted-in fixed-port POSIX DSH Web process through an independent readiness/rollback helper. Token-owned cross-process locking, pre-update manifest/lockfile backups, bounded rollback commands, and exact-version recovery protect the Profile across failed installs and restart handoff. Local/workspace/git/URL and otherwise unsafe-to-replace installs remain read-only; Windows, dynamic-port, and manager-owned processes keep restart ownership outside the plugin.
+
+### Fixed
+
+- Fixed managed runtime creation failing with exit status 101 when the Microsoft Store Python is used on Windows: the venv is now created with `--without-pip`, the staged `pyvenv.cfg` `home`/`executable` are rewritten to the app execution alias directory, and pip is bootstrapped explicitly.
+
+## [0.1.12] - 2026-08-16
 
 ### Fixed
 

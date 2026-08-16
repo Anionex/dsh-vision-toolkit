@@ -246,7 +246,9 @@ export class VisionToolkitWebBackend {
     private readonly onRuntimeActivated: RuntimeActivated,
     updater?: WebPluginUpdater,
   ) {
-    this.updater = updater ?? new VisionToolkitPluginUpdateService(ctx, PLUGIN_VERSION)
+    this.updater = updater ?? new VisionToolkitPluginUpdateService(ctx, PLUGIN_VERSION, {
+      runtimeReady: () => this.manager.status().ready,
+    })
   }
 
   /** Supply the active listener address before the Settings route becomes reachable. */

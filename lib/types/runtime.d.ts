@@ -275,6 +275,7 @@ export interface HtmlScreenshotRequest {
     height?: number;
     scale?: number;
     waitMs?: number;
+    fullPage?: boolean;
     output?: string;
 }
 /** Browser-rendered PNG plus viewport and source facts. */
@@ -288,6 +289,8 @@ export interface HtmlScreenshotResult {
     };
     width: number;
     height: number;
+    /** Full document height in CSS pixels; present only for full-page captures. */
+    pageHeight?: number;
     artifact: ArtifactDescriptor;
 }
 /** Optional preview controls shared by ground and detect. */

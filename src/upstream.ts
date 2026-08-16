@@ -165,6 +165,7 @@ export interface HtmlScreenshotOutput {
   outputPath: string
   width: number
   height: number
+  pageHeight?: number
 }
 
 const BOX_SUFFIX = /x1:\s*(\d+),\s*y1:\s*(\d+),\s*x2:\s*(\d+),\s*y2:\s*(\d+)\s*$/
@@ -448,9 +449,14 @@ export function parseDominantColorsOutput(stdout: string): DominantColorsOutput 
 
 /** Parse the local Chrome screenshot summary. */
 export function parseHtmlScreenshotOutput(stdout: string): HtmlScreenshotOutput {
-  const wrote = /^wrote\s+(.+?)\s+\((\d+)x(\d+)\)\s*$/.exec(stdout.trim())
+  const wrote = /^wrote\s+(.+?)\s+\((\d+)x(\d+)(?:;\s*pageHeight=(\d+))?\)\s*$/.exec(stdout.trim())
   if (wrote === null) throw new VisionToolkitError('output', 'html_screenshot: upstream did not report a written PNG')
-  return { outputPath: wrote[1] ?? '', width: Number(wrote[2]), height: Number(wrote[3]) }
+  return {
+    outputPath: wrote[1] ?? '',
+    width: Number(wrote[2]),
+    height: Number(wrote[3]),
+    ...(wrote[4] === undefined ? {} : { pageHeight: Number(wrote[4]) }),
+  }
 }
 
 const REQUIRED_TOOLS = ['glance', 'ground', 'detect', 'crop', 'trace'] as const
@@ -527,20 +533,24 @@ const VISION_MODEL_GUARD = [
 ].join('\n')
 
 const HTML_SCREENSHOT_GUARD = [
-  'import runpy,subprocess,sys,tempfile',
+  'import os,runpy,subprocess,sys,tempfile',
   'script=sys.argv[1]',
   'sys.argv=[script,*sys.argv[2:]]',
-  'original_run=subprocess.run',
+  'original_popen=subprocess.Popen',
   'with tempfile.TemporaryDirectory(prefix="dsh-vision-chrome-") as profile:',
-  '    def guarded_run(command,*args,**kwargs):',
+  '    original_profile=os.environ.get("DSH_VISION_CHROME_PROFILE")',
+  '    os.environ["DSH_VISION_CHROME_PROFILE"]=profile',
+  '    def guarded_popen(command,*args,**kwargs):',
   '        command=list(command)',
   '        command[1:1]=["--use-mock-keychain",f"--user-data-dir={profile}","--incognito","--disable-background-networking","--proxy-server=http://127.0.0.1:9","--proxy-bypass-list=<-loopback>"]',
-  '        return original_run(command,*args,**kwargs)',
-  '    subprocess.run=guarded_run',
+  '        return original_popen(command,*args,**kwargs)',
+  '    subprocess.Popen=guarded_popen',
   '    try:',
   '        runpy.run_path(script,run_name="__main__")',
   '    finally:',
-  '        subprocess.run=original_run',
+  '        subprocess.Popen=original_popen',
+  '        if original_profile is None: os.environ.pop("DSH_VISION_CHROME_PROFILE",None)',
+  '        else: os.environ["DSH_VISION_CHROME_PROFILE"]=original_profile',
 ].join('\n')
 
 const LONG_OCR_PINNED_GLANCE = [
@@ -852,6 +862,9 @@ export class UpstreamAdapter {
     }
     if (/Missing config VISION_/i.test(result.stderr)) {
       return new VisionToolkitError('config', message)
+    }
+    if (/maxImagePixels|exceed(?:s|ing).*pixels/i.test(result.stderr)) {
+      return new VisionToolkitError('capacity', message)
     }
     if (/not found|only PNG|unsupported|cannot open|empty region|must be|expects|invalid colour|needs at least/i.test(result.stderr)) {
       return new VisionToolkitError('input', message)

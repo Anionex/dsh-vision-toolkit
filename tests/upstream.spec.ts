@@ -196,6 +196,12 @@ describe('P1 upstream output parsers', () => {
       width: 1280,
       height: 800,
     })
+    expect(parseHtmlScreenshotOutput('wrote /tmp/page.png (1280x4210; pageHeight=4210)')).toEqual({
+      outputPath: '/tmp/page.png',
+      width: 1280,
+      height: 4210,
+      pageHeight: 4210,
+    })
     expect(() => parsePixelDiffOutput('overall difference: maybe')).toThrowError(/unexpected output/)
     expect(() => parseDominantColorsOutput('unknown')).toThrowError(/missing region header/)
   })

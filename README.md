@@ -167,9 +167,11 @@ The plugin provides 10 tools that can be called independently or composed into a
 | `vision_long_screenshot_ocr` | “Read this entire long screenshot” | Markdown, chunks, manifest, and audit output |
 | `vision_extract_foreground` | “Remove the background from this subject” | Transparent PNG |
 | `vision_dominant_colors` | “Which colors dominate this area?” | Palette or ranked candidate colors |
-| `vision_html_screenshot` | “Render this local page at an exact viewport” | PNG |
+| `vision_html_screenshot` | “Render this local page at an exact viewport or capture the full page” | PNG and optional CSS `pageHeight` |
 
 Coordinates always use original-image pixels in `x1,y1,x2,y2` form, so grounding output can feed directly into cropping, tracing, or later automation.
+
+For a long HTML document, pass `fullPage=true`. The requested width and height remain the layout viewport, while the resulting PNG covers the complete document and reports `pageHeight` in CSS pixels.
 
 ## How it works
 
@@ -272,7 +274,7 @@ Restart the Web Profile and refresh the page after enabling or upgrading the Web
 
 In **Settings → Vision Toolkit**, **Check for updates** queries the Profile's npm registry. For a direct registry installation, **Update and restart** installs only the exact version you confirmed, verifies it, and restarts an explicitly opted-in POSIX Web process on a fixed `--port`. Local/workspace/file/git/URL installs, Windows, dynamic ports, read-only Profiles, and manager-owned processes remain check-only.
 
-The updater revalidates the Profile before mutation, snapshots the original manifest and lockfile, and holds a token-owned cross-process lock. The current Web process exits only after the restart helper confirms that the backup is readable and the lock handoff succeeded. The page reloads only when the replacement Settings route reports the target version; failed replacements trigger bounded rollback to the previous exact version. If automatic recovery itself fails, the backup and lock are preserved and their paths are written to `$DSH_HOME/logs/vision-toolkit-restart.log`. Detached restart requires `DSH_VISION_TOOLKIT_ALLOW_DETACHED_RESTART=1`; unsaved Settings or API-key input blocks installation.
+The updater revalidates the Profile before mutation, snapshots the original manifest and lockfile, and holds a token-owned cross-process lock. The current Web process exits only after the restart helper confirms that the backup is readable and the lock handoff succeeded. When the Profile was already operational, the replacement must report both the target plugin version and a ready runtime; failed replacements restore the original manifest/lockfile and rebuild dependencies with a frozen lockfile before retrying the previous exact version. If automatic recovery itself fails, the backup and lock are preserved and their paths are written to `$DSH_HOME/logs/vision-toolkit-restart.log`. Detached restart requires `DSH_VISION_TOOLKIT_ALLOW_DETACHED_RESTART=1`; unsaved Settings or API-key input blocks installation.
 
 ## Troubleshooting
 

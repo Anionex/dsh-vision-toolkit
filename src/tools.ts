@@ -540,7 +540,7 @@ export function createVisionTools(
         + WORKSPACE_NOTE,
       parameters: {
         source: { type: 'string', required: true, description: 'Local HTML path only.' }, width: { type: 'integer' }, height: { type: 'integer' },
-        scale: { type: 'integer' }, waitMs: { type: 'integer' }, output: { type: 'string', description: 'Artifact filename; .png only.' },
+        scale: { type: 'integer' }, waitMs: { type: 'integer' }, fullPage: { type: 'boolean', description: 'Capture the full document height while preserving the requested viewport.' }, output: { type: 'string', description: 'Artifact filename; .png only.' },
         timeoutMs: { type: 'integer', description: TIMEOUT_NOTE },
       },
       output: {
@@ -548,7 +548,7 @@ export function createVisionTools(
           type: 'object', additionalProperties: false, properties: {
             sourcePath: { type: 'string', required: true }, sourceBytes: { type: 'integer', required: true },
             viewport: { type: 'object', additionalProperties: false, required: true, properties: { width: { type: 'integer', required: true }, height: { type: 'integer', required: true }, scale: { type: 'integer', required: true } } },
-            width: { type: 'integer', required: true }, height: { type: 'integer', required: true }, artifact: requiredArtifactSchema,
+            width: { type: 'integer', required: true }, height: { type: 'integer', required: true }, pageHeight: { type: 'integer' }, artifact: requiredArtifactSchema,
           },
         },
         render: renderJson,
@@ -559,6 +559,7 @@ export function createVisionTools(
           source: args.source,
           ...(args.width === undefined ? {} : { width: args.width }), ...(args.height === undefined ? {} : { height: args.height }),
           ...(args.scale === undefined ? {} : { scale: args.scale }), ...(args.waitMs === undefined ? {} : { waitMs: args.waitMs }),
+          ...(args.fullPage === undefined ? {} : { fullPage: args.fullPage }),
           ...(args.output === undefined ? {} : { output: args.output }),
         }
         return runtimeFrom(source).htmlScreenshot(request, callOptions(exec, args.timeoutMs, lifecycleSignal))
@@ -663,6 +664,7 @@ interface HtmlArgs {
   height?: number
   scale?: number
   waitMs?: number
+  fullPage?: boolean
   output?: string
   timeoutMs?: number
 }

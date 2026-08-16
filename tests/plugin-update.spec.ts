@@ -406,6 +406,10 @@ describe('VisionToolkitPluginUpdateService', () => {
     expect(addCalls).toBe(2)
     expect(await readFile(manifestPath)).toEqual(originalManifest)
     expect(await readFile(lockfilePath)).toEqual(originalLockfile)
+    expect(subprocess.spawns.at(-1)?.argv).toEqual([
+      '/usr/local/bin/pnpm', 'install', '--frozen-lockfile', '--reporter=append-only',
+    ])
+    await expect(readFile(join(fixture.installedDir, 'package.json'), 'utf8')).resolves.toContain('0.1.0')
     await expect(readFile(join(fixture.profileDir, '.dsh-vision-toolkit-update.lock')))
       .rejects.toMatchObject({ code: 'ENOENT' })
   })
@@ -513,7 +517,10 @@ describe('plugin restart helper', () => {
     const backupDir = join(root, '.update-backup')
     const appPath = join(root, 'fake-dsh.cjs')
     const pnpmPath = join(root, 'fake-pnpm.cjs')
+    const installedPackagePath = join(root, 'node_modules', '@anionex', 'dsh-vision-toolkit', 'package.json')
     await writeFile(statePath, '0.2.0')
+    await mkdir(dirname(installedPackagePath), { recursive: true })
+    await writeFile(installedPackagePath, JSON.stringify({ name: VISION_TOOLKIT_PACKAGE, version: '0.2.0' }))
     await writeFile(lockPath, JSON.stringify({ pid: process.pid, token: lockToken }))
     await mkdir(backupDir)
     await writeFile(join(backupDir, 'package.json'), JSON.stringify({
@@ -528,9 +535,8 @@ const statePath = process.argv[2]
 const port = Number(process.argv[3])
 const pidPath = process.argv[4]
 const version = readFileSync(statePath, 'utf8').trim()
-if (version === '0.2.0') process.exit(1)
 const server = createServer((_req, res) => {
-  const body = JSON.stringify({ ok: true, value: { release: { pluginVersion: version } } })
+  const body = JSON.stringify({ ok: true, value: { release: { pluginVersion: version }, runtime: { ready: version !== '0.2.0' } } })
   res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': String(Buffer.byteLength(body)) })
   res.end(body)
 })
@@ -541,7 +547,9 @@ process.on('SIGTERM', () => { server.close(() => process.exit(0)) })
 const { writeFileSync } = require('node:fs')
 const target = process.argv.find(value => value.startsWith('@anionex/dsh-vision-toolkit@'))
 if (!target) process.exit(1)
-writeFileSync(process.env.DVT_RESTART_STATE, target.slice(target.lastIndexOf('@') + 1))
+const version = target.slice(target.lastIndexOf('@') + 1)
+writeFileSync(process.env.DVT_RESTART_STATE, version)
+writeFileSync(process.env.DVT_INSTALLED_PACKAGE, JSON.stringify({ name: '@anionex/dsh-vision-toolkit', version }))
 `)
     await chmod(pnpmPath, 0o755)
 
@@ -571,14 +579,15 @@ writeFileSync(process.env.DVT_RESTART_STATE, target.slice(target.lastIndexOf('@'
       fromVersion: '0.1.0',
       toVersion: '0.2.0',
       healthUrl: `http://127.0.0.1:${port}/_dsh/vision-toolkit/settings`,
+      baselineRuntimeReady: true,
       rollbackTimeoutMs: 5_000,
       processKillGraceMs: 100,
-      readinessTimeoutMs: 5_000,
+      readinessTimeoutMs: 1_500,
       oldProcessExitTimeoutMs: 1_000,
     })).toString('base64url')
     const helper = spawn(process.execPath, ['-e', PLUGIN_RESTART_HELPER_SOURCE, payload], {
       cwd: root,
-      env: { ...process.env, DVT_RESTART_STATE: statePath },
+      env: { ...process.env, DVT_RESTART_STATE: statePath, DVT_INSTALLED_PACKAGE: installedPackagePath },
       stdio: ['ignore', 'pipe', 'pipe'],
     })
     let stderr = ''
@@ -600,7 +609,7 @@ writeFileSync(process.env.DVT_RESTART_STATE, target.slice(target.lastIndexOf('@'
       await expect(readFile(lockPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
     })
     await expect(readFile(join(backupDir, 'metadata.json'))).rejects.toMatchObject({ code: 'ENOENT' })
-  })
+  }, 15_000)
 
   it('keeps the helper-owned profile lock and times out a hung rollback pnpm process', async () => {
     const fixture = await profileFixture()

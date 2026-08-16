@@ -167,9 +167,11 @@ dsh plugin --profile headless add @anionex/dsh-vision-toolkit
 | `vision_long_screenshot_ocr` | “读完这张很长的截图” | Markdown、分块图、清单和审计结果 |
 | `vision_extract_foreground` | “把主体抠出来” | 透明 PNG |
 | `vision_dominant_colors` | “这块区域用了哪些主要颜色？” | 主色板或候选色排序 |
-| `vision_html_screenshot` | “把本地页面渲染成固定尺寸截图” | PNG |
+| `vision_html_screenshot` | “按精确视口渲染本地页面，或一次捕获整页” | PNG 和可选的 CSS `pageHeight` |
 
 坐标始终使用原图像素格式 `x1,y1,x2,y2`，因此定位结果可以直接交给裁剪、描摹或后续自动化。
+
+对于长 HTML 文档，传入 `fullPage=true`。请求的宽高仍作为布局视口，生成的 PNG 会覆盖完整文档，并以 CSS 像素返回 `pageHeight`。
 
 ## 工作原理
 
@@ -272,7 +274,7 @@ dsh plugin --profile web remove @anionex/dsh-vision-toolkit
 
 在 **设置 → 视觉工具** 中，**检查更新**会查询当前 Profile 的 npm registry。若插件是直接 registry 依赖，**自动更新并重启**只会安装用户刚确认的准确版本，完成校验后重启明确允许自重启、且使用固定 `--port` 的 POSIX Web 进程。本地/workspace/file/git/URL 安装、Windows、动态端口、只读 Profile 和由进程管理器托管的实例只允许检查版本。
 
-更新器会在修改前重新验证 Profile，备份原始 manifest 与 lockfile，并持有带所有权 token 的跨进程锁。只有重启辅助进程确认备份可读且锁交接成功后，当前 Web 进程才会退出；替代进程的 Settings 路由报告目标版本后页面才会刷新，启动失败则在有界时限内回滚到之前的准确版本。若自动恢复本身失败，备份与锁会保留，路径写入 `$DSH_HOME/logs/vision-toolkit-restart.log`。脱离原管理器的自重启需要设置 `DSH_VISION_TOOLKIT_ALLOW_DETACHED_RESTART=1`；存在未保存的 Settings 或 API Key 时不能安装。
+更新器会在修改前重新验证 Profile，备份原始 manifest 与 lockfile，并持有带所有权 token 的跨进程锁。只有重启辅助进程确认备份可读且锁交接成功后，当前 Web 进程才会退出；如果更新前 Profile 已经可用，替代进程还必须同时报告目标插件版本和 Runtime 已就绪，失败时会恢复原始 manifest/lockfile，并用 frozen lockfile 重建依赖后再尝试恢复之前的准确版本。若自动恢复本身失败，备份与锁会保留，路径写入 `$DSH_HOME/logs/vision-toolkit-restart.log`。脱离原管理器的自重启需要设置 `DSH_VISION_TOOLKIT_ALLOW_DETACHED_RESTART=1`；存在未保存的 Settings 或 API Key 时不能安装。
 
 ## 常见问题
 

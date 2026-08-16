@@ -49,6 +49,7 @@ export interface RestartRequest {
     fromVersion: string;
     toVersion: string;
     healthUrl: string;
+    baselineRuntimeReady: boolean;
     rollbackTimeoutMs: number;
     processKillGraceMs: number;
     readinessTimeoutMs: number;
@@ -65,6 +66,7 @@ export interface PluginUpdateServiceOptions {
     schedule?: (callback: () => void, delayMs: number) => void;
     allowDetachedRestart?: boolean;
     healthUrl?: string;
+    runtimeReady?: () => boolean;
     platform?: NodeJS.Platform;
 }
 /** @internal Restart helper source exported for lifecycle integration tests. */
@@ -85,6 +87,7 @@ export declare class VisionToolkitPluginUpdateService {
     private readonly schedule;
     private readonly allowDetachedRestart;
     private healthUrl;
+    private readonly runtimeReady;
     private readonly platform;
     private updating;
     constructor(ctx: Pick<Context, 'subprocess'>, currentVersion: string, options?: PluginUpdateServiceOptions);
@@ -98,6 +101,7 @@ export declare class VisionToolkitPluginUpdateService {
     /** Report whether the current installation can be safely replaced in place. */
     capability(): Promise<PluginUpdateCapability>;
     private runPnpm;
+    private rollbackInstall;
     private acquireLock;
     /** Query the configured npm registry without mutating the profile. */
     check(): Promise<PluginUpdateCheck>;

@@ -102,6 +102,7 @@ export interface RestartRequest {
   fromVersion: string
   toVersion: string
   healthUrl: string
+  baselineRuntimeReady: boolean
   rollbackTimeoutMs: number
   processKillGraceMs: number
   readinessTimeoutMs: number
@@ -119,6 +120,7 @@ export interface PluginUpdateServiceOptions {
   schedule?: (callback: () => void, delayMs: number) => void
   allowDetachedRestart?: boolean
   healthUrl?: string
+  runtimeReady?: () => boolean
   platform?: NodeJS.Platform
 }
 
@@ -137,6 +139,7 @@ interface ParsedVersion {
 
 interface UpdateBackup {
   dir: string
+  hadLockfile: boolean
 }
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
@@ -215,7 +218,7 @@ const killChild = (child, signal) => {
     else process.kill(-child.pid, signal)
   } catch {}
 }
-const runPnpm = version => new Promise(resolve => {
+const runPnpm = args => new Promise(resolve => {
   let settled = false
   let killTimer
   let finalTimer
@@ -227,9 +230,7 @@ const runPnpm = version => new Promise(resolve => {
     clearTimeout(finalTimer)
     resolve(value)
   }
-  const child = spawn(payload.pnpmPath, [
-    'add', payload.packageName + '@' + version, '--save-exact', '--yes', '--reporter=append-only',
-  ], {
+  const child = spawn(payload.pnpmPath, args, {
     cwd: payload.profileDir,
     env: process.env,
     stdio: 'ignore',
@@ -264,8 +265,10 @@ const ready = async (child, version, timeoutMs) => {
     try {
       const response = await fetch(payload.healthUrl, { signal: AbortSignal.timeout(2000) })
       const body = await response.json()
+      const runtimeReady = body && body.value && body.value.runtime && body.value.runtime.ready === true
       if (response.ok && body && body.ok && body.value && body.value.release
-        && body.value.release.pluginVersion === version) return true
+        && body.value.release.pluginVersion === version
+        && (!payload.baselineRuntimeReady || runtimeReady)) return true
     } catch {}
     await sleep(500)
   }
@@ -280,18 +283,47 @@ const stop = async child => {
     try { child.kill('SIGKILL') } catch {}
   }
 }
-const restore = async () => {
-  log('replacement did not become ready; restoring ' + payload.fromVersion)
-  const installed = await runPnpm(payload.fromVersion)
+const installedVersion = () => {
+  const manifest = JSON.parse(readFileSync(payload.profileDir + '/node_modules/'
+    + payload.packageName + '/package.json', 'utf8'))
+  return manifest && manifest.version
+}
+const rollbackInstall = async metadata => {
   try { restoreProfileFiles() }
   catch (error) {
-    console.error('[dsh-vision-toolkit] profile file restore failed:', error)
+    console.error('[dsh-vision-toolkit] profile file restore before rollback failed:', error)
     return false
   }
-  if (!installed) return false
+  const args = metadata.hadLockfile
+    ? ['install', '--frozen-lockfile', '--reporter=append-only']
+    : ['add', payload.packageName + '@' + payload.fromVersion, '--save-exact', '--yes', '--reporter=append-only']
+  const installed = await runPnpm(args)
+  try { restoreProfileFiles() }
+  catch (error) {
+    console.error('[dsh-vision-toolkit] profile file restore after rollback failed:', error)
+    return false
+  }
+  if (!installed) {
+    console.error('[dsh-vision-toolkit] rollback pnpm failed')
+    return false
+  }
+  try {
+    const version = installedVersion()
+    if (version !== payload.fromVersion) console.error('[dsh-vision-toolkit] rollback installed ' + version + ' instead of ' + payload.fromVersion)
+    return version === payload.fromVersion
+  }
+  catch (error) {
+    console.error('[dsh-vision-toolkit] rollback version verification failed:', error)
+    return false
+  }
+}
+const restore = async metadata => {
+  log('replacement did not become ready; restoring ' + payload.fromVersion)
+  if (!await rollbackInstall(metadata)) return false
   const child = launch()
   child.once('error', error => { console.error('[dsh-vision-toolkit] rollback launch failed:', error) })
   if (!await ready(child, payload.fromVersion, payload.readinessTimeoutMs)) {
+    console.error('[dsh-vision-toolkit] rollback replacement did not become ready')
     await stop(child)
     return false
   }
@@ -300,7 +332,7 @@ const restore = async () => {
   return true
 }
 const main = async () => {
-  validateBackup()
+  const metadata = validateBackup()
   if (!transferLock()) {
     console.error('[dsh-vision-toolkit] restart helper could not take ownership of the update lock')
     process.exit(1)
@@ -310,13 +342,8 @@ const main = async () => {
   while (alive(payload.pid) && Date.now() < exitDeadline) await sleep(100)
   if (alive(payload.pid)) {
     log('old process did not exit; restoring package files without replacing the running process')
-    const installed = await runPnpm(payload.fromVersion)
-    let filesRestored = true
-    try { restoreProfileFiles() } catch (error) {
-      filesRestored = false
-      console.error('[dsh-vision-toolkit] profile file restore failed:', error)
-    }
-    if (installed && filesRestored) {
+    const installed = await rollbackInstall(metadata)
+    if (installed) {
       removeLock()
       cleanupBackup()
     } else preserveRecovery('old process did not exit and automatic package recovery failed')
@@ -332,7 +359,7 @@ const main = async () => {
     process.exit(0)
   }
   await stop(child)
-  const restored = await restore()
+  const restored = await restore(metadata)
   if (restored) {
     removeLock()
     cleanupBackup()
@@ -446,9 +473,32 @@ async function defaultPrepareRestart(request: RestartRequest): Promise<void> {
   const payload = Buffer.from(JSON.stringify(request)).toString('base64url')
   mkdirSync(dirname(request.logPath), { recursive: true })
   const log = openSync(request.logPath, 'w', 0o600)
+  let helper: ReturnType<typeof spawn> | undefined
+  let handoffAcknowledged = false
+  const stopHelper = async (): Promise<void> => {
+    if (helper === undefined || helper.exitCode !== null || helper.signalCode !== null) return
+    try {
+      if (process.platform === 'win32') helper.kill('SIGTERM')
+      else if (helper.pid !== undefined) process.kill(-helper.pid, 'SIGTERM')
+    } catch {}
+    const stopDeadline = Date.now() + 1_000
+    while (Date.now() < stopDeadline && helper.exitCode === null && helper.signalCode === null) {
+      await new Promise(resolve => { setTimeout(resolve, 50) })
+    }
+    if (helper.exitCode === null && helper.signalCode === null) {
+      try {
+        if (process.platform === 'win32') helper.kill('SIGKILL')
+        else if (helper.pid !== undefined) process.kill(-helper.pid, 'SIGKILL')
+      } catch {}
+      const killDeadline = Date.now() + 1_000
+      while (Date.now() < killDeadline && helper.exitCode === null && helper.signalCode === null) {
+        await new Promise(resolve => { setTimeout(resolve, 50) })
+      }
+    }
+  }
   try {
     fchmodSync(log, 0o600)
-    const helper = spawn(process.execPath, ['-e', PLUGIN_RESTART_HELPER_SOURCE, payload], {
+    helper = spawn(process.execPath, ['-e', PLUGIN_RESTART_HELPER_SOURCE, payload], {
       cwd: request.cwd,
       env: process.env,
       stdio: ['ignore', log, log],
@@ -467,6 +517,7 @@ async function defaultPrepareRestart(request: RestartRequest): Promise<void> {
       try {
         const handoff = JSON.parse(await readFile(request.handoffPath, 'utf8')) as { pid?: unknown; token?: unknown }
         if (handoff.pid === helper.pid && handoff.token === request.lockToken) {
+          handoffAcknowledged = true
           helper.unref()
           return
         }
@@ -475,21 +526,10 @@ async function defaultPrepareRestart(request: RestartRequest): Promise<void> {
       }
       await new Promise(resolve => { setTimeout(resolve, 50) })
     }
-    try {
-      if (process.platform === 'win32') helper.kill('SIGTERM')
-      else process.kill(-helper.pid, 'SIGTERM')
-    } catch {}
-    const stopDeadline = Date.now() + 1_000
-    while (Date.now() < stopDeadline && helper.exitCode === null && helper.signalCode === null) {
-      await new Promise(resolve => { setTimeout(resolve, 50) })
-    }
-    if (helper.exitCode === null && helper.signalCode === null) {
-      try {
-        if (process.platform === 'win32') helper.kill('SIGKILL')
-        else process.kill(-helper.pid, 'SIGKILL')
-      } catch {}
-    }
     throw new Error('restart helper did not acknowledge lock and backup handoff')
+  } catch (error) {
+    if (!handoffAcknowledged) await stopHelper()
+    throw error
   } finally {
     closeSync(log)
   }
@@ -520,7 +560,7 @@ async function createUpdateBackup(profileDir: string, token: string): Promise<Up
       hadLockfile = false
     }
     await writeFile(join(dir, 'metadata.json'), JSON.stringify({ hadLockfile, manifestMode, lockfileMode }), { mode: 0o600 })
-    return { dir }
+    return { dir, hadLockfile }
   } catch (error) {
     await rm(dir, { recursive: true, force: true }).catch(() => {})
     throw error
@@ -589,6 +629,7 @@ export class VisionToolkitPluginUpdateService {
   private readonly schedule: (callback: () => void, delayMs: number) => void
   private readonly allowDetachedRestart: boolean
   private healthUrl: string | undefined
+  private readonly runtimeReady: () => boolean
   private readonly platform: NodeJS.Platform
   private updating = false
 
@@ -608,6 +649,7 @@ export class VisionToolkitPluginUpdateService {
     this.allowDetachedRestart = options.allowDetachedRestart
       ?? process.env.DSH_VISION_TOOLKIT_ALLOW_DETACHED_RESTART === '1'
     this.healthUrl = options.healthUrl ?? defaultHealthUrl(this.argv)
+    this.runtimeReady = options.runtimeReady ?? (() => true)
     this.platform = options.platform ?? process.platform
   }
 
@@ -835,6 +877,28 @@ export class VisionToolkitPluginUpdateService {
     }
   }
 
+  private async rollbackInstall(
+    backup: UpdateBackup,
+    profile: ProfileInstall,
+    pnpmPath: string,
+  ): Promise<boolean> {
+    await restoreUpdateBackup(profile.profileDir, backup)
+    const args = backup.hadLockfile
+      ? ['install', '--frozen-lockfile', '--reporter=append-only']
+      : ['add', `${VISION_TOOLKIT_PACKAGE}@${this.currentVersion}`, '--save-exact', '--yes', '--reporter=append-only']
+    const result = await this.runPnpm(args, UPDATE_TIMEOUT_MS, profile, pnpmPath)
+    let restored = true
+    try { await restoreUpdateBackup(profile.profileDir, backup) }
+    catch { restored = false }
+    if (result.exitCode !== 0 || !restored) return false
+    try {
+      const restored = await jsonFile(join(profile.installedDir, 'package.json'))
+      return restored.version === this.currentVersion
+    } catch {
+      return false
+    }
+  }
+
   private async acquireLock(profileDir: string): Promise<{
     path: string
     token: string
@@ -993,6 +1057,7 @@ export class VisionToolkitPluginUpdateService {
           fromVersion: this.currentVersion,
           toVersion: installedVersion,
           healthUrl: this.healthUrl,
+          baselineRuntimeReady: this.runtimeReady(),
           rollbackTimeoutMs: RESTART_ROLLBACK_TIMEOUT_MS,
           processKillGraceMs: 5_000,
           readinessTimeoutMs: 60_000,
@@ -1018,24 +1083,12 @@ export class VisionToolkitPluginUpdateService {
       if (updateAttempted && updateContext !== undefined && updateBackup !== undefined) {
         let rollbackFailure: PluginUpdateError | undefined
         try {
-          const rollback = await this.runPnpm([
-            'add', `${VISION_TOOLKIT_PACKAGE}@${this.currentVersion}`, '--save-exact', '--yes', '--reporter=append-only',
-          ], UPDATE_TIMEOUT_MS, updateContext.profile, updateContext.pnpmPath)
-          if (rollback.exitCode !== 0) {
+          if (!await this.rollbackInstall(updateBackup, updateContext.profile, updateContext.pnpmPath)) {
             rollbackFailure = new PluginUpdateError(
               'update-rollback-failed',
-              publicCommandFailure(rollback, 'Plugin update failed and the previous version could not be restored'),
+              'Plugin update failed and the previous version could not be restored',
               { cause: error },
             )
-          } else {
-            const restored = await jsonFile(join(updateContext.profile.installedDir, 'package.json'))
-            if (restored.version !== this.currentVersion) {
-              rollbackFailure = new PluginUpdateError(
-                'update-rollback-failed',
-                `Plugin update failed and rollback installed ${String(restored.version)} instead of ${this.currentVersion}`,
-                { cause: error },
-              )
-            }
           }
         } catch (rollbackError) {
           rollbackFailure = new PluginUpdateError(
