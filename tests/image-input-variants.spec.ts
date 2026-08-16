@@ -185,7 +185,7 @@ describe('convertImagesToEvidence', () => {
 
   it('keeps a native attachment in the session workspace and exposes its path beside the description', async () => {
     const glance = vi.fn(async (request: { images: string[] }) => {
-      expect(request.images[0]).toContain('/.dsh-vision-toolkit/tmp/pasted-images/')
+      expect(request.images[0]?.replaceAll('\\', '/')).toContain('/.dsh-vision-toolkit/tmp/pasted-images/')
       return glanceResult('path-aware description')
     })
     const attachments = { readImage: vi.fn(async () => ({ ref: attachment('native-a'), data: Uint8Array.of(7, 8, 9) })) }
