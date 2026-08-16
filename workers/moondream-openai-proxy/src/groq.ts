@@ -41,6 +41,56 @@ function allRequestsWereRateLimited(statuses: number[]): boolean {
   return statuses.length > 0 && statuses.every(status => status === 429)
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function sanitizeUpstreamMessage(value: string, keys: string[]): string | undefined {
+  let message = value.replace(/\s+/g, ' ').trim()
+  if (message.length === 0) return undefined
+
+  for (const key of keys) message = message.replaceAll(key, '[REDACTED]')
+  message = message
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+\b/gi, 'Bearer [REDACTED]')
+    .replace(/\bgsk_[A-Za-z0-9_-]+\b/g, '[REDACTED]')
+
+  return message.slice(0, 500)
+}
+
+async function readUpstreamErrorMessage(response: Response, keys: string[]): Promise<string | undefined> {
+  try {
+    const text = await response.text()
+    if (text.length === 0 || text.length > 8_192) return undefined
+    const payload: unknown = JSON.parse(text)
+    if (!isRecord(payload)) return undefined
+
+    const error = payload.error
+    const message = isRecord(error) ? error.message : payload.message
+    return typeof message === 'string' ? sanitizeUpstreamMessage(message, keys) : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function invalidRequestError(status: number, message?: string): GroqProviderError {
+  const detail = message ? `: ${message}` : ''
+  if (status === 413) {
+    return new GroqProviderError(
+      `Vision provider rejected the request because it is too large${detail}`,
+      413,
+      'upstream_request_too_large',
+    )
+  }
+  if (status === 404) {
+    return new GroqProviderError('Vision model is temporarily unavailable', 502, 'upstream_model_unavailable')
+  }
+  return new GroqProviderError(
+    `Vision provider rejected the request${detail}`,
+    status === 422 ? 422 : 400,
+    'upstream_invalid_request',
+  )
+}
+
 export async function runGroqCompletion(
   input: VisionInput,
   env: GroqEnv,
@@ -92,9 +142,11 @@ export async function runGroqCompletion(
       return normalizeVisionOutput(payload as Record<string, unknown>)
     }
 
+    const upstreamMessage = await readUpstreamErrorMessage(response, keys)
     statuses.push(response.status)
     lastRetryAfter = response.headers.get('retry-after') ?? lastRetryAfter
-    if (!isRetryableStatus(response.status) || attempt + 1 >= keys.length) break
+    if (!isRetryableStatus(response.status)) throw invalidRequestError(response.status, upstreamMessage)
+    if (attempt + 1 >= keys.length) break
   }
 
   if (allRequestsWereRateLimited(statuses)) {
@@ -111,4 +163,4 @@ export async function runGroqCompletion(
   throw new GroqProviderError('Vision provider is temporarily unavailable', 502, 'upstream_error')
 }
 
-export const __test__ = { configuredKeys, selectKeyIndex }
+export const __test__ = { configuredKeys, sanitizeUpstreamMessage, selectKeyIndex }
