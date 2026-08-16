@@ -66,7 +66,7 @@ function healthResult(testConnection: boolean, testModel = false): VisionToolkit
 }
 
 class FakeManager implements WebRuntimeManager {
-  readonly healthCalls: Array<{ testConnection: boolean; testModel: boolean }> = []
+  readonly healthCalls: Array<{ testConnection: boolean; testModel: boolean; workspace: string }> = []
   private active = resolveConfig({})
   private generation = 1
   readonly runtime = {
@@ -74,8 +74,8 @@ class FakeManager implements WebRuntimeManager {
       repository: 'fixture', version: 'fixture', commit: 'fixture', path: '/fixture', source: 'managed',
       runtimeHome: '/fixture/runtime', python: 'python3', pythonVersion: '3.12.0', dependencies: {},
     },
-    health: async (testConnection: boolean, _options: unknown, testModel = false) => {
-      this.healthCalls.push({ testConnection, testModel })
+    health: async (testConnection: boolean, options: { workspace: string }, testModel = false) => {
+      this.healthCalls.push({ testConnection, testModel, workspace: options.workspace })
       return healthResult(testConnection, testModel)
     },
   } as unknown as VisionToolkitRuntime
@@ -285,9 +285,9 @@ describe('VisionToolkitWebBackend', () => {
     const model = await post({ action: 'health', testConnection: true, testModel: true })
     expect(model.status).toBe(200)
     expect(manager.healthCalls).toEqual([
-      { testConnection: false, testModel: false },
-      { testConnection: true, testModel: false },
-      { testConnection: true, testModel: true },
+      { testConnection: false, testModel: false, workspace: '/fixture/runtime' },
+      { testConnection: true, testModel: false, workspace: '/fixture/runtime' },
+      { testConnection: true, testModel: true, workspace: '/fixture/runtime' },
     ])
   })
 
