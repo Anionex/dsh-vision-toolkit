@@ -42,6 +42,16 @@ export interface PasteVerdict {
 export declare function safePastedImageName(raw: string, mediaType: string): string;
 /** Reject a resolved path that is not rooted below the expected directory. */
 export declare function ensurePathInside(root: string, target: string): void;
+export interface PasteRoot {
+    writeRoot: string;
+    visibleRoot: string;
+}
+/**
+ * Resolve the managed per-session image directory used by both browser pastes
+ * and native attachment bridging. Keeping both flows under the same workspace
+ * root makes the resulting absolute path valid for the model's visual tools.
+ */
+export declare function sessionPasteRoot(ctx: Context, sessionId: string): Promise<PasteRoot>;
 /** Runtime limit face kept separate for focused backend tests. */
 export interface PasteImageRuntime {
     maxImageBytes(): number;

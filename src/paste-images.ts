@@ -147,7 +147,7 @@ export function ensurePathInside(root: string, target: string): void {
   }
 }
 
-interface PasteRoot {
+export interface PasteRoot {
   writeRoot: string
   visibleRoot: string
 }
@@ -168,7 +168,12 @@ async function ensureManagedDirectory(workspace: string, path: string): Promise<
   return canonical
 }
 
-async function sessionPasteRoot(ctx: Context, sessionId: string): Promise<PasteRoot> {
+/**
+ * Resolve the managed per-session image directory used by both browser pastes
+ * and native attachment bridging. Keeping both flows under the same workspace
+ * root makes the resulting absolute path valid for the model's visual tools.
+ */
+export async function sessionPasteRoot(ctx: Context, sessionId: string): Promise<PasteRoot> {
   const session = ctx.sessions.get(sessionId as never)
   if (session === undefined) throw new Error(`live Session not found: ${sessionId}`)
   const cwd = session.header.cwd

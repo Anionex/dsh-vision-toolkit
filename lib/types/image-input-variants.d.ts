@@ -3,15 +3,16 @@
  * host positively declares text-only. A variant declares image input, so
  * pasted images keep the native attachment flow — composer thumbnail and the
  * durable session image — while the variant's stream rewrites every image
- * block into a Vision Toolkit description before delegating to the original
- * route. The durable log is untouched; only the wire carries text.
+ * block into a workspace path plus a Vision Toolkit description before
+ * delegating to the original route. The durable log is untouched; only the
+ * wire carries the evidence text.
  * @module dsh-vision-toolkit/image-input-variants
  */
 import type { Context } from '@deepseek-ai/cordis';
 import LlmService, { LlmAdapter } from '@deepseek-ai/dsh-llm';
 import type { ContentBlock, GenerateOptions, LlmModelInfo, LlmProviderInfo, LlmResolvedModelInfo, Message, StreamChunk } from '@deepseek-ai/dsh-llm';
 import type { ResolvedVisionToolkitConfig } from './config.ts';
-import type { PasteSelectionQuery, PasteVerdict } from './paste-images.ts';
+import { type PasteSelectionQuery, type PasteVerdict } from './paste-images.ts';
 import type { VisionToolkitRuntime } from './runtime.ts';
 /** Provider-id prefix for the variant routes this plugin registers. */
 export declare const VARIANT_PROVIDER_PREFIX = "vision-toolkit-";
@@ -67,9 +68,10 @@ export declare function abortableWait<T>(promise: Promise<T>, signal: AbortSigna
  * @param cache - shared per-adapter description cache.
  * @param messages - the assembled request messages.
  * @param signal - the caller's cancellation for this conversion pass.
+ * @param sessionId - the live Session identity, when available.
  * @returns the rewritten message list.
  */
-export declare function convertImagesToEvidence(ctx: Context, runtime: () => VisionToolkitRuntime | undefined, cache: EvidenceCache, messages: readonly Message[], signal?: AbortSignal): Promise<Message[]>;
+export declare function convertImagesToEvidence(ctx: Context, runtime: () => VisionToolkitRuntime | undefined, cache: EvidenceCache, messages: readonly Message[], signal?: AbortSignal, sessionId?: string): Promise<Message[]>;
 /**
  * The adapter behind one variant route: model metadata declares image input,
  * and every stream rewrites image blocks before delegating to the upstream
