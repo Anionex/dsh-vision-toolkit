@@ -189,6 +189,61 @@ describe('Worker request accounting', () => {
     expect(JSON.stringify(payload)).not.toContain('test-groq-key')
   })
 
+  it('returns Groq image validation details without retrying every account', async () => {
+    const database = new FakeD1()
+    const groqFetch = vi.fn(async () => Response.json({
+      error: {
+        message: 'Image must have at least 2 pixels in each dimension',
+        type: 'invalid_request_error',
+      },
+    }, { status: 400 }))
+    vi.stubGlobal('fetch', groqFetch)
+
+    const response = await worker.fetch(request(), environment(database))
+    expect(response.status).toBe(400)
+    expect(await response.json()).toMatchObject({
+      error: {
+        code: 'upstream_invalid_request',
+        message: 'Vision provider rejected the request: Image must have at least 2 pixels in each dimension',
+      },
+    })
+    expect(groqFetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('redacts provider credentials from an upstream validation message', async () => {
+    const database = new FakeD1()
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({
+      error: {
+        message: 'Invalid Bearer test-groq-key-1 and gsk_exampleSecretValue',
+        type: 'invalid_request_error',
+      },
+    }, { status: 400 })))
+
+    const response = await worker.fetch(request(), environment(database))
+    expect(response.status).toBe(400)
+    const payload = await response.json()
+    expect(payload).toMatchObject({ error: { code: 'upstream_invalid_request' } })
+    expect(JSON.stringify(payload)).not.toContain('test-groq-key')
+    expect(JSON.stringify(payload)).not.toContain('gsk_exampleSecretValue')
+    expect(JSON.stringify(payload)).toContain('[REDACTED]')
+  })
+
+  it('maps an upstream payload limit to a descriptive 413 response', async () => {
+    const database = new FakeD1()
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({
+      error: { message: 'The request exceeds the image payload limit' },
+    }, { status: 413 })))
+
+    const response = await worker.fetch(request(), environment(database))
+    expect(response.status).toBe(413)
+    expect(await response.json()).toMatchObject({
+      error: {
+        code: 'upstream_request_too_large',
+        message: 'Vision provider rejected the request because it is too large: The request exceeds the image payload limit',
+      },
+    })
+  })
+
   it('applies burst limiting before reading the request body', async () => {
     let bodyRead = false
     const incoming = request()
