@@ -103,6 +103,14 @@ dsh --profile headless --dump-config | grep vision-toolkit
 
 安装后重启正在运行的 Web Profile，打开 **设置 → 视觉工具**，为远程工具选择 DSH Credential，先执行**测试 API 连接**，再执行**测试视觉模型**以验证一次真实图片请求。在会话中把图片放进工作区路径，调用 `/vision-tools`，再让 Agent 使用明确的 `vision_*` 工具。本地裁剪、SVG、像素、颜色、前景和 HTML 操作不需要视觉 API Credential。
 
+## 加入交流群
+
+欢迎加入 `agent-vision-toolkit` 项目交流群，交流使用经验、反馈问题并提出建议。
+
+<p align="center">
+  <img src="assets/community-group-qr.png" alt="agent-vision-toolkit 项目交流群二维码" width="260">
+</p>
+
 ## 工作原理
 
 ```mermaid
@@ -409,11 +417,3 @@ pnpm pack --dry-run
 ## 许可证
 
 插件采用 MIT 许可。打包的 `agent-vision-toolkit` 快照在 `vendor/agent-vision-toolkit/LICENSE` 保留上游 MIT 许可证，并继续作为视觉算法的唯一实现。
-
-## 加入交流群
-
-欢迎加入 `agent-vision-toolkit` 项目交流群，交流使用经验、反馈问题并提出建议。请扫描下方二维码入群。
-
-<p align="center">
-  <img src="assets/community-group-qr.png" alt="agent-vision-toolkit 项目交流群二维码" width="320">
-</p>

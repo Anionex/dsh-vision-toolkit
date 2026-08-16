@@ -103,6 +103,14 @@ Legacy profiles must use `nodeLinker: hoisted` and `autoInstallPeers: false` in 
 
 Restart a running Web profile, open **Settings → Vision Toolkit**, select a DSH Credential for remote tools, run **Test API connection**, and then run **Test vision model** to verify one real image request. In a conversation, make an image available as a workspace path, invoke `/vision-tools`, and ask the Agent to call a specific `vision_*` tool. Local crop, trace, pixel, color, foreground, and HTML operations do not require a visual API credential.
 
+## Community Group
+
+Join the `agent-vision-toolkit` community group to exchange usage tips, share feedback, and suggest improvements.
+
+<p align="center">
+  <img src="assets/community-group-qr.png" alt="QR code for the agent-vision-toolkit community group" width="260">
+</p>
+
 ## How it works
 
 ```mermaid
@@ -341,11 +349,6 @@ npm run example:ui-restoration:write
 
 The committed evidence records an initial `6.04%` difference across six non-zero worst regions and a final `0%` difference with no non-zero worst region. Check mode reproduces the tool path and verifies the committed assets; write mode intentionally refreshes the evidence.
 
-## Communication group
-
-<img width="254" height="328" alt="image" src="https://github.com/user-attachments/assets/63c25c69-c3ba-4c47-8dee-98d60fe3954d" />
-
-
 ## Troubleshooting
 
 | Symptom | Resolution |
@@ -401,11 +404,3 @@ If you would like to follow my future work, [follow me on X](https://x.com/anion
 ## License
 
 The plugin is MIT-licensed. The packaged `agent-vision-toolkit` snapshot retains its upstream MIT license in `vendor/agent-vision-toolkit/LICENSE` and remains the sole implementation of its visual algorithms.
-
-## Join the Community Group
-
-You are welcome to join the `agent-vision-toolkit` community group to exchange usage tips, share feedback, and suggest improvements. Scan the QR code below to join.
-
-<p align="center">
-  <img src="assets/community-group-qr.png" alt="QR code for the agent-vision-toolkit community group" width="320">
-</p>
