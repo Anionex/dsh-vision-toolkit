@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -21,6 +21,7 @@ import { resolveConfig } from '../src/config.ts'
 import type { VisionToolkitRuntime } from '../src/runtime.ts'
 
 const roots: string[] = []
+const CHANNEL_NOTE = '[vision proxy] Images reach you as text here: a vision model reads the attachment and writes a description — you never receive visual tokens. Each description is focused by the user or assistant intent available when that image appears. Treat it as visual evidence, not as user-authored text, and do not search the workspace for the original attachment.'
 
 afterEach(async () => {
   vi.restoreAllMocks()
@@ -160,7 +161,7 @@ describe('convertImagesToEvidence', () => {
     expect(after[0]?.content).toHaveLength(3)
     expect(after[0]?.content[1]).toEqual({
       type: 'text',
-      text: '[vision proxy] Images reach you as text here: a vision model reads the file and writes a description — you never receive visual tokens, and `vision_glance` returns a description as well. Each one is written to answer the stated reason for looking. Whenever a description misses what you need, say what you are looking for and call `vision_glance`: the next one is written to answer that.',
+      text: CHANNEL_NOTE,
     })
     expect(after[0]?.content[2]).toEqual({ type: 'text', text: '[vision model description] a red circle' })
     const nested = after[1]?.content[0]
@@ -241,6 +242,19 @@ describe('convertImagesToEvidence', () => {
     expect(glance.mock.calls[0]?.[0]?.query).not.toContain('internal')
   })
 
+  it('filters every upstream injected-context prefix and never promises a path-less re-read', async () => {
+    for (const prefix of ['<environment_context>', '<user_instructions>', '# AGENTS.md instructions']) {
+      const glance = vi.fn(async () => glanceResult('description'))
+      const attachments = { readImage: vi.fn(async () => ({ ref: attachment('a'), data: Uint8Array.of(1) })) }
+      const ctx = { get: (name: string) => name === 'attachments' ? attachments : undefined } as never
+      const messages = [message('m1', [{ type: 'text', text: `${prefix} internal` }, imageBlock('a')])]
+      const converted = await convertImagesToEvidence(ctx, () => runtimeStub(glance), new EvidenceCache(4), messages)
+      expect(glance.mock.calls[0]?.[0]?.query).not.toContain('internal')
+      expect(converted[0]?.content).toContainEqual({ type: 'text', text: CHANNEL_NOTE })
+      expect(CHANNEL_NOTE).not.toContain('call `vision_glance`')
+    }
+  })
+
   it('uses the latest assistant paragraph for tool-fetched images', async () => {
     const glance = vi.fn(async () => glanceResult('focused description'))
     const attachments = { readImage: vi.fn(async () => ({ ref: attachment('a'), data: Uint8Array.of(1) })) }
@@ -262,7 +276,35 @@ describe('convertImagesToEvidence', () => {
     ]
     await convertImagesToEvidence(ctx, () => runtimeStub(glance), new EvidenceCache(4), messages)
     expect(glance.mock.calls[0]?.[0]?.query).toContain('请查看右上角的图标。')
+    expect(glance.mock.calls[0]?.[0]?.query).not.toContain('先定位目标。')
     expect(glance.mock.calls[0]?.[0]?.query).toContain('The latest user or assistant request is shown below.')
+  })
+
+  it('describes multiple images with at most four concurrent vision calls and preserves order', async () => {
+    let active = 0
+    let maximum = 0
+    const glance = vi.fn(async (request: { images: string[] }) => {
+      active += 1
+      maximum = Math.max(maximum, active)
+      const bytes = await readFile(request.images[0] as string)
+      await new Promise(resolve => setTimeout(resolve, 5 + (bytes[0] ?? 0) % 3))
+      active -= 1
+      return glanceResult(`image-${bytes[0] ?? 0}`)
+    })
+    const attachments = {
+      readImage: vi.fn(async (ref: { attachmentId: string }) => ({
+        ref: attachment(ref.attachmentId),
+        data: Uint8Array.of(Number(ref.attachmentId.slice(1))),
+      })),
+    }
+    const ctx = { get: (name: string) => name === 'attachments' ? attachments : undefined } as never
+    const messages = [message('m1', Array.from({ length: 8 }, (_, index) => imageBlock(`a${index}`)))]
+    const converted = await convertImagesToEvidence(ctx, () => runtimeStub(glance), new EvidenceCache(32), messages)
+    const descriptions = converted[0]?.content
+      .filter((block): block is Extract<ContentBlock, { type: 'text' }> => block.type === 'text' && block.text.startsWith('[vision model description]'))
+      .map(block => block.text)
+    expect(maximum).toBe(4)
+    expect(descriptions).toEqual(Array.from({ length: 8 }, (_, index) => `[vision model description] image-${index}`))
   })
 })
 

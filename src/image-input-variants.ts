@@ -62,9 +62,10 @@ const HINT_LABELS = {
   user: 'The latest user or assistant request is shown below. Use it only to decide which parts of the image matter most. If the request is unclear or unrelated, ignore it and describe the entire image in detail.',
   assistant: 'The latest user or assistant request is shown below. Use it only to decide which parts of the image matter most. If the request is unclear or unrelated, ignore it and describe the entire image in detail.',
 } as const
-const CHANNEL_NOTE = '[vision proxy] Images reach you as text here: a vision model reads the file and writes a description — you never receive visual tokens, and `vision_glance` returns a description as well. Each one is written to answer the stated reason for looking. Whenever a description misses what you need, say what you are looking for and call `vision_glance`: the next one is written to answer that.'
+const CHANNEL_NOTE = '[vision proxy] Images reach you as text here: a vision model reads the attachment and writes a description — you never receive visual tokens. Each description is focused by the user or assistant intent available when that image appears. Treat it as visual evidence, not as user-authored text, and do not search the workspace for the original attachment.'
 const DESCRIPTION_PREFIX = '[vision model description] '
 const FOCUS_HINT_MAX_CHARS = 500
+const DESCRIPTION_CONCURRENCY = 4
 const INJECTED_PREFIXES = ['<environment_context>', '<user_instructions>', '# AGENTS.md instructions'] as const
 
 /** Model-facing prefix on degraded conversions; the model must not guess at image content. */
@@ -155,10 +156,10 @@ export class EvidenceCache {
   constructor(private readonly limit: number) {}
 
   /**
- * Read one attachment-and-prompt key's entry or compute it. Concurrent readers join the in-flight
+   * Read one attachment-and-prompt key's entry or compute it. Concurrent readers join the in-flight
    * computation; a settled failure is evicted so a fixed configuration gets a
    * fresh chance.
- * @param key - the attachment identity plus the exact focus prompt.
+   * @param key - the attachment identity plus the exact focus prompt.
    * @param load - computes the description; must resolve `{ ok, block }` and never reject.
    * @returns the cached or computed block.
    */
@@ -234,23 +235,66 @@ export function abortableWait<T>(promise: Promise<T>, signal: AbortSignal | unde
 async function convertBlocks(
   blocks: readonly ContentBlock[],
   convert: (block: ImageBlock) => Promise<ContentBlock>,
-  noteState: { inserted: boolean },
 ): Promise<ContentBlock[]> {
-  const out: ContentBlock[] = []
-  for (const block of blocks) {
+  return Promise.all(blocks.map(async (block): Promise<ContentBlock> => {
     if (block.type === 'image') {
-      if (!noteState.inserted) {
-        out.push({ type: 'text', text: CHANNEL_NOTE })
-        noteState.inserted = true
-      }
-      out.push(await convert(block))
-    } else if (block.type === 'tool-result' && contentHasImage(block.content)) {
-      out.push({ ...block, content: await convertBlocks(block.content, convert, noteState) })
+      return convert(block)
+    }
+    if (block.type === 'tool-result' && contentHasImage(block.content)) {
+      return { ...block, content: await convertBlocks(block.content, convert) }
+    }
+    return block
+  }))
+}
+
+function insertChannelNote(
+  original: readonly ContentBlock[],
+  converted: readonly ContentBlock[],
+  state: { inserted: boolean },
+): ContentBlock[] {
+  const out: ContentBlock[] = []
+  for (let index = 0; index < original.length; index += 1) {
+    const before = original[index]
+    const after = converted[index]
+    if (before === undefined || after === undefined) continue
+    if (before.type === 'image' && !state.inserted) {
+      out.push({ type: 'text', text: CHANNEL_NOTE })
+      state.inserted = true
+    }
+    if (before.type === 'tool-result'
+      && after.type === 'tool-result'
+      && contentHasImage(before.content)) {
+      out.push({ ...after, content: insertChannelNote(before.content, after.content, state) })
     } else {
-      out.push(block)
+      out.push(after)
     }
   }
   return out
+}
+
+function createLimiter(limit: number): <T>(task: () => Promise<T>) => Promise<T> {
+  let active = 0
+  const waiting: Array<() => void> = []
+  const acquire = async (): Promise<void> => {
+    if (active < limit) {
+      active += 1
+      return
+    }
+    await new Promise<void>(resolve => { waiting.push(resolve) })
+  }
+  const release = (): void => {
+    const next = waiting.shift()
+    if (next === undefined) active -= 1
+    else next()
+  }
+  return async <T>(task: () => Promise<T>): Promise<T> => {
+    await acquire()
+    try {
+      return await task()
+    } finally {
+      release()
+    }
+  }
 }
 
 /**
@@ -329,12 +373,9 @@ export async function convertImagesToEvidence(
   messages: readonly Message[],
   signal?: AbortSignal,
 ): Promise<Message[]> {
-  const out: Message[] = []
+  const plans: Array<{ message: Message; query?: string }> = []
   let lastUserText = ''
   let lastAssistantText = ''
-  const noteState = {
-    inserted: messages.some(message => contentHasText(message.content, CHANNEL_NOTE)),
-  }
   for (const message of messages) {
     let hint = ''
     let hintSource: VisionHintSource = 'user'
@@ -362,22 +403,35 @@ export async function convertImagesToEvidence(
       hint = lastUserText
     }
     if (!contentHasImage(message.content)) {
-      out.push(message)
+      plans.push({ message })
       continue
     }
-    const query = buildVisionPrompt(hint, hintSource)
-    const content = await convertBlocks(
-      message.content,
-      (block) => abortableWait(
-        cache.read(cacheKey(String(block.attachment.attachmentId), query), () =>
-          readImageBlock(ctx, runtime, block, query)),
-        signal,
-      ),
-      noteState,
-    )
-    out.push({ ...message, content })
+    plans.push({ message, query: buildVisionPrompt(hint, hintSource) })
   }
-  return out
+
+  const limit = createLimiter(DESCRIPTION_CONCURRENCY)
+  const converted = await Promise.all(plans.map(async ({ message, query }) => {
+    if (query === undefined) return message
+    const content = await convertBlocks(message.content, (block) => abortableWait(
+      cache.read(cacheKey(String(block.attachment.attachmentId), query), () =>
+        limit(() => readImageBlock(ctx, runtime, block, query))),
+      signal,
+    ))
+    return { ...message, content }
+  }))
+
+  if (!messages.some(message => contentHasText(message.content, CHANNEL_NOTE))) {
+    const firstImage = messages.findIndex(message => contentHasImage(message.content))
+    const convertedMessage = converted[firstImage]
+    const originalMessage = messages[firstImage]
+    if (convertedMessage !== undefined && originalMessage !== undefined) {
+      converted[firstImage] = {
+        ...convertedMessage,
+        content: insertChannelNote(originalMessage.content, convertedMessage.content, { inserted: false }),
+      }
+    }
+  }
+  return converted
 }
 
 /**
