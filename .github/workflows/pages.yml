@@ -39,7 +39,7 @@ jobs:
         run: |
           mkdir -p _site/assets _site/examples/ui-restoration/assets
           cp index.html _site/index.html
-          cp assets/hero.png assets/social-preview.png assets/vision-settings.png _site/assets/
+          cp assets/hero-v2.png assets/social-preview.png assets/vision-settings.png _site/assets/
           cp examples/ui-restoration/assets/initial.png _site/examples/ui-restoration/assets/initial.png
           cp examples/ui-restoration/assets/implementation.png _site/examples/ui-restoration/assets/implementation.png
 

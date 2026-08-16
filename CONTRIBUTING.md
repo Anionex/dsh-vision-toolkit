@@ -62,7 +62,7 @@ Use focused tests while iterating, but run the complete package suite before req
 - Keep `README.md` and `README.zh.md` synchronized in section order, commands, links, images, and claims.
 - Update JSDoc, troubleshooting, and requirements traceability with every user-visible behavior change.
 - Use repository-owned screenshots or deterministic outputs. Never fabricate a product state or include secrets, private conversations, or unrelated user data.
-- Refresh `assets/hero.png` and `assets/social-preview.png` only when the public positioning or visible product state changes, then inspect the actual pixels.
+- Refresh `assets/hero-v2.png` and `assets/social-preview.png` only when the public positioning or visible product state changes, then inspect the actual pixels.
 - Update `CHANGELOG.md` under **Unreleased** for notable user-facing changes.
 
 ## Pull requests

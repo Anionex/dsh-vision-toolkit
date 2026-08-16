@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/hero.png" alt="DSH Vision Toolkit — native visual engineering for text-only DeepSeek Harness agents" />
+  <img src="assets/hero-v2.png" alt="DSH Vision Toolkit — native visual engineering for text-only DeepSeek Harness agents" />
 </p>
 
 <h1 align="center">DSH Vision Toolkit</h1>

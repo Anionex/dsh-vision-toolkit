@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/hero.png" alt="DSH Vision Toolkit——面向纯文本 DeepSeek Harness Agent 的原生视觉工程能力" />
+  <img src="assets/hero-v2.png" alt="DSH Vision Toolkit——面向纯文本 DeepSeek Harness Agent 的原生视觉工程能力" />
 </p>
 
 <h1 align="center">DSH Vision Toolkit</h1>

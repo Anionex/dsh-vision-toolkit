@@ -168,7 +168,7 @@ const requiredFiles = [
   'lib/index.js',
   'lib/types/index.d.ts',
   'lib/client.js',
-  'assets/hero.png',
+  'assets/hero-v2.png',
   'assets/social-preview.png',
   'runtime/requirements.lock',
   'vendor/agent-vision-toolkit/UPSTREAM_MANIFEST.json',
@@ -218,7 +218,7 @@ for (const markdownPath of ['README.md', 'README.zh.md', 'CONTRIBUTING.md', 'SUP
 }
 
 const imageExpectations = new Map([
-  ['assets/hero.png', { width: 1672, height: 941 }],
+  ['assets/hero-v2.png', { width: 1672, height: 941 }],
   ['assets/social-preview.png', { width: 1280, height: 640 }],
 ])
 for (const [path, expected] of imageExpectations) {
@@ -259,7 +259,7 @@ if (pack.status !== 0) {
   try {
     const result = JSON.parse(pack.stdout)
     const packedFiles = new Set((result[0]?.files ?? []).map(file => file.path))
-    for (const path of ['lib/index.js', 'lib/types/index.d.ts', 'lib/client.js', 'cordis.patch.yml', 'assets/hero.png', 'assets/social-preview.png']) {
+    for (const path of ['lib/index.js', 'lib/types/index.d.ts', 'lib/client.js', 'cordis.patch.yml', 'assets/hero-v2.png', 'assets/social-preview.png']) {
       check(packedFiles.has(path), `dry-run tarball is missing ${path}`)
     }
   } catch (error) {
