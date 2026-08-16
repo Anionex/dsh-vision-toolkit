@@ -22,6 +22,7 @@ import {
 } from './paste-images.ts'
 import {
   resolveConfig,
+  isBuiltInFreeVisionProvider,
   VISION_TOOLKIT_SETTINGS_NAMESPACE,
   type ResolvedVisionToolkitConfig,
   type VisionToolkitConfig,
@@ -208,6 +209,9 @@ export class VisionToolkitWebBackend {
   ) {}
 
   private async credential(config: ResolvedVisionToolkitConfig): Promise<CredentialInfo> {
+    if (isBuiltInFreeVisionProvider(config.provider)) {
+      return { configured: true, source: 'built-in-free', writable: false }
+    }
     return this.ctx.credentials.describe(credentialRef(String(config.provider.credential)))
   }
 

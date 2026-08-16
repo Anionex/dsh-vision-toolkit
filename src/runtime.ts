@@ -13,7 +13,8 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { ResolvedCredential } from '@deepseek-ai/dsh-credentials'
 import { SaxesParser } from 'saxes'
 import { describeArtifact, type ArtifactDescriptor } from './artifacts.ts'
-import type { ResolvedVisionToolkitConfig } from './config.ts'
+import { isBuiltInFreeVisionProvider, type ResolvedVisionToolkitConfig } from './config.ts'
+import { BUILT_IN_FREE_VISION_KEY } from './defaults.ts'
 import { VisionToolkitError } from './errors.ts'
 import {
   assertDistinctOutput,
@@ -757,7 +758,9 @@ export class VisionToolkitRuntime {
 
   /** Resolve the configured credential at the remote-operation boundary. */
   async resolveVisionEnv(): Promise<UpstreamEnvironment> {
-    const resolved: ResolvedCredential | undefined = await this.ctx.credentials.resolve(this.config.provider.credential)
+    const resolved: ResolvedCredential | undefined = isBuiltInFreeVisionProvider(this.config.provider)
+      ? { value: BUILT_IN_FREE_VISION_KEY, source: 'built-in' }
+      : await this.ctx.credentials.resolve(this.config.provider.credential)
     if (resolved === undefined) {
       throw new VisionToolkitError(
         'config',
@@ -1714,7 +1717,9 @@ export class VisionToolkitRuntime {
       let resolvedCredential: ResolvedCredential | undefined
       let credential: HealthCheck
       try {
-        resolvedCredential = await this.ctx.credentials.resolve(this.config.provider.credential)
+        resolvedCredential = isBuiltInFreeVisionProvider(this.config.provider)
+          ? { value: BUILT_IN_FREE_VISION_KEY, source: 'built-in' }
+          : await this.ctx.credentials.resolve(this.config.provider.credential)
         credential = resolvedCredential === undefined
           ? { status: 'error', detail: `credential ${this.config.provider.credential} is not configured` }
           : { status: 'ok', detail: `credential ${this.config.provider.credential} is resolvable` }

@@ -121,15 +121,25 @@ async function setup() {
 
 describe('VisionToolkitWebBackend', () => {
   it('describes Settings and credential status without resolving or exposing the secret', async () => {
-    const { ctx, base } = await setup()
+    const { ctx, base, credentialService } = await setup()
     const response = await fetch(base)
-    const body = await response.json() as { ok: true; value: { credential: { configured: boolean }; settings: { revision: number } } }
+    const body = await response.json() as {
+      ok: true
+      value: {
+        credential: { configured: boolean; ref: string; source?: string; writable: boolean }
+        settings: { revision: number }
+      }
+    }
 
     expect(response.status).toBe(200)
     expect(body.value.credential.configured).toBe(true)
+    expect(body.value.credential.ref).toBe('ANIONEX_FREE_VISION')
+    expect(body.value.credential.source).toBe('built-in-free')
+    expect(body.value.credential.writable).toBe(false)
     expect(body.value.settings.revision).toBe(0)
     expect(JSON.stringify(body)).not.toContain('never-exposed-secret')
     expect(ctx.credentials.resolve).not.toHaveBeenCalled()
+    expect(credentialService.describe).not.toHaveBeenCalled()
   })
 
   it('preflights, persists, activates, and rejects a stale revision', async () => {

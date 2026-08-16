@@ -19,7 +19,7 @@ declare const en: {
     readonly apiKeyBlank: "The API key cannot contain only spaces.";
     readonly apiKeyInvalid: "Paste only the key, without a variable name, quotes, spaces, or line breaks.";
     readonly credential: "Credential name";
-    readonly credentialHint: "Advanced: the API key is stored under this name. Keep VISION_API_KEY unless another plugin configuration requires a different reference.";
+    readonly credentialHint: "The built-in free provider needs no user key. For a custom provider, this is the DSH credential reference used to store its key.";
     readonly model: "Model";
     readonly protocol: "API protocol";
     readonly anthropicThinking: "Anthropic thinking";

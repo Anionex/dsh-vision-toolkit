@@ -11,6 +11,17 @@ import type Schema from '@deepseek-ai/schemastery'
 import { credentialRef, type CredentialRef } from '@deepseek-ai/dsh-credentials'
 import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import { VisionToolkitError } from './errors.ts'
+import {
+  BUILT_IN_FREE_VISION_BASE_URL,
+  BUILT_IN_FREE_VISION_CREDENTIAL,
+  BUILT_IN_FREE_VISION_MODEL,
+} from './defaults.ts'
+
+export {
+  BUILT_IN_FREE_VISION_BASE_URL,
+  BUILT_IN_FREE_VISION_CREDENTIAL,
+  BUILT_IN_FREE_VISION_MODEL,
+} from './defaults.ts'
 
 /** Settings document namespace owned by this plugin. */
 export const VISION_TOOLKIT_SETTINGS_NAMESPACE = settingsNamespace('vision-toolkit')
@@ -80,17 +91,17 @@ export interface VisionToolkitConfig {
 /** Configuration schema with the documented P0 defaults. */
 export const Config: Schema<VisionToolkitConfig> = z.object({
   provider: z.object({
-    baseUrl: z.string().default('https://api.inferera.com/v1'),
-    credential: z.string().default('VISION_API_KEY'),
-    model: z.string().default('gemini-3.6-flash'),
+    baseUrl: z.string().default(BUILT_IN_FREE_VISION_BASE_URL),
+    credential: z.string().default(BUILT_IN_FREE_VISION_CREDENTIAL),
+    model: z.string().default(BUILT_IN_FREE_VISION_MODEL),
     protocol: z.union(['openai', 'anthropic'] as const).default('openai'),
     anthropicThinking: z.union(['omit', 'disabled', 'adaptive'] as const).default('omit'),
     userAgent: z.string().default(DEFAULT_VISION_USER_AGENT),
   }),
   language: z.union(['zh', 'en'] as const).default('zh'),
   timeoutMs: z.number().default(60000),
-  maxImageBytes: z.number().default(10485760),
-  maxImagePixels: z.number().default(40000000),
+  maxImageBytes: z.number().default(4194304),
+  maxImagePixels: z.number().default(20000000),
   concurrency: z.number().default(4),
   runtime: z.object({
     mode: z.union(['managed', 'external'] as const).default('managed'),
@@ -149,21 +160,21 @@ const MAX_CONCURRENCY = 16
 export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionToolkitConfig {
   const provider = config.provider ?? {}
   const runtime = config.runtime ?? {}
-  const baseUrl = (provider.baseUrl ?? 'https://api.inferera.com/v1').trim().replace(/\/+$/, '')
+  const baseUrl = (provider.baseUrl ?? BUILT_IN_FREE_VISION_BASE_URL).trim().replace(/\/+$/, '')
   if (!/^https?:\/\//i.test(baseUrl) || baseUrl.length <= 'https://'.length) {
     throw new VisionToolkitError('config', 'provider.baseUrl must be an http(s) URL')
   }
   let credential: CredentialRef
   try {
-    credential = credentialRef((provider.credential ?? 'VISION_API_KEY').trim())
+    credential = credentialRef((provider.credential ?? BUILT_IN_FREE_VISION_CREDENTIAL).trim())
   } catch (error) {
     throw new VisionToolkitError(
       'config',
-      `provider.credential "${provider.credential ?? 'VISION_API_KEY'}" is not a valid credential reference`,
+      `provider.credential "${provider.credential ?? BUILT_IN_FREE_VISION_CREDENTIAL}" is not a valid credential reference`,
       { cause: error },
     )
   }
-  const model = (provider.model ?? 'gemini-3.6-flash').trim()
+  const model = (provider.model ?? BUILT_IN_FREE_VISION_MODEL).trim()
   if (model.length === 0) {
     throw new VisionToolkitError('config', 'provider.model must not be empty')
   }
@@ -187,11 +198,11 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
   if (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > MAX_TIMEOUT_MS) {
     throw new VisionToolkitError('config', `timeoutMs must be an integer between 1000 and ${MAX_TIMEOUT_MS}`)
   }
-  const maxImageBytes = config.maxImageBytes ?? 10485760
+  const maxImageBytes = config.maxImageBytes ?? 4194304
   if (!Number.isInteger(maxImageBytes) || maxImageBytes < 1024 || maxImageBytes > MAX_IMAGE_BYTES) {
     throw new VisionToolkitError('config', `maxImageBytes must be an integer between 1024 and ${MAX_IMAGE_BYTES}`)
   }
-  const maxImagePixels = config.maxImagePixels ?? 40000000
+  const maxImagePixels = config.maxImagePixels ?? 20000000
   if (!Number.isInteger(maxImagePixels) || maxImagePixels < 1 || maxImagePixels > MAX_IMAGE_PIXELS) {
     throw new VisionToolkitError('config', `maxImagePixels must be an integer between 1 and ${MAX_IMAGE_PIXELS}`)
   }
@@ -241,4 +252,12 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
       autoSwitch: imageInputVariants.autoSwitch ?? true,
     },
   }
+}
+
+/** Whether a resolved provider should use the bundled public key instead of DSH credentials. */
+export function isBuiltInFreeVisionProvider(provider: ResolvedVisionToolkitConfig['provider']): boolean {
+  return String(provider.credential) === BUILT_IN_FREE_VISION_CREDENTIAL
+    && provider.baseUrl === BUILT_IN_FREE_VISION_BASE_URL
+    && provider.model === BUILT_IN_FREE_VISION_MODEL
+    && provider.protocol === 'openai'
 }

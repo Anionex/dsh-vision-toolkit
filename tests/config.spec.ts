@@ -1,19 +1,27 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_VISION_USER_AGENT, resolveConfig } from '../src/config.ts'
+import {
+  BUILT_IN_FREE_VISION_BASE_URL,
+  BUILT_IN_FREE_VISION_CREDENTIAL,
+  BUILT_IN_FREE_VISION_MODEL,
+  DEFAULT_VISION_USER_AGENT,
+  isBuiltInFreeVisionProvider,
+  resolveConfig,
+} from '../src/config.ts'
 
 describe('resolveConfig', () => {
-  it('applies documented defaults', () => {
+  it('applies install-and-use free vision defaults', () => {
     const config = resolveConfig({})
-    expect(config.provider.baseUrl).toBe('https://api.inferera.com/v1')
-    expect(config.provider.credential).toBe('VISION_API_KEY')
-    expect(config.provider.model).toBe('gemini-3.6-flash')
+    expect(config.provider.baseUrl).toBe(BUILT_IN_FREE_VISION_BASE_URL)
+    expect(config.provider.credential).toBe(BUILT_IN_FREE_VISION_CREDENTIAL)
+    expect(config.provider.model).toBe(BUILT_IN_FREE_VISION_MODEL)
     expect(config.provider.protocol).toBe('openai')
     expect(config.provider.anthropicThinking).toBe('omit')
     expect(config.provider.userAgent).toBe(DEFAULT_VISION_USER_AGENT)
     expect(config.language).toBe('zh')
     expect(config.timeoutMs).toBe(60000)
-    expect(config.maxImageBytes).toBe(10485760)
-    expect(config.maxImagePixels).toBe(40000000)
+    expect(config.maxImageBytes).toBe(4194304)
+    expect(config.maxImagePixels).toBe(20000000)
+    expect(isBuiltInFreeVisionProvider(config.provider)).toBe(true)
     expect(config.concurrency).toBe(4)
     expect(config.runtime.mode).toBe('managed')
     expect(config.runtime.python).toBeUndefined()
