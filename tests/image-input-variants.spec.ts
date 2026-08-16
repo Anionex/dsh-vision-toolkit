@@ -730,7 +730,7 @@ describe('createPasteTakeoverResolver', () => {
     llm.listModels.mockImplementation(async (provider: string) => provider === 'vision-toolkit-deepseek-official'
       ? [{ provider, id: 'plain', name: 'Plain (Vision Toolkit)', inputModalities: ['text', 'image'] }]
       : [{ provider: 'deepseek-official', id: 'plain', name: 'Plain', inputModalities: ['text'] }])
-    const resolve = createPasteTakeoverResolver(ctx, () => config())
+    const resolve = createPasteTakeoverResolver(ctx, () => config({ autoSwitch: true }))
     const verdict = await resolve('s1', { provider: 'deepseek-official', model: 'plain' })
     expect(verdict).toEqual({
       takeOver: false,
@@ -754,7 +754,7 @@ describe('createPasteTakeoverResolver', () => {
     llm.listModels.mockImplementation(async (provider: string) => provider === 'vision-toolkit-deepseek-official'
       ? [{ provider, id: 'plain', name: 'Plain (Vision Toolkit)', inputModalities: ['text', 'image'] }]
       : [{ provider: 'deepseek-official', id: 'plain', name: 'Plain', inputModalities: ['text'] }])
-    const resolve = createPasteTakeoverResolver(ctx, () => config())
+    const resolve = createPasteTakeoverResolver(ctx, () => config({ autoSwitch: true }))
     const verdict = await resolve('s1', { provider: 'deepseek-official', model: 'plain', reasoningEffort: 'high' })
     expect(verdict.autoSwitch?.reasoningEffort).toBe('high')
   })

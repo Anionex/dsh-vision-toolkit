@@ -82,7 +82,7 @@ export interface VisionToolkitConfig {
      * to the image-input variant of a text-only model before the paste, so
      * pasted images keep the native attachment flow with no manual model
      * change. Off means a text-only model keeps the path takeover (default
-     * true).
+     * false), which is the DSH-compatible paste flow.
      */
     autoSwitch?: boolean
   }
@@ -112,7 +112,7 @@ export const Config: Schema<VisionToolkitConfig> = z.object({
   imageInputVariants: z.object({
     enabled: z.boolean().default(true),
     providers: z.array(z.string()).default([]),
-    autoSwitch: z.boolean().default(true),
+    autoSwitch: z.boolean().default(false),
   }),
 })
 
@@ -249,7 +249,7 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
     imageInputVariants: {
       enabled: imageInputVariants.enabled ?? true,
       providers: variantProviders,
-      autoSwitch: imageInputVariants.autoSwitch ?? true,
+      autoSwitch: imageInputVariants.autoSwitch ?? false,
     },
   }
 }
