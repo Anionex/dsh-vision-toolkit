@@ -12,15 +12,19 @@
 [![MIT](https://img.shields.io/badge/license-MIT-0B7285?style=flat-square)](LICENSE)
 [![DSH](https://img.shields.io/badge/DSH-Web%20%2B%20Headless-5B4CF0?style=flat-square)](cordis.patch.yml)
 
-**Give text-only DeepSeek Harness agents eyes: image Q&A, long-screenshot OCR, UI restoration, and GUI visual tasks in one toolkit and Skill.**
+**A more powerful vision toolkit—give text-only models in DeepSeek Harness eyes: image Q&A, long-screenshot OCR, UI restoration, and GUI visual tasks in one toolkit and Skill.**
 
-🚀 Paste an image and ask directly | Install with one command | Built-in free quota
+🚀 Paste an image and ask directly | Install with one command | Built-in free quota | Broad use cases
 
 🌐 **English** | [中文](README.zh.md)
 
 </div>
 
 If you use DeepSeek or another text-only model in DeepSeek Harness (DSH), you may have run into the same problems: the model cannot see a screenshot, generic descriptions miss the point, buttons have no usable coordinates, and a rebuilt page can look “close enough” without a way to measure the remaining difference.
+
+🏆 This project is the first comprehensive vision-tool plugin in the DeepSeek Harness ecosystem: it was initiated before internal beta and built during the beta with reference to [`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit).
+
+> **Original work:** This vision toolkit and the `vision-tools` Skill were personally created and continuously refined by the author through long-term real-world use and repeated iteration.
 
 ## Highlights
 
@@ -29,7 +33,6 @@ If you use DeepSeek or another text-only model in DeepSeek Harness (DSH), you ma
 - **One command to install.** The built-in free Gemma 4 vision service is ready after installation, with no API key required.
 - **Built-in free quota.** The shared service includes 100 requests per client per day, 400 requests globally per day, and a 20-request burst per 60 seconds, with readable errors when a limit is reached.
 - **Vision guided by intent.** The agent extracts evidence for the task at hand, such as “Where is the error?” or “Where is the button?”, instead of returning a generic caption.
-- **Outputs that keep working.** Coordinates, OCR, crops, transparent PNGs, SVGs, heatmaps, and JSON can feed directly into the next step.
 - **A complete screenshot-to-verification loop.** Reference images, HTML screenshots, difference regions, and pixel comparison work together for UI restoration.
 
 [`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit) gives an agent more than image captions: it can read, locate, crop, trace, rebuild, and verify visual work. DSH Vision Toolkit is its native DeepSeek Harness integration, bringing that workflow into Web and Headless Profiles.
@@ -72,8 +75,6 @@ dsh plugin --profile web add @anionex/dsh-vision-toolkit
 - **2026-08-16 · Real model test:** Added a full image-request test in Settings, fixing the false confidence caused by a successful `/models` request to a model that still cannot process images.
 
 ## Who it is for
-
-This plugin is for anyone using a text-only agent in DSH to work with screenshots, webpages, interfaces, icons, long images, or visual differences. It is especially useful when:
 
 | The problem | What Vision Toolkit delivers |
 |---|---|
