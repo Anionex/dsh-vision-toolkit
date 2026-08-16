@@ -11,8 +11,8 @@
     "deploy:dry-run": "wrangler deploy --dry-run --minify",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json",
-    "types": "wrangler types",
-    "types:check": "wrangler types --check"
+    "types": "node scripts/types.mjs",
+    "types:check": "node scripts/types.mjs --check"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20260816.1",
