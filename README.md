@@ -7,19 +7,40 @@
 # DSH Vision Toolkit
 
 [![Recommended by dshfind](https://img.shields.io/badge/recommended%20by-dshfind-FFD700?style=flat-square)](https://dshfind.com/en/plugins/Anionex/dsh-vision-toolkit)
+[![dshfind score: 94 — highest-rated plugin](https://img.shields.io/badge/dshfind%20score-94%20%7C%20highest--rated%20plugin-5B4CF0?style=flat-square)](https://dshfind.com/en/plugins/Anionex/dsh-vision-toolkit)
 [![npm](https://img.shields.io/npm/v/@anionex/dsh-vision-toolkit?style=flat-square&color=5B4CF0)](https://www.npmjs.com/package/@anionex/dsh-vision-toolkit)
 [![MIT](https://img.shields.io/badge/license-MIT-0B7285?style=flat-square)](LICENSE)
 [![DSH](https://img.shields.io/badge/DSH-Web%20%2B%20Headless-5B4CF0?style=flat-square)](cordis.patch.yml)
 
-**Give text-only DSH agents eyes: paste an image, ask a question, locate exact elements, extract assets, and verify UI restoration with measurable results.**
+**A more powerful vision toolkit—give text-only models in DeepSeek Harness eyes: image Q&A, long-screenshot OCR, UI restoration, and GUI visual tasks in one toolkit and Skill.**
+
+🚀 Paste an image and ask directly | Install with one command | Built-in free quota | Broad use cases
 
 🌐 **English** | [中文](README.zh.md)
 
 </div>
 
-When you run DeepSeek or another text-only model in DeepSeek Harness (DSH), familiar problems appear quickly: the model cannot see a screenshot, generic image descriptions miss the point, buttons have no usable coordinates, and a rebuilt page may look “close enough” without any way to measure the remaining difference.
+If you use DeepSeek or another text-only model in DeepSeek Harness (DSH), you may have run into the same problems: the model cannot see a screenshot, generic descriptions miss the point, buttons have no usable coordinates, and a rebuilt page can look “close enough” without a way to measure the remaining difference.
 
-DSH Vision Toolkit packages [`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit) as a native DSH plugin. It helps an agent do more than describe an image: the agent can read, locate, crop, trace, rebuild, and verify visual work around the task at hand.
+🏆 This project is the first comprehensive vision-tool plugin in the DeepSeek Harness ecosystem: it was initiated before internal beta and built during the beta with reference to [`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit).
+
+> **Original work:** This vision toolkit and the `vision-tools` Skill were personally created and continuously refined by the author through long-term real-world use and repeated iteration.
+
+## Highlights
+
+- **Paste and use it immediately.** Paste an image in DSH Web and the text-only route switches to its `(Vision Toolkit)` variant without manual path copying or model changes.
+- **A seamless image workflow.** Native thumbnails, session history, and workspace paths stay intact; Web can preview artifacts and Headless can continue using the same structured results.
+- **One command to install.** The built-in free Groq Qwen3.6 vision service is ready after installation, with no API key required.
+- **Built-in free quota.** The shared service includes 100 requests per client per day, 3,000 requests globally per day, and a 60-request burst per 60 seconds, with readable errors when a limit is reached.
+- **Vision guided by intent.** The agent extracts evidence for the task at hand, such as “Where is the error?” or “Where is the button?”, instead of returning a generic caption.
+- **A complete screenshot-to-verification loop.** Reference images, HTML screenshots, difference regions, and pixel comparison work together for UI restoration.
+
+[`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit) gives an agent more than image captions: it can read, locate, crop, trace, rebuild, and verify visual work. DSH Vision Toolkit is its native DeepSeek Harness integration, bringing that workflow into Web and Headless Profiles.
+
+This project has two layers:
+
+1. **Visual tools and a Skill:** the agent learns when to inspect, ground, OCR, crop, trace, or compare pixels.
+2. **Native DSH integration:** those capabilities live inside Profiles, sessions, Settings, Artifacts, and the Web UI, with a free Groq Qwen3.6 vision service ready after installation.
 
 > **Install and use it immediately.** The default setup includes a free Qwen3.6 vision service and requires no API key. Cropping, pixel diffing, color analysis, foreground extraction, SVG tracing, and HTML screenshots run locally without spending vision API requests.
 
@@ -32,10 +53,10 @@ dsh plugin --profile web add @anionex/dsh-vision-toolkit
 <details>
 <summary><strong>Table of contents</strong></summary>
 
-- [Recent updates](#recent-updates)
-- [Problems it solves](#problems-it-solves)
-- [See it in action](#see-it-in-action)
 - [Highlights](#highlights)
+- [Recent updates](#recent-updates)
+- [Who it is for](#who-it-is-for)
+- [See it in action](#see-it-in-action)
 - [Quick start: three steps](#quick-start-three-steps)
 - [Common workflows](#common-workflows)
 - [Toolbox](#toolbox)
@@ -53,7 +74,7 @@ dsh plugin --profile web add @anionex/dsh-vision-toolkit
 - **2026-08-16 · Higher free quotas:** Raised the shared service ceiling to `3,000/day` and `60/minute` to make better use of the three-account Groq pool while keeping the per-client limit at `100/day`.
 - **2026-08-16 · Real model test:** Added a full image-request test in Settings, fixing the false confidence caused by a successful `/models` request to a model that still cannot process images.
 
-## Problems it solves
+## Who it is for
 
 | The problem | What Vision Toolkit delivers |
 |---|---|
@@ -94,21 +115,12 @@ dsh plugin --profile web add @anionex/dsh-vision-toolkit
 
 ### Turn “looks close” into a verifiable result
 
-The repository includes a reproducible UI-restoration example. The first implementation differs from the reference by **6.04%**. After the highlighted regions are corrected, the final `1200 × 720` render reaches **0% pixel difference**.
+The repository includes a reproducible UI-restoration example: the agent renders the reference and implementation, then uses difference regions, a heatmap, and a JSON report to guide the next correction.
 
 <p>
   <img src="examples/ui-restoration/assets/initial.png" width="49%" alt="Initial UI implementation with measurable layout and styling differences" />
-  <img src="examples/ui-restoration/assets/implementation.png" width="49%" alt="Final UI implementation after visual diagnosis, reaching zero pixel difference" />
+  <img src="examples/ui-restoration/assets/implementation.png" width="49%" alt="UI implementation after visual diagnosis and pixel comparison" />
 </p>
-
-## Highlights
-
-- **Free by default.** New installations use the built-in Groq Qwen3.6 service without requiring another account or API key.
-- **Focused on the current task.** The agent sends the reason it needs to inspect the image, so the result emphasizes useful evidence instead of producing a generic caption.
-- **Outputs you can keep working with.** Coordinates, OCR, transparent PNGs, SVGs, screenshots, heatmaps, and JSON can feed directly into the next step.
-- **Built for UI and screenshot work.** Reference analysis, element location, asset extraction, HTML rendering, and pixel comparison form one continuous workflow.
-- **Local where possible.** Crop, trace, pixel diff, color, foreground, and HTML screenshot operations do not need a remote vision model.
-- **The same capabilities in Web and Headless.** Web users can preview and download artifacts; Headless runs still receive replayable structured results and workspace paths.
 
 ## Quick start: three steps
 
