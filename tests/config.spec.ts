@@ -18,7 +18,7 @@ describe('resolveConfig', () => {
     expect(config.provider.anthropicThinking).toBe('omit')
     expect(config.provider.userAgent).toBe(DEFAULT_VISION_USER_AGENT)
     expect(config.language).toBe('zh')
-    expect(config.timeoutMs).toBe(60000)
+    expect(config.timeoutMs).toBe(15000)
     expect(config.maxImageBytes).toBe(4194304)
     expect(config.maxImagePixels).toBe(20000000)
     expect(isBuiltInFreeVisionProvider(config.provider)).toBe(true)

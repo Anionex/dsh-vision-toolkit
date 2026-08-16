@@ -32,7 +32,7 @@
   ],
   "vars": {
     "PUBLIC_API_KEY": "free",
-    "DAILY_LIMIT": "100",
+    "DAILY_LIMIT": "300",
     "GLOBAL_DAILY_LIMIT": "3000",
     "MAX_IMAGE_BYTES": "4194304",
     "MAX_IMAGE_PIXELS": "20000000",
