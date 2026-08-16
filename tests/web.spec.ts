@@ -208,6 +208,19 @@ describe('VisionToolkitWebBackend', () => {
     expect(credentialService.set).not.toHaveBeenCalled()
   })
 
+  it('rejects credential writes for the read-only built-in free provider', async () => {
+    const { credentialService, post } = await setup()
+    const response = await post({
+      action: 'credential', expectedRevision: 0, ref: 'ANIONEX_FREE_VISION', value: 'sk-must-not-persist',
+    })
+    const body = await response.json() as { ok: false; error: { code: string; message: string } }
+
+    expect(response.status).toBe(400)
+    expect(body.error.code).toBe('credential-rejected')
+    expect(body.error.message).toContain('built-in free vision provider')
+    expect(credentialService.set).not.toHaveBeenCalled()
+  })
+
   it('rejects wrapped or environment-assignment key pastes at the HTTP boundary', async () => {
     const { credentialService, post } = await setup()
 

@@ -962,6 +962,13 @@ function valueOf(draft: Draft, t: Translate): SettingsValue {
   }
 }
 
+function isBuiltInFreeVisionDraft(draft: Draft): boolean {
+  return draft.baseUrl.trim().replace(/\/+$/, '') === BUILT_IN_FREE_VISION_BASE_URL
+    && draft.credential.trim() === BUILT_IN_FREE_VISION_CREDENTIAL
+    && draft.model.trim() === BUILT_IN_FREE_VISION_MODEL
+    && draft.protocol === 'openai'
+}
+
 interface SettingsInjected {
   controller: VisionSettingsController
   t: Translate
@@ -1095,7 +1102,11 @@ function LoadedSettings({ controller, t }: SettingsInjected) {
   }
   const busy = state.action !== undefined
   const credentialMatchesSnapshot = draft.credential.trim() === snapshot.credential.ref
-  const keyLocked = credentialMatchesSnapshot && !snapshot.credential.writable
+  const builtInCredentialChangedProvider = snapshot.credential.source === 'built-in-free'
+    && !isBuiltInFreeVisionDraft(draft)
+  const keyLocked = credentialMatchesSnapshot
+    && !snapshot.credential.writable
+    && !builtInCredentialChangedProvider
   const canSave = snapshot.writable || (apiKey.length > 0 && !keyLocked)
   const runtimeErrorTitle = snapshot.runtime.ready ? t('runtimeCandidateRejected') : t('runtimeUnavailable')
 

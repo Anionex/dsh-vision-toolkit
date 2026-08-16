@@ -287,6 +287,9 @@ export class VisionToolkitWebBackend {
         `credential reference changed from "${request.ref}" to "${currentRef}"; reload Settings and try again`,
       )
     }
+    if (isBuiltInFreeVisionProvider(resolved.provider)) {
+      throw new Error('The built-in free vision provider does not accept a user API key')
+    }
     await this.ctx.credentials.set(currentRef, request.value)
     return this.snapshot()
   }

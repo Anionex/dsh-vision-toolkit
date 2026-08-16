@@ -340,6 +340,36 @@ describe('Vision Toolkit client plugin', () => {
     expect(view.container.querySelector('.dvt-settings-header')).toBeNull()
   })
 
+  it('unlocks API key input when the built-in provider changes to a custom endpoint', async () => {
+    const initial = settingsSnapshot()
+    initial.settings.value.provider = {
+      baseUrl: 'https://vision.anionex.me/v1',
+      credential: 'ANIONEX_FREE_VISION',
+      model: 'moondream-3.1',
+      protocol: 'openai',
+      anthropicThinking: 'omit',
+      userAgent: 'fixture-agent/1.0',
+    }
+    initial.credential = {
+      ref: 'ANIONEX_FREE_VISION', configured: true, source: 'built-in-free', writable: false,
+    }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(jsonResponse({ ok: true, value: initial })))
+
+    const { ctx, registrations } = fakeClientContext()
+    apply(ctx as never)
+    const settings = registrations.find(entry => entry.options.name === 'settings.section')
+    if (settings === undefined) throw new Error('Settings component was not registered')
+    render(createElement(settings.component, {
+      controller: new VisionSettingsController(),
+      t: (key: string) => key,
+    }))
+
+    const keyInput = await screen.findByLabelText('apiKey') as HTMLInputElement
+    expect(keyInput.disabled).toBe(true)
+    fireEvent.change(screen.getByLabelText('baseUrl'), { target: { value: 'https://custom.example/v1' } })
+    expect(keyInput.disabled).toBe(false)
+  })
+
   it('labels the lightweight API probe separately from the real multimodal model test', async () => {
     const health = {
       pluginVersion: '0.1.0',
