@@ -38,7 +38,8 @@ export interface UpstreamEnvironment {
   VISION_API_KEY: string
   VISION_BASE_URL: string
   VISION_MODEL: string
-  VISION_API_PROTOCOL: 'chat_completions' | 'anthropic'
+  VISION_API_PROTOCOL: 'chat_completions' | 'responses' | 'anthropic'
+  VISION_REASONING_EFFORT?: string
   VISION_ANTHROPIC_THINKING: 'omit' | 'disabled' | 'adaptive'
   VISION_USER_AGENT: string
   LANG: 'zh' | 'en'
@@ -616,6 +617,7 @@ export class UpstreamAdapter {
           VISION_BASE_URL: options.env.VISION_BASE_URL,
           VISION_MODEL: options.env.VISION_MODEL,
           VISION_API_PROTOCOL: options.env.VISION_API_PROTOCOL,
+          ...(options.env.VISION_REASONING_EFFORT === undefined ? {} : { VISION_REASONING_EFFORT: options.env.VISION_REASONING_EFFORT }),
           VISION_ANTHROPIC_THINKING: options.env.VISION_ANTHROPIC_THINKING,
           VISION_USER_AGENT: options.env.VISION_USER_AGENT,
           LANG: options.env.LANG,

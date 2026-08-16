@@ -888,7 +888,8 @@ interface Draft {
   baseUrl: string
   credential: string
   model: string
-  protocol: 'openai' | 'anthropic'
+  protocol: 'openai' | 'anthropic' | 'responses'
+  reasoningEffort: string
   anthropicThinking: 'omit' | 'disabled' | 'adaptive'
   userAgent: string
   language: 'zh' | 'en'
@@ -908,6 +909,7 @@ function draftOf(value: SettingsValue): Draft {
     credential: value.provider?.credential ?? BUILT_IN_FREE_VISION_CREDENTIAL,
     model: value.provider?.model ?? BUILT_IN_FREE_VISION_MODEL,
     protocol: value.provider?.protocol ?? 'openai',
+    reasoningEffort: value.provider?.reasoningEffort ?? '',
     anthropicThinking: value.provider?.anthropicThinking ?? 'omit',
     userAgent: value.provider?.userAgent ?? DEFAULT_USER_AGENT,
     language: value.language ?? 'zh',
@@ -945,6 +947,7 @@ function valueOf(draft: Draft, t: Translate): SettingsValue {
       credential: draft.credential.trim(),
       model: draft.model.trim(),
       protocol: draft.protocol,
+      ...(draft.reasoningEffort.trim().length === 0 ? {} : { reasoningEffort: draft.reasoningEffort.trim() }),
       anthropicThinking: draft.anthropicThinking,
       userAgent: draft.userAgent.trim(),
     },
@@ -1121,7 +1124,8 @@ function LoadedSettings({ controller, t }: SettingsInjected) {
 
       <section className="dvt-panel dvt-essential"><div className="dvt-panel-title"><div><h3>{t('provider')}</h3><p>{t('providerHint')}</p></div><span className={`dvt-badge ${snapshot.credential.configured ? 'ok' : 'error'}`}>{snapshot.credential.configured ? t('configured') : t('missing')}</span></div>
         <div className="dvt-form-grid">
-          <Field label={t('protocol')}><select disabled={!snapshot.writable || busy} value={draft.protocol} onChange={(event) => { update('protocol', event.target.value as 'openai' | 'anthropic') }}><option value="openai">OpenAI Chat Completions</option><option value="anthropic">Anthropic Messages</option></select></Field>
+          <Field label={t('protocol')}><select disabled={!snapshot.writable || busy} value={draft.protocol} onChange={(event) => { update('protocol', event.target.value as 'openai' | 'anthropic' | 'responses') }}><option value="openai">OpenAI Chat Completions</option><option value="anthropic">Anthropic Messages</option><option value="responses">OpenAI Responses</option></select></Field>
+          {draft.protocol === 'responses' ? <Field label="Reasoning effort" hint="low / medium / high — sent to /v1/responses"><Input aria-label="reasoningEffort" placeholder="medium" value={draft.reasoningEffort ?? ''} onChange={(event) => { update('reasoningEffort', event.target.value === '' ? undefined : event.target.value) }} /></Field> : null}
           <Field label={t('baseUrl')}><Input disabled={!snapshot.writable || busy} value={draft.baseUrl} onChange={(event) => { update('baseUrl', event.target.value) }} /></Field>
           <Field label={t('model')}><Input disabled={!snapshot.writable || busy} value={draft.model} onChange={(event) => { update('model', event.target.value) }} /></Field>
           <Field label={t('apiKey')} hint={keyLocked ? t('apiKeyLocked') : snapshot.credential.source === undefined ? t('apiKeyHint') : `${t('apiKeyHint')} ${t('sourceHint', { source: t('source'), value: credentialSource(snapshot.credential.source, t) })}`}><Input aria-label={t('apiKey')} type="password" autoComplete="new-password" disabled={busy || keyLocked} placeholder={snapshot.credential.configured ? t('apiKeyPlaceholderConfigured') : t('apiKeyPlaceholderMissing')} value={apiKey} onChange={(event) => { setApiKey(event.target.value); setDraftError(undefined) }} /></Field>
