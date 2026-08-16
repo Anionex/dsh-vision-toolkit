@@ -2,10 +2,11 @@
 
 All notable user-facing changes to DSH Vision Toolkit are documented in this file. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and uses semantic version tags.
 
-## [Unreleased]
+## [0.1.8] - 2026-08-16
 
 ### Added
 
+- Pasting an image with a plain text-only model now works like a multimodal model with zero manual steps: the browser integration asks the host with the exact model route, the host answers an auto-switch instruction when the image-input variant exists, and the client switches the session by itself and replays the paste into the composer's native intake (thumbnail, limits, keyboard). A failed switch or an environment that cannot replay clipboard bytes degrades to the paste-to-path takeover with the same files; `imageInputVariants.autoSwitch` (default `true`) turns the auto-switch off.
 - Text-only model routes now get `(Vision Toolkit)` image-input variants in the model selector. Selecting a variant keeps the native paste and attachment flow — composer thumbnail and durable session image — and the plugin rewrites image blocks into Vision Toolkit descriptions only on the wire to the model. Variants are registered automatically for every model the host declares text-only and can be disabled or restricted via `imageInputVariants`.
 - The browser paste interception now asks the host before taking a paste over: pastes stay native for image-capable models (including the variants) and are converted to workspace paths only for models the host confirms text-only.
 
