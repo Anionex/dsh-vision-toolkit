@@ -1,16 +1,16 @@
 import {
   CANONICAL_MODEL,
   ProtocolError,
-  buildGemmaInput,
+  buildVisionInput,
   completionContent,
   completionFinishReason,
-  normalizeGemmaOutput,
   parseChatCompletionRequest,
   tokenUsage,
-  type GemmaOutput,
+  type VisionOutput,
 } from './protocol'
 import { materializeImage } from './image'
 import { normalizeClientAddress } from './identity'
+import { GroqProviderError, runGroqCompletion } from './groq'
 
 const CORS_HEADERS = {
   'access-control-allow-headers': 'authorization, content-type, openai-organization, openai-project, x-stainless-arch, x-stainless-async, x-stainless-helper-method, x-stainless-lang, x-stainless-os, x-stainless-package-version, x-stainless-read-timeout, x-stainless-retry-count, x-stainless-runtime, x-stainless-runtime-version, x-stainless-timeout',
@@ -224,7 +224,7 @@ function modelList(): Response {
       created: 1_783_382_400,
       id: CANONICAL_MODEL,
       object: 'model',
-      owned_by: 'cloudflare',
+      owned_by: 'groq',
     }],
     object: 'list',
   })
@@ -257,13 +257,10 @@ async function chatCompletion(request: Request, env: Env): Promise<Response> {
       Number(env.MAX_IMAGE_PIXELS),
     )
     const maxTokens = Math.min(completion.maxTokens ?? 512, Number(env.MAX_OUTPUT_TOKENS))
-    const modelInput = buildGemmaInput(completion, image, maxTokens)
+    const modelInput = buildVisionInput(completion, image, maxTokens)
 
     inferenceStarted = true
-    const rawOutput = await env.AI.run(CANONICAL_MODEL, modelInput, {
-      tags: ['dsh-vision-free', completion.task],
-    })
-    const output: GemmaOutput = normalizeGemmaOutput(rawOutput)
+    const output: VisionOutput = await runGroqCompletion(modelInput, env, requestId)
     const content = completionContent(output, completion.task)
     const usage = tokenUsage(output)
     const headers = new Headers({
@@ -309,6 +306,16 @@ async function chatCompletion(request: Request, env: Env): Promise<Response> {
           requestId,
         }))
       }
+    }
+    if (error instanceof GroqProviderError) {
+      const headers = new Headers({ 'x-request-id': requestId })
+      if (error.retryAfter) headers.set('retry-after', error.retryAfter)
+      return openAiError(error.message, {
+        code: error.code,
+        headers,
+        status: error.status,
+        type: error.status === 429 ? 'rate_limit_error' : 'api_error',
+      })
     }
     if (error instanceof ProtocolError) {
       const headers = new Headers({ 'x-request-id': requestId })

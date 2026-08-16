@@ -12,10 +12,6 @@
       "custom_domain": true
     }
   ],
-  "ai": {
-    "binding": "AI",
-    "remote": true
-  },
   "d1_databases": [
     {
       "binding": "USAGE_DB",
@@ -29,7 +25,7 @@
       "name": "BURST_LIMITER",
       "namespace_id": "1001",
       "simple": {
-        "limit": 20,
+        "limit": 60,
         "period": 60
       }
     }
@@ -37,7 +33,7 @@
   "vars": {
     "PUBLIC_API_KEY": "free",
     "DAILY_LIMIT": "100",
-    "GLOBAL_DAILY_LIMIT": "400",
+    "GLOBAL_DAILY_LIMIT": "3000",
     "MAX_IMAGE_BYTES": "4194304",
     "MAX_IMAGE_PIXELS": "20000000",
     "MAX_OUTPUT_TOKENS": "512",

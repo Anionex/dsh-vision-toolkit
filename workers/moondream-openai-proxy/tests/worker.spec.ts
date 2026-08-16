@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import worker from '../src/index'
 import { CANONICAL_MODEL } from '../src/protocol'
@@ -69,40 +69,54 @@ function request(image = tinyPng, body?: BodyInit): Request {
   } as RequestInit)
 }
 
-function environment(database: FakeD1, aiRun: () => Promise<Record<string, unknown>>, burstSuccess = true): Env {
+function environment(database: FakeD1, burstSuccess = true): Env {
   return {
-    AI: { run: vi.fn(aiRun) },
     BURST_LIMITER: { limit: vi.fn(async () => ({ success: burstSuccess })) },
     DAILY_LIMIT: '100',
-    GLOBAL_DAILY_LIMIT: '400',
+    GLOBAL_DAILY_LIMIT: '3000',
     IP_HASH_SECRET: '0123456789abcdef0123456789abcdef',
     MAX_IMAGE_BYTES: '4194304',
     MAX_IMAGE_PIXELS: '20000000',
     MAX_OUTPUT_TOKENS: '512',
     MAX_REQUEST_BYTES: '6291456',
     PUBLIC_API_KEY: 'free',
+    GROQ_API_KEY_1: 'test-groq-key-1',
+    GROQ_API_KEY_2: 'test-groq-key-2',
+    GROQ_API_KEY_3: 'test-groq-key-3',
     USAGE_DB: database,
   } as Env
 }
 
+afterEach(() => vi.unstubAllGlobals())
+
 describe('Worker request accounting', () => {
-  it('calls the Gemma model with an OpenAI vision message and returns its text', async () => {
+  it('calls Groq with an OpenAI vision message and returns its text', async () => {
     const database = new FakeD1()
-    const aiRun = vi.fn(async () => ({
+    const groqFetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      expect(init?.headers).toMatchObject({ authorization: expect.stringMatching(/^Bearer test-groq-key-[123]$/) })
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>
+      expect(body.model).toBe(CANONICAL_MODEL)
+      expect(body.reasoning_effort).toBe('none')
+      expect(body).not.toHaveProperty('chat_template_kwargs')
+      return Response.json({
       choices: [{
         finish_reason: 'stop',
         message: { content: 'A one-pixel test image.', role: 'assistant' },
       }],
       usage: { completion_tokens: 5, prompt_tokens: 12, total_tokens: 17 },
-    }))
-    const response = await worker.fetch(request(), environment(database, aiRun))
+      })
+    })
+    vi.stubGlobal('fetch', groqFetch)
+    const response = await worker.fetch(request(), environment(database))
     expect(response.status).toBe(200)
     expect((await response.json()) as Record<string, unknown>).toMatchObject({
       choices: [{ message: { content: 'A one-pixel test image.' } }],
       model: CANONICAL_MODEL,
       usage: { completion_tokens: 5, prompt_tokens: 12, total_tokens: 17 },
     })
-    expect(aiRun).toHaveBeenCalledWith(CANONICAL_MODEL, expect.objectContaining({
+    expect(groqFetch).toHaveBeenCalledTimes(1)
+    const body = JSON.parse(String(groqFetch.mock.calls[0]?.[1]?.body)) as Record<string, unknown>
+    expect(body).toMatchObject({
       messages: [{
         content: [
           { text: 'User: Describe this image.', type: 'text' },
@@ -111,9 +125,36 @@ describe('Worker request accounting', () => {
         role: 'user',
       }],
       max_tokens: 512,
-      chat_template_kwargs: { enable_thinking: false },
       stream: false,
-    }), expect.objectContaining({ tags: ['dsh-vision-free', 'query'] }))
+    })
+  })
+
+  it('tries the next Groq key when the selected account is rate limited', async () => {
+    const database = new FakeD1()
+    const groqFetch = vi.fn()
+      .mockResolvedValueOnce(new Response('rate limited', { status: 429, headers: { 'retry-after': '7' } }))
+      .mockResolvedValueOnce(Response.json({
+        choices: [{ finish_reason: 'stop', message: { content: 'Recovered.', role: 'assistant' } }],
+      }))
+    vi.stubGlobal('fetch', groqFetch)
+    const response = await worker.fetch(request(), environment(database))
+    expect(response.status).toBe(200)
+    expect(groqFetch).toHaveBeenCalledTimes(2)
+    const firstAuth = String(groqFetch.mock.calls[0]?.[1]?.headers && new Headers(groqFetch.mock.calls[0]?.[1]?.headers).get('authorization'))
+    const secondAuth = String(groqFetch.mock.calls[1]?.[1]?.headers && new Headers(groqFetch.mock.calls[1]?.[1]?.headers).get('authorization'))
+    expect(firstAuth).not.toBe(secondAuth)
+  })
+
+  it('returns a sanitized upstream error when all Groq accounts are rate limited', async () => {
+    const database = new FakeD1()
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('rate limited', { status: 429 })))
+    const response = await worker.fetch(request(), environment(database))
+    expect(response.status).toBe(429)
+    const payload = await response.json()
+    expect(payload).toMatchObject({
+      error: { code: 'upstream_rate_limit_exceeded' },
+    })
+    expect(JSON.stringify(payload)).not.toContain('test-groq-key')
   })
 
   it('applies burst limiting before reading the request body', async () => {
@@ -128,7 +169,7 @@ describe('Worker request accounting', () => {
       },
     })
     const database = new FakeD1()
-    const response = await worker.fetch(incoming, environment(database, async () => ({}), false))
+    const response = await worker.fetch(incoming, environment(database, false))
     expect(response.status).toBe(429)
     expect(bodyRead).toBe(false)
     expect(database.counts.size).toBe(0)
@@ -136,9 +177,8 @@ describe('Worker request accounting', () => {
 
   it('keeps the daily quota reservation after inference has started', async () => {
     const database = new FakeD1()
-    const response = await worker.fetch(request(), environment(database, async () => {
-      throw new Error('upstream unavailable')
-    }))
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('upstream unavailable') }))
+    const response = await worker.fetch(request(), environment(database))
     expect(response.status).toBe(502)
     expect([...database.counts.values()]).toEqual([1, 1])
   })
@@ -147,7 +187,7 @@ describe('Worker request accounting', () => {
     const database = new FakeD1()
     const response = await worker.fetch(
       request('data:image/png;base64,iVBORw0KGgo='),
-      environment(database, async () => ({ answer: 'unused' })),
+      environment(database),
     )
     expect(response.status).toBe(400)
     expect(database.counts.size).toBe(0)

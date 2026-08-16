@@ -433,7 +433,7 @@ describe('Vision Toolkit client plugin', () => {
     initial.settings.value.provider = {
       baseUrl: 'https://vision.anionex.me/v1',
       credential: 'ANIONEX_FREE_VISION',
-      model: 'gemma-4-26b-a4b-it',
+      model: 'qwen/qwen3.6-27b',
       protocol: 'openai',
       anthropicThinking: 'omit',
       userAgent: 'fixture-agent/1.0',

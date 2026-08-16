@@ -4,6 +4,13 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+## [0.1.14] - 2026-08-16
+
+### Changed
+
+- Switched the built-in free vision service from Cloudflare Workers AI Gemma 4 to Groq Qwen3.6 (`qwen/qwen3.6-27b`), with three server-side API keys rotated across requests and no change to the public OpenAI-compatible endpoint.
+- Raised the shared Worker ceiling to 3,000 requests per UTC day and 60 requests per minute to match the combined request capacity of the three Groq free-tier accounts more closely, while keeping the per-client ceiling at 100 requests per day.
+
 ## [0.1.13] - 2026-08-16
 
 ### Added
@@ -171,7 +178,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 - Runtime teardown cancels in-flight operations before removing Agent-scoped tools, the activation bootstrap, and the Skill.
 - The Web client is published through the current nested `dsh.client` manifest and loader-compatible built artifact required by DSH snapshot0810.
 
-[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.13...HEAD
+[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.14...HEAD
+[0.1.14]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.13...v0.1.14
 [0.1.13]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.12...v0.1.13
 [0.1.12]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.11...v0.1.12
 [0.1.11]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.10...v0.1.11
