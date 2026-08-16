@@ -306,6 +306,32 @@ describe('convertImagesToEvidence', () => {
     expect(maximum).toBe(4)
     expect(descriptions).toEqual(Array.from({ length: 8 }, (_, index) => `[vision model description] image-${index}`))
   })
+
+  it('does not start queued image calls after the conversion is aborted', async () => {
+    let release: () => void = () => {}
+    const gate = new Promise<void>(resolve => { release = resolve })
+    const glance = vi.fn(async () => {
+      await gate
+      return glanceResult('blocked image')
+    })
+    const attachments = { readImage: vi.fn(async () => ({ ref: attachment('a'), data: Uint8Array.of(1) })) }
+    const ctx = { get: (name: string) => name === 'attachments' ? attachments : undefined } as never
+    const controller = new AbortController()
+    const messages = [message('m1', Array.from({ length: 8 }, (_, index) => imageBlock(`a${index}`)))]
+    const conversion = convertImagesToEvidence(
+      ctx,
+      () => runtimeStub(glance),
+      new EvidenceCache(32),
+      messages,
+      controller.signal,
+    )
+    await vi.waitFor(() => { expect(glance).toHaveBeenCalledTimes(4) })
+    controller.abort()
+    await expect(conversion).rejects.toThrow('aborted')
+    release()
+    await new Promise(resolve => setTimeout(resolve, 10))
+    expect(glance).toHaveBeenCalledTimes(4)
+  })
 })
 
 describe('ImageInputVariantAdapter', () => {

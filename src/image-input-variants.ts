@@ -272,23 +272,53 @@ function insertChannelNote(
   return out
 }
 
-function createLimiter(limit: number): <T>(task: () => Promise<T>) => Promise<T> {
+function createLimiter(limit: number): <T>(task: () => Promise<T>, signal?: AbortSignal) => Promise<T> {
   let active = 0
-  const waiting: Array<() => void> = []
-  const acquire = async (): Promise<void> => {
+  type Waiter = {
+    resolve: () => void
+    reject: (error: unknown) => void
+    signal: AbortSignal | undefined
+    onAbort: (() => void) | undefined
+  }
+  const waiting: Waiter[] = []
+  const acquire = (signal?: AbortSignal): Promise<void> => {
+    if (signal?.aborted) return Promise.reject(signal.reason ?? new Error('aborted'))
     if (active < limit) {
       active += 1
-      return
+      return Promise.resolve()
     }
-    await new Promise<void>(resolve => { waiting.push(resolve) })
+    return new Promise<void>((resolve, reject) => {
+      const waiter: Waiter = { resolve, reject, signal, onAbort: undefined }
+      const onAbort = (): void => {
+        const index = waiting.indexOf(waiter)
+        if (index >= 0) waiting.splice(index, 1)
+        signal?.removeEventListener('abort', onAbort)
+        reject(signal?.reason ?? new Error('aborted'))
+      }
+      waiter.onAbort = onAbort
+      signal?.addEventListener('abort', onAbort, { once: true })
+      waiting.push(waiter)
+    })
   }
   const release = (): void => {
-    const next = waiting.shift()
-    if (next === undefined) active -= 1
-    else next()
+    while (waiting.length > 0) {
+      const next = waiting.shift()
+      if (next === undefined) break
+      if (next.signal !== undefined && next.onAbort !== undefined) {
+        next.signal.removeEventListener('abort', next.onAbort)
+      }
+      if (next.signal?.aborted) {
+        next.reject(next.signal.reason ?? new Error('aborted'))
+        continue
+      }
+      // Transfer the slot directly to the waiter; active stays unchanged.
+      next.resolve()
+      return
+    }
+    active -= 1
   }
-  return async <T>(task: () => Promise<T>): Promise<T> => {
-    await acquire()
+  return async <T>(task: () => Promise<T>, signal?: AbortSignal): Promise<T> => {
+    await acquire(signal)
     try {
       return await task()
     } finally {
@@ -414,7 +444,7 @@ export async function convertImagesToEvidence(
     if (query === undefined) return message
     const content = await convertBlocks(message.content, (block) => abortableWait(
       cache.read(cacheKey(String(block.attachment.attachmentId), query), () =>
-        limit(() => readImageBlock(ctx, runtime, block, query))),
+        limit(() => readImageBlock(ctx, runtime, block, query), signal)),
       signal,
     ))
     return { ...message, content }
