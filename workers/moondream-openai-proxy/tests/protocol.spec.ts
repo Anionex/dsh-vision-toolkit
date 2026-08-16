@@ -9,7 +9,7 @@ import {
   tokenUsage,
 } from '../src/protocol'
 
-const tinyPng = 'data:image/png;base64,iVBORw0KGgo='
+const tinyPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
 
 function request(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -111,6 +111,15 @@ describe('parseChatCompletionRequest', () => {
       }],
     }), 1024)).toThrow('invalid base64')
     expect(() => parseChatCompletionRequest(request({ max_tokens: 1.5 }), 1024)).toThrow('integer')
+  })
+
+  it('supports max_completion_tokens and rejects conflicting token limits', () => {
+    expect(parseChatCompletionRequest(request({ max_completion_tokens: 128 }), 1024).maxTokens).toBe(128)
+    expect(parseChatCompletionRequest(request({ max_completion_tokens: 128, max_tokens: 128 }), 1024).maxTokens).toBe(128)
+    expect(() => parseChatCompletionRequest(request({
+      max_completion_tokens: 128,
+      max_tokens: 64,
+    }), 1024)).toThrow('must match')
   })
 
   it('rejects streaming and tool calls explicitly', () => {

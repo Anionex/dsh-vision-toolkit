@@ -21,7 +21,7 @@ function run(args, options = {}) {
     }
     throw new Error(`wrangler ${args.join(' ')} failed with exit code ${result.status}`)
   }
-  return result.stdout ?? ''
+  return `${result.stdout ?? ''}${result.stderr ?? ''}`
 }
 
 try {
@@ -31,7 +31,14 @@ try {
     throw new Error('Required Worker secret IP_HASH_SECRET is missing')
   }
   if (dryRun) {
-    run(['d1', 'migrations', 'list', 'dsh-vision-free-usage', '--remote'], { timeout: 60_000 })
+    const migrations = run(
+      ['d1', 'migrations', 'list', 'dsh-vision-free-usage', '--remote'],
+      { capture: true, timeout: 60_000 },
+    )
+    if (!migrations.includes('No migrations to apply!')) {
+      process.stderr.write(migrations)
+      throw new Error('Pending D1 migrations must be applied before deployment')
+    }
     run(['deploy', '--dry-run', '--minify'])
   } else {
     run(['d1', 'migrations', 'apply', 'dsh-vision-free-usage', '--remote'])

@@ -271,11 +271,18 @@ export function parseChatCompletionRequest(value: unknown, maxImageBytes: number
     }
     target = targetValue.trim()
   }
+  const maxTokens = readOptionalInteger(input, 'max_tokens', 1, 28_672)
+  const maxCompletionTokens = readOptionalInteger(input, 'max_completion_tokens', 1, 28_672)
+  if (maxTokens !== undefined && maxCompletionTokens !== undefined && maxTokens !== maxCompletionTokens) {
+    throw new ProtocolError('max_tokens and max_completion_tokens must match when both are provided', {
+      param: 'max_completion_tokens',
+    })
+  }
 
   return {
     captionLength: captionLengthValue as CaptionLength,
     image: validateImage(images[0] ?? '', maxImageBytes),
-    maxTokens: readOptionalInteger(input, 'max_tokens', 1, 28_672),
+    maxTokens: maxCompletionTokens ?? maxTokens,
     question,
     target,
     task: taskValue as MoondreamTask,

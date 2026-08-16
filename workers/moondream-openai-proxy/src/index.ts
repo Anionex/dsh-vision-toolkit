@@ -233,10 +233,9 @@ async function chatCompletion(request: Request, env: Env): Promise<Response> {
 
   const requestId = request.headers.get('cf-ray') ?? crypto.randomUUID()
   const startedAt = Date.now()
+  let inferenceStarted = false
   let quota: QuotaReservation | undefined
   try {
-    const body = await readBoundedJson(request, Number(env.MAX_REQUEST_BYTES))
-    const completion = parseChatCompletionRequest(body, Number(env.MAX_IMAGE_BYTES))
     const hash = await clientHash(request, env.IP_HASH_SECRET)
     const burst = await env.BURST_LIMITER.limit({ key: hash })
     if (!burst.success) {
@@ -247,8 +246,14 @@ async function chatCompletion(request: Request, env: Env): Promise<Response> {
         type: 'rate_limit_error',
       })
     }
+    const body = await readBoundedJson(request, Number(env.MAX_REQUEST_BYTES))
+    const completion = parseChatCompletionRequest(body, Number(env.MAX_IMAGE_BYTES))
     quota = await consumeDailyQuota(env, hash)
-    const image = await materializeImage(completion.image, Number(env.MAX_IMAGE_BYTES))
+    const image = await materializeImage(
+      completion.image,
+      Number(env.MAX_IMAGE_BYTES),
+      Number(env.MAX_IMAGE_PIXELS),
+    )
     const maxTokens = Math.min(completion.maxTokens ?? 512, Number(env.MAX_OUTPUT_TOKENS))
     const modelInput: Record<string, unknown> = {
       image,
@@ -263,6 +268,7 @@ async function chatCompletion(request: Request, env: Env): Promise<Response> {
     if (completion.task === 'caption') modelInput.caption_length = completion.captionLength
     if (completion.task === 'point' || completion.task === 'detect') modelInput.target = completion.target
 
+    inferenceStarted = true
     const rawOutput = await env.AI.run(CANONICAL_MODEL, modelInput, {
       tags: ['dsh-vision-free', completion.task],
     })
@@ -302,7 +308,7 @@ async function chatCompletion(request: Request, env: Env): Promise<Response> {
       usage,
     }, { headers })
   } catch (error) {
-    if (quota) {
+    if (quota && !inferenceStarted) {
       try {
         await releaseCounters(env, quota.day, [quota.clientHash, '__global__'])
       } catch (rollbackError) {
