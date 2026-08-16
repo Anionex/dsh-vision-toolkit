@@ -312,6 +312,16 @@ export function rewriteVenvConfig(cfg: string, homeDir: string): string {
 }
 
 /**
+ * Build the Microsoft Store probe environment while preserving Python-variable
+ * tombstones; only the user-directory variables must fall back to the host.
+ */
+export function storePythonProbeEnvironment(installEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  return Object.fromEntries(
+    Object.entries(installEnv).filter(([key]) => key !== 'HOME' && key !== 'USERPROFILE' && key !== 'LOCALAPPDATA'),
+  )
+}
+
+/**
  * Windows-only workaround for the Microsoft Store Python. `python -m venv`
  * records `home = C:\Program Files\WindowsApps\...` in the new venv, but the
  * venv launcher (venvlauncher.exe) cannot CreateProcess that `python.exe`
@@ -331,9 +341,7 @@ async function rewriteStorePythonVenvHome(
   // The HOME/USERPROFILE/LOCALAPPDATA overrides make the Store alias resolve to
   // the real Program Files\WindowsApps path; without them sys.executable points
   // back at the alias directory that venvlauncher can launch.
-  const probeEnv = Object.fromEntries(
-    Object.entries(installEnv).filter(([key, value]) => value !== undefined && key !== 'HOME' && key !== 'USERPROFILE' && key !== 'LOCALAPPDATA'),
-  )
+  const probeEnv = storePythonProbeEnvironment(installEnv)
   const probe = await runCollected(
     ctx,
     [bootstrap.command.program, ...bootstrap.command.prefix, '-c', 'import os,sys; print(os.path.dirname(sys.executable))'],
