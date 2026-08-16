@@ -128,6 +128,7 @@ export interface WebRuntimeManager {
 
 /** Minimal self-update face used by the Web route and its tests. */
 export interface WebPluginUpdater {
+  configureWebServer?(host: string, port: number): void
   capability(): Promise<PluginUpdateCapability>
   check(): Promise<PluginUpdateCheck>
   installAndRestart(expectedVersion: string): Promise<PluginUpdateResult>
@@ -246,6 +247,11 @@ export class VisionToolkitWebBackend {
     updater?: WebPluginUpdater,
   ) {
     this.updater = updater ?? new VisionToolkitPluginUpdateService(ctx, PLUGIN_VERSION)
+  }
+
+  /** Supply the active listener address before the Settings route becomes reachable. */
+  configureWebServer(host: string, port: number): void {
+    this.updater.configureWebServer?.(host, port)
   }
 
   private async credential(config: ResolvedVisionToolkitConfig): Promise<CredentialInfo> {
@@ -511,6 +517,7 @@ export function installVisionToolkitWeb(
 ): void {
   ctx.inject(['webServer'], (webCtx) => {
     webCtx.effect(() => {
+      backend.configureWebServer(webCtx.webServer.host, webCtx.webServer.port)
       const detach = artifacts.attachRoute()
       const disposeArtifact = webCtx.webServer.register({
         kind: 'prefix',

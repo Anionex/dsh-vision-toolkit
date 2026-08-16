@@ -1238,7 +1238,7 @@ function LoadedSettings({ controller, t }: SettingsInjected) {
     let cancelled = false
     void (async () => {
       await wait(restart.retryAfterMs)
-      const deadline = Date.now() + 190_000
+      const deadline = Date.now() + 390_000
       let outageSeen = false
       while (!cancelled && Date.now() < deadline) {
         try {

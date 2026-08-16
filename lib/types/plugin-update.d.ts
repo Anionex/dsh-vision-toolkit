@@ -42,6 +42,7 @@ export interface RestartRequest {
     lockPath: string;
     lockToken: string;
     backupDir: string;
+    handoffPath: string;
     profileDir: string;
     pnpmPath: string;
     packageName: string;
@@ -51,6 +52,7 @@ export interface RestartRequest {
     rollbackTimeoutMs: number;
     processKillGraceMs: number;
     readinessTimeoutMs: number;
+    oldProcessExitTimeoutMs: number;
 }
 export interface PluginUpdateServiceOptions {
     packageRoot?: string;
@@ -58,7 +60,7 @@ export interface PluginUpdateServiceOptions {
     dshHome?: string;
     argv?: readonly string[];
     now?: () => Date;
-    prepareRestart?: (request: RestartRequest) => void;
+    prepareRestart?: (request: RestartRequest) => void | Promise<void>;
     terminateCurrent?: () => void;
     schedule?: (callback: () => void, delayMs: number) => void;
     allowDetachedRestart?: boolean;
@@ -82,10 +84,12 @@ export declare class VisionToolkitPluginUpdateService {
     private readonly terminateCurrent;
     private readonly schedule;
     private readonly allowDetachedRestart;
-    private readonly healthUrl;
+    private healthUrl;
     private readonly platform;
     private updating;
     constructor(ctx: Pick<Context, 'subprocess'>, currentVersion: string, options?: PluginUpdateServiceOptions);
+    /** Bind readiness checks to the active WebServer and reject ports that cannot be reproduced on restart. */
+    configureWebServer(host: string, port: number): void;
     private inspectProfile;
     private locateProfile;
     private profile;

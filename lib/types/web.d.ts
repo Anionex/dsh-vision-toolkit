@@ -51,6 +51,7 @@ export interface WebRuntimeManager {
 }
 /** Minimal self-update face used by the Web route and its tests. */
 export interface WebPluginUpdater {
+    configureWebServer?(host: string, port: number): void;
     capability(): Promise<PluginUpdateCapability>;
     check(): Promise<PluginUpdateCheck>;
     installAndRestart(expectedVersion: string): Promise<PluginUpdateResult>;
@@ -65,6 +66,8 @@ export declare class VisionToolkitWebBackend {
     private readonly onRuntimeActivated;
     private readonly updater;
     constructor(ctx: Context, manager: WebRuntimeManager, artifacts: ArtifactAccessController, onRuntimeActivated: RuntimeActivated, updater?: WebPluginUpdater);
+    /** Supply the active listener address before the Settings route becomes reachable. */
+    configureWebServer(host: string, port: number): void;
     private credential;
     /** Build the current settings/runtime/credential snapshot without secrets. */
     snapshot(): Promise<VisionToolkitSettingsSnapshot>;

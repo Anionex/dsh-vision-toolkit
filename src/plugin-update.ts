@@ -20,6 +20,8 @@ export const VISION_TOOLKIT_PACKAGE = '@anionex/dsh-vision-toolkit'
 
 const CHECK_TIMEOUT_MS = 20_000
 const UPDATE_TIMEOUT_MS = 180_000
+const RESTART_ROLLBACK_TIMEOUT_MS = 120_000
+const OLD_PROCESS_EXIT_TIMEOUT_MS = 30_000
 const RESTART_DELAY_MS = 750
 const RESTART_RETRY_AFTER_MS = 1_200
 const COMMAND_OUTPUT_BYTES = 128 * 1024
@@ -93,6 +95,7 @@ export interface RestartRequest {
   lockPath: string
   lockToken: string
   backupDir: string
+  handoffPath: string
   profileDir: string
   pnpmPath: string
   packageName: string
@@ -102,6 +105,7 @@ export interface RestartRequest {
   rollbackTimeoutMs: number
   processKillGraceMs: number
   readinessTimeoutMs: number
+  oldProcessExitTimeoutMs: number
 }
 
 export interface PluginUpdateServiceOptions {
@@ -110,7 +114,7 @@ export interface PluginUpdateServiceOptions {
   dshHome?: string
   argv?: readonly string[]
   now?: () => Date
-  prepareRestart?: (request: RestartRequest) => void
+  prepareRestart?: (request: RestartRequest) => void | Promise<void>
   terminateCurrent?: () => void
   schedule?: (callback: () => void, delayMs: number) => void
   allowDetachedRestart?: boolean
@@ -146,6 +150,7 @@ const { chmodSync, existsSync, readFileSync, renameSync, rmSync, unlinkSync, wri
 const payload = JSON.parse(Buffer.from(process.argv[1], 'base64url').toString('utf8'))
 const sleep = delay => new Promise(resolve => setTimeout(resolve, delay))
 const log = message => console.log('[dsh-vision-toolkit]', message)
+let lockTransferred = false
 const alive = pid => {
   try { process.kill(pid, 0); return true }
   catch (error) { return Boolean(error && error.code === 'EPERM') }
@@ -163,6 +168,7 @@ const writeLock = owner => {
 const transferLock = () => {
   if (!ownsLock()) return false
   writeLock({ pid: process.pid, token: payload.lockToken, startedAt: new Date().toISOString(), role: 'restart-helper' })
+  lockTransferred = true
   return true
 }
 const removeLock = () => {
@@ -174,15 +180,32 @@ const cleanupBackup = () => {
   try { rmSync(payload.backupDir, { recursive: true, force: true }) }
   catch (error) { console.error('[dsh-vision-toolkit] backup cleanup failed:', error) }
 }
+const preserveRecovery = message => {
+  console.error('[dsh-vision-toolkit]', message + '; recovery files preserved at ' + payload.backupDir
+    + ' and update lock preserved at ' + payload.lockPath)
+}
+const atomicWrite = (path, contents, mode) => {
+  const temp = path + '.' + process.pid + '.tmp'
+  writeFileSync(temp, contents, { mode })
+  chmodSync(temp, mode)
+  renameSync(temp, path)
+}
+const validateBackup = () => {
+  const metadata = JSON.parse(readFileSync(payload.backupDir + '/metadata.json', 'utf8'))
+  readFileSync(payload.backupDir + '/package.json')
+  if (metadata.hadLockfile) readFileSync(payload.backupDir + '/pnpm-lock.yaml')
+  return metadata
+}
+const acknowledgeHandoff = () => {
+  atomicWrite(payload.handoffPath, JSON.stringify({ pid: process.pid, token: payload.lockToken }), 0o600)
+}
 const restoreProfileFiles = () => {
   const manifest = readFileSync(payload.backupDir + '/package.json')
   const metadata = JSON.parse(readFileSync(payload.backupDir + '/metadata.json', 'utf8'))
-  writeFileSync(payload.profileDir + '/package.json', manifest)
-  chmodSync(payload.profileDir + '/package.json', metadata.manifestMode)
+  atomicWrite(payload.profileDir + '/package.json', manifest, metadata.manifestMode)
   const lockfile = payload.profileDir + '/pnpm-lock.yaml'
   if (metadata.hadLockfile) {
-    writeFileSync(lockfile, readFileSync(payload.backupDir + '/pnpm-lock.yaml'))
-    chmodSync(lockfile, metadata.lockfileMode)
+    atomicWrite(lockfile, readFileSync(payload.backupDir + '/pnpm-lock.yaml'), metadata.lockfileMode)
   }
   else if (existsSync(lockfile)) unlinkSync(lockfile)
 }
@@ -277,19 +300,26 @@ const restore = async () => {
   return true
 }
 const main = async () => {
+  validateBackup()
   if (!transferLock()) {
     console.error('[dsh-vision-toolkit] restart helper could not take ownership of the update lock')
-    cleanupBackup()
     process.exit(1)
   }
-  const exitDeadline = Date.now() + 120000
+  acknowledgeHandoff()
+  const exitDeadline = Date.now() + payload.oldProcessExitTimeoutMs
   while (alive(payload.pid) && Date.now() < exitDeadline) await sleep(100)
   if (alive(payload.pid)) {
     log('old process did not exit; restoring package files without replacing the running process')
-    await runPnpm(payload.fromVersion)
-    try { restoreProfileFiles() } catch (error) { console.error('[dsh-vision-toolkit] profile file restore failed:', error) }
-    removeLock()
-    cleanupBackup()
+    const installed = await runPnpm(payload.fromVersion)
+    let filesRestored = true
+    try { restoreProfileFiles() } catch (error) {
+      filesRestored = false
+      console.error('[dsh-vision-toolkit] profile file restore failed:', error)
+    }
+    if (installed && filesRestored) {
+      removeLock()
+      cleanupBackup()
+    } else preserveRecovery('old process did not exit and automatic package recovery failed')
     process.exit(1)
   }
   const child = launch()
@@ -303,14 +333,15 @@ const main = async () => {
   }
   await stop(child)
   const restored = await restore()
-  removeLock()
-  cleanupBackup()
+  if (restored) {
+    removeLock()
+    cleanupBackup()
+  } else preserveRecovery('replacement and automatic rollback both failed')
   process.exit(restored ? 2 : 1)
 }
 main().catch(error => {
   console.error('[dsh-vision-toolkit] restart helper failed:', error)
-  removeLock()
-  cleanupBackup()
+  if (lockTransferred) preserveRecovery('restart helper failed before recovery completed')
   process.exit(1)
 })
 `
@@ -411,7 +442,7 @@ function defaultHealthUrl(argv: readonly string[]): string | undefined {
   return `http://${authority}:${port}${SETTINGS_ROUTE}`
 }
 
-function defaultPrepareRestart(request: RestartRequest): void {
+async function defaultPrepareRestart(request: RestartRequest): Promise<void> {
   const payload = Buffer.from(JSON.stringify(request)).toString('base64url')
   mkdirSync(dirname(request.logPath), { recursive: true })
   const log = openSync(request.logPath, 'w', 0o600)
@@ -425,7 +456,40 @@ function defaultPrepareRestart(request: RestartRequest): void {
       windowsHide: true,
     })
     if (helper.pid === undefined) throw new Error('restart helper did not publish a process id')
-    helper.unref()
+    let spawnError: Error | undefined
+    helper.once('error', (error) => { spawnError = error })
+    const deadline = Date.now() + 5_000
+    while (Date.now() < deadline) {
+      if (spawnError !== undefined) throw spawnError
+      if (helper.exitCode !== null || helper.signalCode !== null) {
+        throw new Error(`restart helper exited before handoff with code ${String(helper.exitCode)}`)
+      }
+      try {
+        const handoff = JSON.parse(await readFile(request.handoffPath, 'utf8')) as { pid?: unknown; token?: unknown }
+        if (handoff.pid === helper.pid && handoff.token === request.lockToken) {
+          helper.unref()
+          return
+        }
+      } catch (error) {
+        if (!isNodeError(error) || error.code !== 'ENOENT') throw error
+      }
+      await new Promise(resolve => { setTimeout(resolve, 50) })
+    }
+    try {
+      if (process.platform === 'win32') helper.kill('SIGTERM')
+      else process.kill(-helper.pid, 'SIGTERM')
+    } catch {}
+    const stopDeadline = Date.now() + 1_000
+    while (Date.now() < stopDeadline && helper.exitCode === null && helper.signalCode === null) {
+      await new Promise(resolve => { setTimeout(resolve, 50) })
+    }
+    if (helper.exitCode === null && helper.signalCode === null) {
+      try {
+        if (process.platform === 'win32') helper.kill('SIGKILL')
+        else process.kill(-helper.pid, 'SIGKILL')
+      } catch {}
+    }
+    throw new Error('restart helper did not acknowledge lock and backup handoff')
   } finally {
     closeSync(log)
   }
@@ -506,7 +570,7 @@ function publicCommandFailure(result: CommandResult, fallback: string): string {
     .replace(/([a-z][a-z0-9+.-]*:\/\/)[^\s/@]+@/giu, '$1***@')
     .replace(/([?&](?:access[_-]?token|api[_-]?key|auth|key|password|token)=)[^&#\s]+/giu, '$1***')
     .replace(/((?:authorization|proxy-authorization)\s*[:=]\s*(?:bearer|basic)\s+)\S+/giu, '$1***')
-    .replace(/((?:_authToken|token|password|_password)\s*[:=]\s*)\S+/giu, '$1***')
+    .replace(/((?:_auth(?:Token)?|token|password|_password)\s*[:=]\s*)\S+/giu, '$1***')
     .replace(/\bnpm_[A-Za-z0-9_-]+\b/gu, 'npm_***')
   if (result.timedOut) return `${fallback}: command timed out`
   if (detail.length === 0) return `${fallback}: pnpm exited with code ${String(result.exitCode)}`
@@ -520,11 +584,11 @@ export class VisionToolkitPluginUpdateService {
   private readonly dshHome: string
   private readonly argv: readonly string[]
   private readonly now: () => Date
-  private readonly prepareRestart: (request: RestartRequest) => void
+  private readonly prepareRestart: (request: RestartRequest) => void | Promise<void>
   private readonly terminateCurrent: () => void
   private readonly schedule: (callback: () => void, delayMs: number) => void
   private readonly allowDetachedRestart: boolean
-  private readonly healthUrl: string | undefined
+  private healthUrl: string | undefined
   private readonly platform: NodeJS.Platform
   private updating = false
 
@@ -545,6 +609,19 @@ export class VisionToolkitPluginUpdateService {
       ?? process.env.DSH_VISION_TOOLKIT_ALLOW_DETACHED_RESTART === '1'
     this.healthUrl = options.healthUrl ?? defaultHealthUrl(this.argv)
     this.platform = options.platform ?? process.platform
+  }
+
+  /** Bind readiness checks to the active WebServer and reject ports that cannot be reproduced on restart. */
+  configureWebServer(host: string, port: number): void {
+    const explicitPort = optionValue(this.argv, '--port')?.trim()
+    const stable = explicitPort === undefined ? port === 3080 : Number(explicitPort) === port && port > 0
+    if (!stable || !Number.isInteger(port) || port < 1 || port > 65_535) {
+      this.healthUrl = undefined
+      return
+    }
+    const probeHost = host === '0.0.0.0' || host === '::' ? '127.0.0.1' : host
+    const authority = probeHost.includes(':') && !probeHost.startsWith('[') ? `[${probeHost}]` : probeHost
+    this.healthUrl = `http://${authority}:${port}${SETTINGS_ROUTE}`
   }
 
   private async inspectProfile(
@@ -900,7 +977,7 @@ export class VisionToolkitPluginUpdateService {
       }
 
       try {
-        this.prepareRestart({
+        await this.prepareRestart({
           pid: process.pid,
           execPath: process.execPath,
           args: [...process.execArgv, ...process.argv.slice(1)],
@@ -909,15 +986,17 @@ export class VisionToolkitPluginUpdateService {
           lockPath: locked.path,
           lockToken: locked.token,
           backupDir: updateBackup.dir,
+          handoffPath: join(updateBackup.dir, 'handoff.json'),
           profileDir: final.profile.profileDir,
           pnpmPath: final.pnpmPath,
           packageName: VISION_TOOLKIT_PACKAGE,
           fromVersion: this.currentVersion,
           toVersion: installedVersion,
           healthUrl: this.healthUrl,
-          rollbackTimeoutMs: UPDATE_TIMEOUT_MS,
+          rollbackTimeoutMs: RESTART_ROLLBACK_TIMEOUT_MS,
           processKillGraceMs: 5_000,
           readinessTimeoutMs: 60_000,
+          oldProcessExitTimeoutMs: OLD_PROCESS_EXIT_TIMEOUT_MS,
         })
       } catch (error) {
         throw new PluginUpdateError(
@@ -974,18 +1053,29 @@ export class VisionToolkitPluginUpdateService {
             { cause: restoreError },
           )
         }
-        try {
-          await cleanupUpdateBackup(updateBackup)
-        } catch (cleanupError) {
-          rollbackFailure ??= new PluginUpdateError(
-            'update-rollback-failed',
-            'Plugin update failed and its recovery backup could not be removed',
-            { cause: cleanupError },
+        if (rollbackFailure === undefined) {
+          try {
+            await cleanupUpdateBackup(updateBackup)
+          } catch (cleanupError) {
+            rollbackFailure = new PluginUpdateError(
+              'update-rollback-failed',
+              'Plugin update failed and its completed recovery backup could not be removed',
+              { cause: cleanupError },
+            )
+          }
+        } else {
+          rollbackFailure = new PluginUpdateError(
+            rollbackFailure.code,
+            `${rollbackFailure.message}; recovery files preserved at ${updateBackup.dir}`,
+            { cause: rollbackFailure },
           )
         }
         if (rollbackFailure !== undefined) error = rollbackFailure
       }
-      if (locked !== undefined) {
+      const preserveLock = error instanceof PluginUpdateError
+        && error.code === 'update-rollback-failed'
+        && updateBackup !== undefined
+      if (locked !== undefined && !preserveLock) {
         try { await locked.release() } catch (releaseError) {
           error = new PluginUpdateError('update-lock-release-failed', 'The profile update lock could not be released', {
             cause: releaseError,
