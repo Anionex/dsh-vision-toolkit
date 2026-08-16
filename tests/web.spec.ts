@@ -7,7 +7,12 @@ import { ArtifactAccessController } from '../src/artifact-access.ts'
 import { Config, VISION_TOOLKIT_SETTINGS_NAMESPACE, resolveConfig } from '../src/config.ts'
 import type { VisionToolkitRuntime, VisionToolkitHealthResult } from '../src/runtime.ts'
 import type { PreparedRuntimeGeneration, RuntimeManagerStatus } from '../src/runtime-manager.ts'
-import { VisionToolkitWebBackend, createPastePolicyHandler, type WebRuntimeManager } from '../src/web.ts'
+import {
+  VisionToolkitWebBackend,
+  createPastePolicyHandler,
+  type WebPluginUpdater,
+  type WebRuntimeManager,
+} from '../src/web.ts'
 
 const contexts: Context[] = []
 const servers: Server[] = []
@@ -91,6 +96,37 @@ class FakeManager implements WebRuntimeManager {
   }
 }
 
+class FakeUpdater implements WebPluginUpdater {
+  readonly checks = vi.fn(async () => ({
+    supported: true,
+    profile: 'web',
+    dependencySpec: '0.1.0',
+    currentVersion: '0.1.0',
+    latestVersion: '0.2.0',
+    updateAvailable: true,
+    checkedAt: '2026-08-16T12:00:00.000Z',
+  }))
+  readonly installs = vi.fn(async (expectedVersion: string) => ({
+    fromVersion: '0.1.0',
+    toVersion: expectedVersion,
+    profile: 'web',
+    restarting: true as const,
+    retryAfterMs: 1200,
+  }))
+
+  capability() {
+    return Promise.resolve({ supported: true, profile: 'web', dependencySpec: '0.1.0' })
+  }
+
+  check() {
+    return this.checks()
+  }
+
+  installAndRestart(expectedVersion: string) {
+    return this.installs(expectedVersion)
+  }
+}
+
 async function setup() {
   const ctx = new Context()
   contexts.push(ctx)
@@ -103,7 +139,8 @@ async function setup() {
   const manager = new FakeManager()
   const artifacts = new ArtifactAccessController(Buffer.alloc(32, 7))
   const activated = vi.fn()
-  const backend = new VisionToolkitWebBackend(ctx, manager, artifacts, activated)
+  const updater = new FakeUpdater()
+  const backend = new VisionToolkitWebBackend(ctx, manager, artifacts, activated, updater)
   const server = createServer((req, res) => { void backend.handle(req, res) })
   servers.push(server)
   await new Promise<void>((resolve, reject) => {
@@ -118,7 +155,7 @@ async function setup() {
     headers: { 'Content-Type': 'application/json', Origin: base },
     body: JSON.stringify(body),
   })
-  return { ctx, credentialService, manager, activated, base, post }
+  return { ctx, credentialService, manager, activated, updater, base, post }
 }
 
 describe('VisionToolkitWebBackend', () => {
@@ -252,6 +289,32 @@ describe('VisionToolkitWebBackend', () => {
       { testConnection: true, testModel: false },
       { testConnection: true, testModel: true },
     ])
+  })
+
+  it('checks and applies a confirmed plugin update through explicit same-origin actions', async () => {
+    const { updater, post } = await setup()
+    const checked = await post({ action: 'check-update' })
+    expect(checked.status).toBe(200)
+    await expect(checked.json()).resolves.toMatchObject({
+      ok: true,
+      value: { latestVersion: '0.2.0', updateAvailable: true },
+    })
+
+    const applied = await post({ action: 'apply-update', expectedVersion: '0.2.0' })
+    expect(applied.status).toBe(200)
+    await expect(applied.json()).resolves.toMatchObject({
+      ok: true,
+      value: { toVersion: '0.2.0', restarting: true },
+    })
+    expect(updater.checks).toHaveBeenCalledTimes(1)
+    expect(updater.installs).toHaveBeenCalledWith('0.2.0')
+  })
+
+  it('rejects an update request without a confirmed target version', async () => {
+    const { updater, post } = await setup()
+    const response = await post({ action: 'apply-update', expectedVersion: '' })
+    expect(response.status).toBe(400)
+    expect(updater.installs).not.toHaveBeenCalled()
   })
 
   it('rejects a model test that omits the API connection probe', async () => {

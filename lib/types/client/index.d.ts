@@ -62,6 +62,33 @@ declare const en: {
     readonly upstreamVersion: "Upstream";
     readonly activeGeneration: "Runtime generation";
     readonly activeGenerationValue: "Generation {generation}";
+    readonly updates: "Plugin updates";
+    readonly updatesHint: "Check npm for a newer release, install it into this DSH profile, and restart DSH Web automatically.";
+    readonly checkUpdate: "Check for updates";
+    readonly checkingUpdate: "Checking for updates…";
+    readonly updateAvailable: "Update available";
+    readonly updateAvailableDetail: "Version {version} is available. Updating restarts DSH Web and may interrupt work that is currently running.";
+    readonly upToDate: "Up to date";
+    readonly upToDateDetail: "Version {version} is the latest release.";
+    readonly updateNow: "Update and restart";
+    readonly updatingPlugin: "Updating and restarting…";
+    readonly updateConfirm: "Install Vision Toolkit {version} and restart DSH Web now? Running work may be interrupted.";
+    readonly restarting: "Version {version} was installed. Waiting for DSH Web to restart…";
+    readonly updateProfile: "Profile";
+    readonly updateInstalled: "Installed";
+    readonly updateLatest: "Latest";
+    readonly updateUnsupported: "Automatic updates are unavailable for this installation.";
+    readonly updateReasonProfileNotFound: "The running plugin could not be matched to a DSH profile installation.";
+    readonly updateReasonNotDependency: "The plugin is not a direct dependency of this DSH profile.";
+    readonly updateReasonLocalSource: "This profile uses a local, workspace, URL, or git installation; update that source manually so local work is not overwritten.";
+    readonly updateReasonReadOnly: "The profile package manifest is read-only.";
+    readonly updateReasonPnpm: "pnpm is unavailable in the DSH execution environment.";
+    readonly updateReasonPlatform: "Automatic restart is unavailable on this operating system.";
+    readonly updateReasonRestartUnmanaged: "Detached self-restart is disabled. Use a supported process manager, or explicitly opt in with DSH_VISION_TOOLKIT_ALLOW_DETACHED_RESTART=1 for an unsupervised Web process.";
+    readonly updateReasonRestartAddress: "Automatic restart is unavailable when DSH Web uses an unknown or dynamically allocated port. Start it with a fixed --port value.";
+    readonly updateSaveFirst: "Save or discard the current Settings and API key changes before updating the plugin.";
+    readonly restartTimedOut: "DSH Web did not return with the target plugin version. Check the restart log and restart the Web profile through its original process manager.";
+    readonly restartRolledBack: "The new plugin did not become ready, so the previous version was restored. Check the restart log before trying again.";
     readonly pluginKind: "DSH native plugin";
     readonly runtimeUnavailable: "Runtime unavailable";
     readonly runtimeCandidateRejected: "Last runtime candidate was rejected; the active generation remains available.";
@@ -205,6 +232,27 @@ interface SettingsValue {
     };
     allowedDirs?: string[];
 }
+type PluginUpdateUnavailableReason = 'profile-not-found' | 'not-direct-dependency' | 'unsupported-install-source' | 'profile-read-only' | 'pnpm-unavailable' | 'unsupported-platform' | 'restart-unmanaged' | 'restart-address-unavailable';
+interface PluginUpdateCapability {
+    supported: boolean;
+    checkSupported?: boolean;
+    profile?: string;
+    dependencySpec?: string;
+    reason?: PluginUpdateUnavailableReason;
+}
+interface PluginUpdateCheck extends PluginUpdateCapability {
+    currentVersion: string;
+    latestVersion?: string;
+    updateAvailable: boolean;
+    checkedAt: string;
+}
+interface PluginUpdateResult {
+    fromVersion: string;
+    toVersion: string;
+    profile: string;
+    restarting: true;
+    retryAfterMs: number;
+}
 interface SettingsSnapshot {
     schemaVersion: 1;
     writable: boolean;
@@ -237,6 +285,7 @@ interface SettingsSnapshot {
         upstreamRepository: string;
         upstreamVersion: string;
         upstreamCommit: string;
+        update: PluginUpdateCapability;
     };
     artifactRouteAvailable: boolean;
 }
@@ -246,7 +295,9 @@ interface SettingsState {
     status: 'idle' | 'loading' | 'ready' | 'error';
     snapshot?: SettingsSnapshot | undefined;
     health?: HealthResult | undefined;
-    action?: 'save' | 'health' | 'connection' | 'model' | undefined;
+    update?: PluginUpdateCheck | undefined;
+    restart?: PluginUpdateResult | undefined;
+    action?: 'save' | 'health' | 'connection' | 'model' | 'check-update' | 'apply-update' | undefined;
     message?: string | undefined;
     error?: string | undefined;
 }
@@ -262,6 +313,9 @@ export declare class VisionSettingsController {
     refreshIfLoaded(): void;
     save(value: SettingsValue, expectedRevision: number, credentialValue: string | undefined, writeSettings: boolean): Promise<boolean>;
     runHealth(mode: 'health' | 'connection' | 'model'): Promise<void>;
+    checkUpdate(): Promise<void>;
+    applyUpdate(expectedVersion: string): Promise<void>;
+    reportRestartTimeout(message: string): void;
 }
 /** Required client services. The pasted-image codec attaches to either trigger-service generation after load. */
 export declare const inject: string[];

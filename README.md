@@ -270,6 +270,12 @@ Restart the Web Profile and refresh the page after enabling or upgrading the Web
 
 </details>
 
+### Plugin updates
+
+In **Settings → Vision Toolkit**, **Check for updates** queries the Profile's npm registry. For a direct registry installation, **Update and restart** installs only the exact version you confirmed, verifies it, and restarts an explicitly opted-in POSIX Web process on a fixed `--port`. Local/workspace/file/git/URL installs, Windows, dynamic ports, read-only Profiles, and manager-owned processes remain check-only.
+
+The updater revalidates the Profile before mutation, snapshots the original manifest and lockfile, and holds a token-owned cross-process lock. The current Web process exits only after the restart helper confirms that the backup is readable and the lock handoff succeeded. When the Profile was already operational, the replacement must report both the target plugin version and a ready runtime; failed replacements restore the original manifest/lockfile and rebuild dependencies with a frozen lockfile before retrying the previous exact version. If automatic recovery itself fails, the backup and lock are preserved and their paths are written to `$DSH_HOME/logs/vision-toolkit-restart.log`. Detached restart requires `DSH_VISION_TOOLKIT_ALLOW_DETACHED_RESTART=1`; unsaved Settings or API-key input blocks installation.
+
 ## Troubleshooting
 
 | Problem | What to do |

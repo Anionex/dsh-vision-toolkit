@@ -29,6 +29,13 @@ import {
 } from './config.ts'
 import type { VisionToolkitHealthResult } from './runtime.ts'
 import {
+  PluginUpdateError,
+  VisionToolkitPluginUpdateService,
+  type PluginUpdateCapability,
+  type PluginUpdateCheck,
+  type PluginUpdateResult,
+} from './plugin-update.ts'
+import {
   VisionToolkitRuntimeManager,
   type PreparedRuntimeGeneration,
   type RuntimeManagerStatus,
@@ -62,6 +69,7 @@ export interface VisionToolkitSettingsSnapshot {
     upstreamRepository: string
     upstreamVersion: string
     upstreamCommit: string
+    update: PluginUpdateCapability
   }
   artifactRouteAvailable: boolean
 }
@@ -85,7 +93,16 @@ interface CredentialRequest {
   value: string
 }
 
-type SettingsRequest = SaveRequest | HealthRequest | CredentialRequest
+interface CheckUpdateRequest {
+  action: 'check-update'
+}
+
+interface ApplyUpdateRequest {
+  action: 'apply-update'
+  expectedVersion: string
+}
+
+type SettingsRequest = SaveRequest | HealthRequest | CredentialRequest | CheckUpdateRequest | ApplyUpdateRequest
 
 interface JsonError {
   ok: false
@@ -107,6 +124,14 @@ export interface WebRuntimeManager {
   activateCandidate(candidate: PreparedRuntimeGeneration): void
   recordFailure(error: unknown): void
   status(): RuntimeManagerStatus
+}
+
+/** Minimal self-update face used by the Web route and its tests. */
+export interface WebPluginUpdater {
+  configureWebServer?(host: string, port: number): void
+  capability(): Promise<PluginUpdateCapability>
+  check(): Promise<PluginUpdateCheck>
+  installAndRestart(expectedVersion: string): Promise<PluginUpdateResult>
 }
 
 /** Callback invoked when a Settings save makes the first runtime available. */
@@ -195,6 +220,13 @@ function parseRequest(value: unknown): SettingsRequest {
       value: secret,
     }
   }
+  if (value.action === 'check-update') return { action: 'check-update' }
+  if (value.action === 'apply-update') {
+    if (typeof value.expectedVersion !== 'string' || value.expectedVersion.trim().length === 0) {
+      throw new TypeError('apply-update.expectedVersion must be a non-empty string')
+    }
+    return { action: 'apply-update', expectedVersion: value.expectedVersion.trim() }
+  }
   throw new TypeError(`unsupported action: ${value.action}`)
 }
 
@@ -205,12 +237,24 @@ function publicMessage(error: unknown): string {
 
 /** Same-origin Settings and health handler. */
 export class VisionToolkitWebBackend {
+  private readonly updater: WebPluginUpdater
+
   constructor(
     private readonly ctx: Context,
     private readonly manager: WebRuntimeManager,
     private readonly artifacts: ArtifactAccessController,
     private readonly onRuntimeActivated: RuntimeActivated,
-  ) {}
+    updater?: WebPluginUpdater,
+  ) {
+    this.updater = updater ?? new VisionToolkitPluginUpdateService(ctx, PLUGIN_VERSION, {
+      runtimeReady: () => this.manager.status().ready,
+    })
+  }
+
+  /** Supply the active listener address before the Settings route becomes reachable. */
+  configureWebServer(host: string, port: number): void {
+    this.updater.configureWebServer?.(host, port)
+  }
 
   private async credential(config: ResolvedVisionToolkitConfig): Promise<CredentialInfo> {
     if (isBuiltInFreeVisionProvider(config.provider)) {
@@ -225,6 +269,7 @@ export class VisionToolkitWebBackend {
     const value = descriptor.value as VisionToolkitConfig
     const resolved = resolveConfig(value)
     const credential = await this.credential(resolved)
+    const update = await this.updater.capability()
     return {
       schemaVersion: 1,
       writable: this.ctx.settings.writable,
@@ -247,6 +292,7 @@ export class VisionToolkitWebBackend {
         upstreamRepository: UPSTREAM_REPOSITORY,
         upstreamVersion: UPSTREAM_VERSION,
         upstreamCommit: UPSTREAM_COMMIT,
+        update,
       },
       artifactRouteAvailable: this.artifacts.routeAvailable,
     }
@@ -350,20 +396,39 @@ export class VisionToolkitWebBackend {
         case 'credential':
           responseJson(res, 200, { ok: true, value: await this.saveCredential(parsed) })
           break
+        case 'check-update':
+          responseJson(res, 200, { ok: true, value: await this.updater.check() })
+          break
+        case 'apply-update':
+          responseJson(res, 200, { ok: true, value: await this.updater.installAndRestart(parsed.expectedVersion) })
+          break
       }
     } catch (error) {
       const settingsConflict = error instanceof SettingsConflictError
       const credentialConflict = error instanceof CredentialReferenceConflictError
+      const updateError = error instanceof PluginUpdateError
       const code = settingsConflict
         ? 'settings-conflict'
         : credentialConflict
           ? 'credential-conflict'
+          : updateError
+            ? error.code
           : parsed.action === 'health'
             ? 'health-failed'
             : parsed.action === 'credential'
               ? 'credential-rejected'
               : 'settings-rejected'
-      const status = settingsConflict || credentialConflict ? 409 : parsed.action === 'health' ? 503 : 400
+      const updateConflict = updateError && ['update-in-progress', 'update-stale', 'update-unavailable', 'already-current'].includes(error.code)
+      const updateGateway = updateError && error.code === 'update-check-failed'
+      const status = settingsConflict || credentialConflict || updateConflict
+        ? 409
+        : parsed.action === 'health'
+          ? 503
+          : updateGateway
+            ? 502
+            : updateError
+              ? 500
+              : 400
       this.ctx.logger.warn('dsh-vision-toolkit Web action=%s failed: %s', parsed.action, publicMessage(error))
       requestError(res, status, code, publicMessage(error))
     }
@@ -454,6 +519,7 @@ export function installVisionToolkitWeb(
 ): void {
   ctx.inject(['webServer'], (webCtx) => {
     webCtx.effect(() => {
+      backend.configureWebServer(webCtx.webServer.host, webCtx.webServer.port)
       const detach = artifacts.attachRoute()
       const disposeArtifact = webCtx.webServer.register({
         kind: 'prefix',

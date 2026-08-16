@@ -114,6 +114,7 @@ function settingsSnapshot(runtime: { ready: boolean; lastError?: string } = { re
       upstreamRepository: 'https://github.com/Anionex/agent-vision-toolkit',
       upstreamVersion: 'v0.1.0+snapshot.c27d1a3',
       upstreamCommit: 'c27d1a300962b553c0884993c575cd3e819465ce',
+      update: { supported: true, profile: 'web', dependencySpec: '0.1.0' },
     },
     artifactRouteAvailable: true,
   }
@@ -326,7 +327,7 @@ describe('Vision Toolkit client plugin', () => {
       t: (key: string) => key,
     }))
 
-    await screen.findByText('0.1.0')
+    await screen.findAllByText('0.1.0')
     expect(screen.getByLabelText('apiKey')).toBeTruthy()
     const root = view.container.querySelector('.dvt-settings')
     const essential = view.container.querySelector('.dvt-essential')
@@ -338,6 +339,93 @@ describe('Vision Toolkit client plugin', () => {
     expect(advanced).not.toBeNull()
     expect(advanced?.contains(screen.getByLabelText('credential'))).toBe(true)
     expect(view.container.querySelector('.dvt-settings-header')).toBeNull()
+  })
+
+  it('checks for a plugin release and requires confirmation before update and restart', async () => {
+    const update = {
+      supported: true,
+      profile: 'web',
+      dependencySpec: '0.1.0',
+      currentVersion: '0.1.0',
+      latestVersion: '0.2.0',
+      updateAvailable: true,
+      checkedAt: '2026-08-16T12:00:00.000Z',
+    }
+    const restart = {
+      fromVersion: '0.1.0',
+      toVersion: '0.2.0',
+      profile: 'web',
+      restarting: true,
+      retryAfterMs: 60_000,
+    }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ ok: true, value: settingsSnapshot() }))
+      .mockResolvedValueOnce(jsonResponse({ ok: true, value: update }))
+      .mockResolvedValueOnce(jsonResponse({ ok: true, value: restart }))
+    vi.stubGlobal('fetch', fetchMock)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    const { ctx, registrations } = fakeClientContext()
+    apply(ctx as never)
+    const settings = registrations.find(entry => entry.options.name === 'settings.section')
+    if (settings === undefined) throw new Error('Settings component was not registered')
+    render(createElement(settings.component, {
+      controller: new VisionSettingsController(),
+      t: (key: string) => key,
+    }))
+
+    fireEvent.click(await screen.findByRole('button', { name: 'checkUpdate' }))
+    await screen.findByText('updateAvailableDetail')
+    fireEvent.click(screen.getByRole('button', { name: 'updateNow' }))
+    await screen.findByText('restarting')
+
+    expect(window.confirm).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body))).toEqual({ action: 'check-update' })
+    expect(JSON.parse(String((fetchMock.mock.calls[2]?.[1] as RequestInit).body))).toEqual({
+      action: 'apply-update',
+      expectedVersion: '0.2.0',
+    })
+  })
+
+  it('blocks plugin installation while Settings or the API key field has unsaved changes', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ ok: true, value: settingsSnapshot() }))
+      .mockResolvedValueOnce(jsonResponse({
+        ok: true,
+        value: {
+          supported: true,
+          profile: 'web',
+          dependencySpec: '0.1.0',
+          currentVersion: '0.1.0',
+          latestVersion: '0.2.0',
+          updateAvailable: true,
+          checkedAt: '2026-08-16T12:00:00.000Z',
+        },
+      }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { ctx, registrations } = fakeClientContext()
+    apply(ctx as never)
+    const settings = registrations.find(entry => entry.options.name === 'settings.section')
+    if (settings === undefined) throw new Error('Settings component was not registered')
+    render(createElement(settings.component, {
+      controller: new VisionSettingsController(),
+      t: (key: string) => key,
+    }))
+
+    fireEvent.click(await screen.findByRole('button', { name: 'checkUpdate' }))
+    const updateButton = await screen.findByRole('button', { name: 'updateNow' }) as HTMLButtonElement
+    expect(updateButton.disabled).toBe(false)
+
+    fireEvent.change(screen.getByLabelText('baseUrl'), { target: { value: 'https://changed.example/v1' } })
+    expect(updateButton.disabled).toBe(true)
+    expect(screen.getByText('updateSaveFirst')).toBeTruthy()
+
+    fireEvent.change(screen.getByLabelText('baseUrl'), { target: { value: 'https://api.inferera.com/v1' } })
+    const keyInput = screen.getByLabelText('apiKey') as HTMLInputElement
+    expect(keyInput.disabled).toBe(false)
+    fireEvent.change(keyInput, { target: { value: 'unsaved-secret' } })
+    expect(updateButton.disabled).toBe(true)
   })
 
   it('unlocks API key input when the built-in provider changes to a custom endpoint', async () => {

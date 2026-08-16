@@ -9,6 +9,7 @@ import type { Context } from '@deepseek-ai/cordis';
 import { ArtifactAccessController } from './artifact-access.ts';
 import { PastedImageBackend, type PasteSelectionQuery, type PasteVerdict } from './paste-images.ts';
 import { type VisionToolkitConfig } from './config.ts';
+import { type PluginUpdateCapability, type PluginUpdateCheck, type PluginUpdateResult } from './plugin-update.ts';
 import { VisionToolkitRuntimeManager, type PreparedRuntimeGeneration, type RuntimeManagerStatus } from './runtime-manager.ts';
 /** Exact route used by the browser Settings page. */
 export declare const SETTINGS_ROUTE = "/_dsh/vision-toolkit/settings";
@@ -35,6 +36,7 @@ export interface VisionToolkitSettingsSnapshot {
         upstreamRepository: string;
         upstreamVersion: string;
         upstreamCommit: string;
+        update: PluginUpdateCapability;
     };
     artifactRouteAvailable: boolean;
 }
@@ -47,6 +49,13 @@ export interface WebRuntimeManager {
     recordFailure(error: unknown): void;
     status(): RuntimeManagerStatus;
 }
+/** Minimal self-update face used by the Web route and its tests. */
+export interface WebPluginUpdater {
+    configureWebServer?(host: string, port: number): void;
+    capability(): Promise<PluginUpdateCapability>;
+    check(): Promise<PluginUpdateCheck>;
+    installAndRestart(expectedVersion: string): Promise<PluginUpdateResult>;
+}
 /** Callback invoked when a Settings save makes the first runtime available. */
 export type RuntimeActivated = () => void;
 /** Same-origin Settings and health handler. */
@@ -55,7 +64,10 @@ export declare class VisionToolkitWebBackend {
     private readonly manager;
     private readonly artifacts;
     private readonly onRuntimeActivated;
-    constructor(ctx: Context, manager: WebRuntimeManager, artifacts: ArtifactAccessController, onRuntimeActivated: RuntimeActivated);
+    private readonly updater;
+    constructor(ctx: Context, manager: WebRuntimeManager, artifacts: ArtifactAccessController, onRuntimeActivated: RuntimeActivated, updater?: WebPluginUpdater);
+    /** Supply the active listener address before the Settings route becomes reachable. */
+    configureWebServer(host: string, port: number): void;
     private credential;
     /** Build the current settings/runtime/credential snapshot without secrets. */
     snapshot(): Promise<VisionToolkitSettingsSnapshot>;
