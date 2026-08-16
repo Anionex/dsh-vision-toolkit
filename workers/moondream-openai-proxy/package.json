@@ -9,7 +9,7 @@
     "deploy": "node scripts/deploy.mjs",
     "deploy:check": "node scripts/deploy.mjs --dry-run",
     "deploy:dry-run": "wrangler deploy --dry-run --minify",
-    "test": "vitest run",
+    "test": "vitest run --config ./vitest.config.ts",
     "typecheck": "tsc -p tsconfig.json",
     "types": "node scripts/types.mjs",
     "types:check": "node scripts/types.mjs --check"
