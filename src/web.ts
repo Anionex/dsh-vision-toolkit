@@ -22,6 +22,7 @@ import {
 } from './paste-images.ts'
 import {
   resolveConfig,
+  isBuiltInFreeVisionProvider,
   VISION_TOOLKIT_SETTINGS_NAMESPACE,
   type ResolvedVisionToolkitConfig,
   type VisionToolkitConfig,
@@ -212,6 +213,9 @@ export class VisionToolkitWebBackend {
   ) {}
 
   private async credential(config: ResolvedVisionToolkitConfig): Promise<CredentialInfo> {
+    if (isBuiltInFreeVisionProvider(config.provider)) {
+      return { configured: true, source: 'built-in-free', writable: false }
+    }
     return this.ctx.credentials.describe(credentialRef(String(config.provider.credential)))
   }
 
@@ -282,6 +286,9 @@ export class VisionToolkitWebBackend {
       throw new CredentialReferenceConflictError(
         `credential reference changed from "${request.ref}" to "${currentRef}"; reload Settings and try again`,
       )
+    }
+    if (isBuiltInFreeVisionProvider(resolved.provider)) {
+      throw new Error('The built-in free vision provider does not accept a user API key')
     }
     await this.ctx.credentials.set(currentRef, request.value)
     return this.snapshot()

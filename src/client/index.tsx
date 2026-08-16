@@ -25,6 +25,10 @@ const NS = 'vision-toolkit'
 const SETTINGS_ROUTE = '/_dsh/vision-toolkit/settings'
 const PRESENTATION_META_KEY = '$dshVisionToolkit'
 const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
+// Keep these browser defaults aligned with src/defaults.ts without importing server-side config.
+const BUILT_IN_FREE_VISION_BASE_URL = 'https://vision.anionex.me/v1'
+const BUILT_IN_FREE_VISION_CREDENTIAL = 'ANIONEX_FREE_VISION'
+const BUILT_IN_FREE_VISION_MODEL = 'moondream-3.1'
 
 const en = {
   nav: 'Vision',
@@ -42,7 +46,7 @@ const en = {
   apiKeyBlank: 'The API key cannot contain only spaces.',
   apiKeyInvalid: 'Paste only the key, without a variable name, quotes, spaces, or line breaks.',
   credential: 'Credential name',
-  credentialHint: 'Advanced: the API key is stored under this name. Keep VISION_API_KEY unless another plugin configuration requires a different reference.',
+  credentialHint: 'The built-in free provider needs no user key. For a custom provider, this is the DSH credential reference used to store its key.',
   model: 'Model',
   protocol: 'API protocol',
   anthropicThinking: 'Anthropic thinking',
@@ -192,7 +196,7 @@ const zh: Record<LocaleKey, string> = {
   apiKeyBlank: 'API 密钥不能只包含空格。',
   apiKeyInvalid: '请只粘贴密钥本身，不要包含变量名、引号、空格或换行。',
   credential: '凭据名称',
-  credentialHint: '高级用法：API 密钥会按此名称保存。除非其他插件配置要求不同名称，否则保持 VISION_API_KEY。',
+  credentialHint: '内置免费视觉服务无需用户密钥；切换到自定义服务时，此处是保存其密钥的 DSH 凭据名称。',
   model: '模型名称',
   protocol: 'API 协议',
   anthropicThinking: 'Anthropic thinking',
@@ -900,16 +904,16 @@ interface Draft {
 
 function draftOf(value: SettingsValue): Draft {
   return {
-    baseUrl: value.provider?.baseUrl ?? 'https://api.inferera.com/v1',
-    credential: value.provider?.credential ?? 'VISION_API_KEY',
-    model: value.provider?.model ?? 'gemini-3.6-flash',
+    baseUrl: value.provider?.baseUrl ?? BUILT_IN_FREE_VISION_BASE_URL,
+    credential: value.provider?.credential ?? BUILT_IN_FREE_VISION_CREDENTIAL,
+    model: value.provider?.model ?? BUILT_IN_FREE_VISION_MODEL,
     protocol: value.provider?.protocol ?? 'openai',
     anthropicThinking: value.provider?.anthropicThinking ?? 'omit',
     userAgent: value.provider?.userAgent ?? DEFAULT_USER_AGENT,
     language: value.language ?? 'zh',
     timeoutMs: String(value.timeoutMs ?? 60000),
-    maxImageBytes: String(value.maxImageBytes ?? 10485760),
-    maxImagePixels: String(value.maxImagePixels ?? 40000000),
+    maxImageBytes: String(value.maxImageBytes ?? 4194304),
+    maxImagePixels: String(value.maxImagePixels ?? 20000000),
     concurrency: String(value.concurrency ?? 4),
     runtimeMode: value.runtime?.mode ?? 'managed',
     toolkitPath: value.runtime?.agentVisionToolkitPath ?? '',
@@ -956,6 +960,13 @@ function valueOf(draft: Draft, t: Translate): SettingsValue {
     },
     allowedDirs: draft.allowedDirs.split(/\r?\n/).map(entry => entry.trim()).filter(Boolean),
   }
+}
+
+function isBuiltInFreeVisionDraft(draft: Draft): boolean {
+  return draft.baseUrl.trim().replace(/\/+$/, '') === BUILT_IN_FREE_VISION_BASE_URL
+    && draft.credential.trim() === BUILT_IN_FREE_VISION_CREDENTIAL
+    && draft.model.trim() === BUILT_IN_FREE_VISION_MODEL
+    && draft.protocol === 'openai'
 }
 
 interface SettingsInjected {
@@ -1091,7 +1102,11 @@ function LoadedSettings({ controller, t }: SettingsInjected) {
   }
   const busy = state.action !== undefined
   const credentialMatchesSnapshot = draft.credential.trim() === snapshot.credential.ref
-  const keyLocked = credentialMatchesSnapshot && !snapshot.credential.writable
+  const builtInCredentialChangedProvider = snapshot.credential.source === 'built-in-free'
+    && !isBuiltInFreeVisionDraft(draft)
+  const keyLocked = credentialMatchesSnapshot
+    && !snapshot.credential.writable
+    && !builtInCredentialChangedProvider
   const canSave = snapshot.writable || (apiKey.length > 0 && !keyLocked)
   const runtimeErrorTitle = snapshot.runtime.ready ? t('runtimeCandidateRejected') : t('runtimeUnavailable')
 

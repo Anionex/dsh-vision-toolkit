@@ -1,0 +1,24 @@
+{
+  "name": "@anionex/moondream-openai-proxy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.7.0",
+  "scripts": {
+    "check": "pnpm run types:check && pnpm run typecheck && pnpm test",
+    "deploy": "node scripts/deploy.mjs",
+    "deploy:check": "node scripts/deploy.mjs --dry-run",
+    "deploy:dry-run": "wrangler deploy --dry-run --minify",
+    "test": "vitest run --config ./vitest.config.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "types": "node scripts/types.mjs",
+    "types:check": "node scripts/types.mjs --check"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260816.1",
+    "@types/node": "22.20.0",
+    "typescript": "6.0.3",
+    "vitest": "4.1.8",
+    "wrangler": "4.123.0"
+  }
+}

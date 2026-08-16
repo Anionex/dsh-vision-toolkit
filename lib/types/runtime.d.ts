@@ -7,7 +7,7 @@
  */
 import type { Context } from '@deepseek-ai/cordis';
 import { type ArtifactDescriptor } from './artifacts.ts';
-import type { ResolvedVisionToolkitConfig } from './config.ts';
+import { type ResolvedVisionToolkitConfig } from './config.ts';
 import { UpstreamAdapter, type DominantColorsOutput, type UpstreamEnvironment, type UpstreamVersionInfo } from './upstream.ts';
 /** Per-invocation cancellation and timeout facts. */
 export interface Deadline {
