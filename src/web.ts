@@ -348,8 +348,7 @@ export class VisionToolkitWebBackend {
     req.socket.once('close', abort)
     try {
       const runtime = this.manager.current()
-      // DSH Desktop can start with its read-only installation directory as cwd.
-      // The prepared runtime home is created in DSH's user-writable state area.
+      // Use the prepared runtime home instead of the host process cwd.
       return await runtime.health(request.testConnection, {
         signal: controller.signal,
         workspace: runtime.upstreamVersion.runtimeHome,
