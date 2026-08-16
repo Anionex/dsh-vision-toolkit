@@ -196,11 +196,11 @@ flowchart LR
 
 ## 纯文本模型的图片输入变体
 
-纯文本模型路由仍会获得同名的兄弟模型条目：`<模型名> (Vision Toolkit)`，挂在对应的提供方分组下。但 DSH 原生图片块不会把粘贴附件的本地路径传给模型，因此默认粘贴流程会先把每张图片复制进会话工作区，再把绝对路径插入模型可见的消息。DSH 模型随后可以把这个路径传给 `vision_glance` 或其他视觉工具，并使用与 `agent-vision-toolkit` 对齐的 focus hint 和 `[vision model description]` 通道标记。会话日志保存可复用的路径引用，UI 保留粘贴记录。
+纯文本模型路由仍会获得同名的兄弟模型条目：`<模型名> (Vision Toolkit)`，挂在对应的提供方分组下。但 DSH 原生图片块不会把粘贴附件的本地路径传给模型，因此所有桥接路径都会先把图片复制进会话工作区，再把绝对路径暴露给模型。模型随后可以把这个路径传给 `vision_glance` 或其他视觉工具。当服务端图片输入变体启用时，同一个模型可见消息还会包含与 `agent-vision-toolkit` 对齐、带 focus hint 的 `[vision model description]` 证据；路径仍然保留，模型可以再次针对更具体的问题调用视觉工具。会话日志保存可复用的路径引用，UI 保留粘贴记录。
 
 插件会自动为宿主明确声明为纯文本的每个模型注册变体（例如 DeepSeek 对话家族）。粘贴处理是全自动的：当当前模型被确认为纯文本、且它的变体已注册时，浏览器端集成会自动把会话切换到变体（会有一条简短提示说明新模型名），随后粘贴走原生流程，无需手动切换模型。宿主依据浏览器从实时模型目录读到的精确模型路由来裁决，模型选择器标签作为兜底；无法确认或支持图片的路由一律保持原生流程，而"纯文本但没有变体"的模型（例如变体被关闭时）继续走"粘贴转路径"：图片被复制进会话工作区，输入框里插入的是它的路径文本。
 
-启用图片输入变体并将 `imageInputVariants.autoSwitch` 设为 `true` 时，描述转换需要已配置的视觉提供方及其 Credential；当运行时未就绪或读取失败时，请求链路上的图片块降级为与上游兼容的 `[vision unavailable: ...]` 提示，而不是让整轮失败。默认路径流程不需要先调用这层自动描述桥接，模型可直接使用收到的图片路径调用视觉工具。桥接不会把注入的上下文文件当作当前用户意图；如果图片来自工具调用，则使用最新的助手段落作为关注提示。用 `imageInputVariants.enabled: false` 关闭变体，用 `imageInputVariants.providers` 限制被包装的路由，或用 `imageInputVariants.autoSwitch: true` 显式启用原生附件自动切换。
+默认启用图片输入变体自动切换。描述转换需要已配置的视觉提供方及其 Credential；当运行时未就绪或读取失败时，请求链路上的图片块仍保留工作区路径，并追加与上游兼容的 `[vision unavailable: ...]` 提示，而不是让整轮失败。桥接不会把注入的上下文文件当作当前用户意图；如果图片来自工具调用，则使用最新的助手段落作为关注提示。用 `imageInputVariants.enabled: false` 关闭变体，用 `imageInputVariants.providers` 限制被包装的路由，或用 `imageInputVariants.autoSwitch: false` 改回只注入路径的接管流程。
 
 </details>
 
@@ -295,7 +295,7 @@ Bundle 默认使用 managed 运行时。Profile patch 可以覆盖提供方与�
     imageInputVariants:
       enabled: true
       providers: []
-      autoSwitch: false
+      autoSwitch: true
 ```
 
 ### 配置字段
@@ -319,7 +319,7 @@ Bundle 默认使用 managed 运行时。Profile patch 可以覆盖提供方与�
 | `allowedDirs` | `[]` | 额外的 realpath 解析输入根目录；会话工作区始终允许 |
 | `imageInputVariants.enabled` | `true` | 为纯文本模型路由在模型选择器中注册图片输入变体条目 |
 | `imageInputVariants.providers` | `[]` | 按提供方 id 限制被包装的上游路由；为空时包装所有符合条件的路由 |
-| `imageInputVariants.autoSwitch` | `false` | 是否在粘贴时自动把纯文本会话切换到图片输入变体；默认关闭，纯文本模型继续走 DSH 兼容的"粘贴转路径"流程 |
+| `imageInputVariants.autoSwitch` | `true` | 粘贴时自动切换到图片输入变体；模型同时收到工作区路径和聚焦描述。设为 `false` 时只走路径接管 |
 
 ### Credential
 
