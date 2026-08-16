@@ -326,6 +326,60 @@ def main():
         assert json.loads(Handler.last_body)["thinking"] == {"type": "adaptive"}
         assert Handler.calls == 1
 
+        Handler.calls, Handler.statuses, Handler.bodies = 0, [200], [json.dumps({
+            "steps": [
+                {"type": "user_input", "status": "done",
+                 "content": [{"type": "text", "text": "read both images"}]},
+                {"type": "model_output", "status": "done",
+                 "content": [{"type": "text", "text": "gemini fixture answer"}]},
+            ],
+        }).encode()]
+        previous_base_url = os.environ.get("VISION_BASE_URL")
+        os.environ["VISION_API_PROTOCOL"] = "gemini"
+        os.environ["VISION_BASE_URL"] = f"http://127.0.0.1:{server.server_port}/v1beta"
+        try:
+            assert vision_client.describe_image(
+                ["data:image/png;base64,AAAA", "https://example.com/remote.webp"],
+                prompt="read both images",
+                max_tokens=123,
+            ) == "gemini fixture answer"
+        finally:
+            os.environ.pop("VISION_API_PROTOCOL", None)
+            if previous_base_url is None:
+                os.environ.pop("VISION_BASE_URL", None)
+            else:
+                os.environ["VISION_BASE_URL"] = previous_base_url
+        assert Handler.last_path == "/v1beta/interactions"
+        assert next(v for k, v in Handler.last_headers.items() if k.lower() == "x-goog-api-key") == "test-key"
+        assert not any(k.lower() == "authorization" for k in Handler.last_headers)
+        payload = json.loads(Handler.last_body)
+        assert payload["model"] == "fixture-model"
+        assert payload["store"] is False
+        parts = payload["input"]
+        assert parts[0] == {"type": "text", "text": "read both images"}
+        assert parts[1] == {"type": "image", "data": "AAAA", "mime_type": "image/png"}
+        assert parts[2] == {"type": "image", "uri": "https://example.com/remote.webp", "mime_type": "image/webp"}
+        assert Handler.calls == 1
+
+        Handler.calls, Handler.statuses, Handler.bodies = 0, [200], [json.dumps({
+            "steps": [
+                {"type": "model_output", "status": "done",
+                 "content": [{"type": "text", "text": "host-only gemini answer"}]},
+            ],
+        }).encode()]
+        os.environ["VISION_API_PROTOCOL"] = "gemini"
+        os.environ["VISION_BASE_URL"] = f"http://127.0.0.1:{server.server_port}/"
+        try:
+            assert vision_client.describe_image("data:image/png;base64,AAAA") == "host-only gemini answer"
+        finally:
+            os.environ.pop("VISION_API_PROTOCOL", None)
+            if previous_base_url is None:
+                os.environ.pop("VISION_BASE_URL", None)
+            else:
+                os.environ["VISION_BASE_URL"] = previous_base_url
+        assert Handler.last_path == "/v1beta/interactions",             "a host-only Gemini base URL must auto-fill /v1beta before /interactions"
+        assert Handler.calls == 1
+
         Handler.calls, Handler.statuses, Handler.bodies, Handler.response_headers = 0, [], [], []
         os.environ["VISION_API_PROTOCOL"] = "anthropic"
         os.environ["VISION_ANTHROPIC_THINKING"] = "unsupported"

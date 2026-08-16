@@ -442,7 +442,7 @@ interface SettingsValue {
     baseUrl?: string
     credential?: string
     model?: string
-    protocol?: 'openai' | 'anthropic'
+    protocol?: 'openai' | 'anthropic' | 'gemini'
     anthropicThinking?: 'omit' | 'disabled' | 'adaptive'
     userAgent?: string
   }
@@ -1025,7 +1025,7 @@ interface Draft {
   baseUrl: string
   credential: string
   model: string
-  protocol: 'openai' | 'anthropic'
+  protocol: 'openai' | 'anthropic' | 'gemini'
   anthropicThinking: 'omit' | 'disabled' | 'adaptive'
   userAgent: string
   language: 'zh' | 'en'
@@ -1322,7 +1322,7 @@ function LoadedSettings({ controller, t }: SettingsInjected) {
 
       <section className="dvt-panel dvt-essential"><div className="dvt-panel-title"><div><h3>{t('provider')}</h3><p>{t('providerHint')}</p></div><span className={`dvt-badge ${snapshot.credential.configured ? 'ok' : 'error'}`}>{snapshot.credential.configured ? t('configured') : t('missing')}</span></div>
         <div className="dvt-form-grid">
-          <Field label={t('protocol')}><select disabled={!snapshot.writable || busy} value={draft.protocol} onChange={(event) => { update('protocol', event.target.value as 'openai' | 'anthropic') }}><option value="openai">OpenAI Chat Completions</option><option value="anthropic">Anthropic Messages</option></select></Field>
+          <Field label={t('protocol')}><select disabled={!snapshot.writable || busy} value={draft.protocol} onChange={(event) => { update('protocol', event.target.value as 'openai' | 'anthropic' | 'gemini') }}><option value="openai">OpenAI Chat Completions</option><option value="anthropic">Anthropic Messages</option><option value="gemini">Google Gemini</option></select></Field>
           <Field label={t('baseUrl')}><Input disabled={!snapshot.writable || busy} value={draft.baseUrl} onChange={(event) => { update('baseUrl', event.target.value) }} /></Field>
           <Field label={t('model')}><Input disabled={!snapshot.writable || busy} value={draft.model} onChange={(event) => { update('model', event.target.value) }} /></Field>
           <Field label={t('apiKey')} hint={keyLocked ? t('apiKeyLocked') : snapshot.credential.source === undefined ? t('apiKeyHint') : `${t('apiKeyHint')} ${t('sourceHint', { source: t('source'), value: credentialSource(snapshot.credential.source, t) })}`}><Input aria-label={t('apiKey')} type="password" autoComplete="new-password" disabled={busy || keyLocked} placeholder={snapshot.credential.configured ? t('apiKeyPlaceholderConfigured') : t('apiKeyPlaceholderMissing')} value={apiKey} onChange={(event) => { setApiKey(event.target.value); setDraftError(undefined) }} /></Field>

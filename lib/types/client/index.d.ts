@@ -216,7 +216,7 @@ interface SettingsValue {
         baseUrl?: string;
         credential?: string;
         model?: string;
-        protocol?: 'openai' | 'anthropic';
+        protocol?: 'openai' | 'anthropic' | 'gemini';
         anthropicThinking?: 'omit' | 'disabled' | 'adaptive';
         userAgent?: string;
     };

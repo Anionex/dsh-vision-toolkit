@@ -783,7 +783,7 @@ export class VisionToolkitRuntime {
       VISION_API_KEY: resolved.value,
       VISION_BASE_URL: this.config.provider.baseUrl,
       VISION_MODEL: this.config.provider.model,
-      VISION_API_PROTOCOL: this.config.provider.protocol === 'anthropic' ? 'anthropic' : 'chat_completions',
+      VISION_API_PROTOCOL: this.config.provider.protocol === 'anthropic' ? 'anthropic' : this.config.provider.protocol === 'gemini' ? 'gemini' : 'chat_completions',
       VISION_ANTHROPIC_THINKING: this.config.provider.anthropicThinking,
       VISION_USER_AGENT: this.config.provider.userAgent,
       LANG: this.config.language,
@@ -1786,6 +1786,8 @@ export class VisionToolkitRuntime {
             if (this.config.provider.protocol === 'anthropic') {
               headers['x-api-key'] = resolvedCredential.value
               headers['anthropic-version'] = '2023-06-01'
+            } else if (this.config.provider.protocol === 'gemini') {
+              headers['x-goog-api-key'] = resolvedCredential.value
             } else {
               headers.Authorization = `Bearer ${resolvedCredential.value}`
             }

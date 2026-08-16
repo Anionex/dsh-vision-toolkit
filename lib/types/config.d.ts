@@ -21,8 +21,8 @@ export interface VisionToolkitConfig {
         credential?: string;
         /** Multimodal model name. */
         model?: string;
-        /** Vision request protocol: OpenAI Chat Completions or Anthropic Messages. */
-        protocol?: 'openai' | 'anthropic';
+        /** Vision request protocol: OpenAI Chat Completions, Anthropic Messages, or Google Gemini Interactions. */
+        protocol?: 'openai' | 'anthropic' | 'gemini';
         /** Anthropic thinking field behavior; `omit` leaves model defaults untouched. */
         anthropicThinking?: 'omit' | 'disabled' | 'adaptive';
         /** Outbound User-Agent for provider requests and connection tests. */
@@ -78,7 +78,7 @@ export interface ResolvedVisionToolkitConfig {
         baseUrl: string;
         credential: CredentialRef;
         model: string;
-        protocol: 'openai' | 'anthropic';
+        protocol: 'openai' | 'anthropic' | 'gemini';
         anthropicThinking: 'omit' | 'disabled' | 'adaptive';
         userAgent: string;
     };

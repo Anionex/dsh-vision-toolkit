@@ -75,6 +75,14 @@ describe('resolveConfig', () => {
     expect(isBuiltInFreeVisionProvider(config.provider)).toBe(true)
   })
 
+  it('accepts the Google Gemini protocol and auto-fills its API version', () => {
+    const config = resolveConfig({ provider: { protocol: 'gemini', baseUrl: 'https://generativelanguage.googleapis.com/', model: 'gemini-3.6-flash' } })
+    expect(config.provider.protocol).toBe('gemini')
+    expect(config.provider.baseUrl).toBe('https://generativelanguage.googleapis.com/v1beta')
+    expect(resolveConfig({ provider: { protocol: 'gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta' } }).provider.baseUrl)
+      .toBe('https://generativelanguage.googleapis.com/v1beta')
+  })
+
   it('rejects a non-http baseUrl', () => {
     expect(() => resolveConfig({ provider: { baseUrl: 'ftp://x' } }))
       .toThrowError(/provider\.baseUrl/)

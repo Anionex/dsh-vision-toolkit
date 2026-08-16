@@ -46,8 +46,8 @@ export interface VisionToolkitConfig {
     credential?: string
     /** Multimodal model name. */
     model?: string
-    /** Vision request protocol: OpenAI Chat Completions or Anthropic Messages. */
-    protocol?: 'openai' | 'anthropic'
+    /** Vision request protocol: OpenAI Chat Completions, Anthropic Messages, or Google Gemini Interactions. */
+    protocol?: 'openai' | 'anthropic' | 'gemini'
     /** Anthropic thinking field behavior; `omit` leaves model defaults untouched. */
     anthropicThinking?: 'omit' | 'disabled' | 'adaptive'
     /** Outbound User-Agent for provider requests and connection tests. */
@@ -102,7 +102,7 @@ export const Config: Schema<VisionToolkitConfig> = z.object({
     baseUrl: z.string().default(BUILT_IN_FREE_VISION_BASE_URL),
     credential: z.string().default(BUILT_IN_FREE_VISION_CREDENTIAL),
     model: z.string().default(BUILT_IN_FREE_VISION_MODEL),
-    protocol: z.union(['openai', 'anthropic'] as const).default('openai'),
+    protocol: z.union(['openai', 'anthropic', 'gemini'] as const).default('openai'),
     anthropicThinking: z.union(['omit', 'disabled', 'adaptive'] as const).default('omit'),
     userAgent: z.string().default(DEFAULT_VISION_USER_AGENT),
   }),
@@ -130,7 +130,7 @@ export interface ResolvedVisionToolkitConfig {
     baseUrl: string
     credential: CredentialRef
     model: string
-    protocol: 'openai' | 'anthropic'
+    protocol: 'openai' | 'anthropic' | 'gemini'
     anthropicThinking: 'omit' | 'disabled' | 'adaptive'
     userAgent: string
   }
@@ -168,7 +168,7 @@ const MAX_CONCURRENCY = 16
 export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionToolkitConfig {
   const provider = config.provider ?? {}
   const runtime = config.runtime ?? {}
-  const baseUrl = (provider.baseUrl ?? BUILT_IN_FREE_VISION_BASE_URL).trim().replace(/\/+$/, '')
+  let baseUrl = (provider.baseUrl ?? BUILT_IN_FREE_VISION_BASE_URL).trim().replace(/\/+$/, '')
   if (!/^https?:\/\//i.test(baseUrl) || baseUrl.length <= 'https://'.length) {
     throw new VisionToolkitError('config', 'provider.baseUrl must be an http(s) URL')
   }
@@ -187,8 +187,17 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
     throw new VisionToolkitError('config', 'provider.model must not be empty')
   }
   const protocol = provider.protocol ?? 'openai'
-  if (protocol !== 'openai' && protocol !== 'anthropic') {
-    throw new VisionToolkitError('config', 'provider.protocol must be "openai" or "anthropic"')
+  if (protocol !== 'openai' && protocol !== 'anthropic' && protocol !== 'gemini') {
+    throw new VisionToolkitError('config', 'provider.protocol must be "openai", "anthropic", or "gemini"')
+  }
+  if (protocol === 'gemini') {
+    let pathname: string
+    try {
+      pathname = new URL(baseUrl).pathname
+    } catch {
+      throw new VisionToolkitError('config', 'provider.baseUrl must be an http(s) URL')
+    }
+    if (pathname === '' || pathname === '/') baseUrl = `${baseUrl}/v1beta`
   }
   const anthropicThinking = provider.anthropicThinking ?? 'omit'
   if (anthropicThinking !== 'omit' && anthropicThinking !== 'disabled' && anthropicThinking !== 'adaptive') {

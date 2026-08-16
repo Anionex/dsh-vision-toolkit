@@ -239,7 +239,7 @@ API Key:  不需要用户配置
       protocol: openai
 ```
 
-支持 OpenAI Chat Completions 兼容端点和 Anthropic Messages。Web Settings 页面还可以调整超时、图片限制、并发、运行时和图片输入变体。
+支持 OpenAI Chat Completions 兼容端点、Anthropic Messages 和 Google Gemini Interactions API。使用 Gemini 时配置 `protocol: gemini`，`baseUrl` 填 `https://generativelanguage.googleapis.com/v1beta`（也可以只填域名，插件会自动补全 `/v1beta`）。Gemini 请求使用 `x-goog-api-key` 认证，发送到 `/v1beta/interactions`。Web Settings 页面还可以调整超时、图片限制、并发、运行时和图片输入变体。
 
 ### 运行要求
 

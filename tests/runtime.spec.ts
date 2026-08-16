@@ -677,6 +677,36 @@ describe('VisionToolkitRuntime', () => {
       await new Promise<void>((resolve, reject) => server.close(error => error === undefined ? resolve() : reject(error)))
     }
   })
+
+  it('uses Gemini authentication for an explicit connection test', async () => {
+    const server = createServer((request, response) => {
+      expect(request.url).toBe('/v1beta/models')
+      expect(request.headers.authorization).toBeUndefined()
+      expect(request.headers['x-goog-api-key']).toBe('test-vision-key')
+      expect(request.headers['user-agent']).toBe('fixture-agent/1.0')
+      response.writeHead(200, { 'content-type': 'application/json' })
+      response.end('{"models":[]}')
+    })
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+    try {
+      const address = server.address()
+      if (address === null || typeof address === 'string') throw new Error('fixture server did not bind')
+      const { runtime } = await setup({
+        provider: {
+          baseUrl: `http://127.0.0.1:${address.port}/v1beta`,
+          credential: 'VISION_API_KEY',
+          model: 'gemini-3.6-flash',
+          protocol: 'gemini',
+          userAgent: 'fixture-agent/1.0',
+        },
+      })
+      const workspace = await tempWorkspace()
+      await expect(runtime.health(true, { signal, workspace }))
+        .resolves.toMatchObject({ connectionTested: true, checks: { service: { status: 'ok' } } })
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close(error => error === undefined ? resolve() : reject(error)))
+    }
+  })
 })
 
 describe('createDeadline', () => {
@@ -844,6 +874,28 @@ describe('upstream adapter version facts', () => {
       VISION_ANTHROPIC_THINKING: 'omit',
       VISION_API_KEY: 'test-vision-key',
       VISION_USER_AGENT: expect.stringContaining('Mozilla/5.0'),
+    })
+  })
+
+  it('forwards the resolved Gemini protocol to remote upstream tools', async () => {
+    const { ctx, adapter, runtime } = await setup({
+      provider: {
+        baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+        credential: 'VISION_API_KEY',
+        model: 'gemini-3.6-flash',
+        protocol: 'gemini',
+      },
+    })
+    const spawn = vi.spyOn(ctx.subprocess, 'spawn')
+
+    await adapter.run('glance', [SAMPLE_IMAGE], { signal, env: await runtime.resolveVisionEnv() })
+
+    expect(spawn).toHaveBeenCalledOnce()
+    expect(spawn.mock.calls[0]?.[0].env).toMatchObject({
+      VISION_API_PROTOCOL: 'gemini',
+      VISION_API_KEY: 'test-vision-key',
+      VISION_BASE_URL: 'https://generativelanguage.googleapis.com/v1beta',
+      VISION_MODEL: 'gemini-3.6-flash',
     })
   })
 

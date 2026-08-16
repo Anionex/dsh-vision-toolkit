@@ -239,7 +239,7 @@ You can also configure a Profile patch:
       protocol: openai
 ```
 
-OpenAI Chat Completions-compatible endpoints and Anthropic Messages are supported. The Web Settings panel exposes the full provider, runtime, timeout, image-limit, and image-input-variant configuration.
+OpenAI Chat Completions-compatible endpoints, Anthropic Messages, and the Google Gemini Interactions API are supported. For Gemini set `protocol: gemini` and `baseUrl: https://generativelanguage.googleapis.com/v1beta` (or just the host; `/v1beta` is filled in automatically). Gemini requests use `x-goog-api-key` against `/v1beta/interactions`. The Web Settings panel exposes the full provider, runtime, timeout, image-limit, and image-input-variant configuration.
 
 ### Requirements
 

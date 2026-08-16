@@ -13,6 +13,7 @@ from pathlib import Path
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 DEFAULT_PROMPT = "Please describe the contents of this image in detail."
@@ -139,6 +140,56 @@ def _anthropic_text(response: object) -> str:
     ).strip()
 
 
+def _gemini_image_source(url: str) -> dict[str, str]:
+    if url.startswith("data:"):
+        header, separator, data = url.partition(",")
+        if separator == "" or ";base64" not in header:
+            raise VisionError("Gemini image data URLs must use base64 encoding")
+        media_type = header[5:].split(";", 1)[0]
+        if not media_type:
+            raise VisionError("Gemini image data URLs must include a media type")
+        return {"type": "image", "data": data, "mime_type": media_type}
+    path = urllib.parse.urlsplit(url).path
+    mime, _ = mimetypes.guess_type(path)
+    if not mime:
+        mime = {
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".gif": "image/gif",
+            ".webp": "image/webp",
+        }.get(Path(path).suffix.lower(), "image/jpeg")
+    return {"type": "image", "uri": url, "mime_type": mime}
+
+
+def _gemini_text(response: object) -> str:
+    if not isinstance(response, dict) or not isinstance(response.get("steps"), list):
+        return ""
+    for step in reversed(response["steps"]):
+        if not isinstance(step, dict) or step.get("type") != "model_output":
+            continue
+        content = step.get("content")
+        if not isinstance(content, list):
+            continue
+        text = "\n".join(
+            part["text"]
+            for part in content
+            if isinstance(part, dict) and part.get("type") == "text"
+            and isinstance(part.get("text"), str)
+        ).strip()
+        if text:
+            return text
+    return ""
+
+
+def _gemini_endpoint(base_url: str) -> str:
+    """Resolve the Interactions endpoint, auto-filling the API version when needed."""
+    if base_url.endswith("/interactions"):
+        return ""
+    path = urllib.parse.urlsplit(base_url).path.rstrip("/")
+    return "/v1beta/interactions" if path == "" else "/interactions"
+
+
 def _redact(text: str, *secrets: str) -> str:
     for secret in secrets:
         if secret:
@@ -223,9 +274,19 @@ def describe_image(image_url: str | list[str], prompt: str | None = None, max_to
             payload["thinking"] = {"type": thinking}
         endpoint = "/messages"
         extract_text = _anthropic_text
+    elif protocol == "gemini":
+        payload = {
+            "model": model,
+            "store": False,
+            "input": [{"type": "text", "text": text}] + [
+                _gemini_image_source(url) for url in urls
+            ],
+        }
+        endpoint = _gemini_endpoint(base_url)
+        extract_text = _gemini_text
     else:
         raise VisionError(
-            "Unsupported VISION_API_PROTOCOL; use chat_completions, responses, or anthropic"
+            "Unsupported VISION_API_PROTOCOL; use chat_completions, responses, anthropic, or gemini"
         )
     headers = {
         "Content-Type": "application/json",
@@ -236,6 +297,8 @@ def describe_image(image_url: str | list[str], prompt: str | None = None, max_to
             "x-api-key": api_key,
             "anthropic-version": "2023-06-01",
         })
+    elif protocol == "gemini":
+        headers["x-goog-api-key"] = api_key
     else:
         headers["Authorization"] = "Bearer " + api_key
     request = urllib.request.Request(base_url + endpoint, data=json.dumps(payload).encode(), headers=headers)
