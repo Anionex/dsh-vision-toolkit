@@ -4,6 +4,12 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+## [0.1.15] - 2026-08-16
+
+### Fixed
+
+- Fixed the Settings runtime health check reporting a false artifact-directory failure when DSH Desktop starts from a read-only installation directory. The check now uses the prepared runtime home and validates output readiness independently from session-relative input directories.
+
 ## [0.1.14] - 2026-08-16
 
 ### Changed
