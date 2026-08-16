@@ -167,9 +167,11 @@ The plugin provides 10 tools that can be called independently or composed into a
 | `vision_long_screenshot_ocr` | “Read this entire long screenshot” | Markdown, chunks, manifest, and audit output |
 | `vision_extract_foreground` | “Remove the background from this subject” | Transparent PNG |
 | `vision_dominant_colors` | “Which colors dominate this area?” | Palette or ranked candidate colors |
-| `vision_html_screenshot` | “Render this local page at an exact viewport” | PNG |
+| `vision_html_screenshot` | “Render this local page at an exact viewport or capture the full page” | PNG and optional CSS `pageHeight` |
 
 Coordinates always use original-image pixels in `x1,y1,x2,y2` form, so grounding output can feed directly into cropping, tracing, or later automation.
+
+For a long HTML document, pass `fullPage=true`. The requested width and height remain the layout viewport, while the resulting PNG covers the complete document and reports `pageHeight` in CSS pixels.
 
 ## How it works
 

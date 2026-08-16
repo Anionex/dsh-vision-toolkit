@@ -524,8 +524,40 @@ describe('VisionToolkitRuntime', () => {
       height: 360,
       artifact: { mimeType: 'image/png', kind: 'image', sourceTool: 'vision_html_screenshot' },
     })
+    expect(result).not.toHaveProperty('pageHeight')
     await expect(runtime.htmlScreenshot({ source: 'https://example.com' }, { signal, workspace }))
       .rejects.toMatchObject({ code: 'input' })
+  })
+
+  it('captures a full HTML document and reports its CSS page height', async () => {
+    const { adapter, runtime } = await setup()
+    const workspace = await tempWorkspace()
+    await writeFile(join(workspace, 'page.html'), '<!doctype html><title>fixture</title>\n')
+    vi.spyOn(adapter, 'run').mockImplementationOnce(async (_tool, args) => {
+      const outputIndex = args.indexOf('-o')
+      const outputPath = outputIndex === -1 ? undefined : args[outputIndex + 1]
+      if (outputPath === undefined) throw new Error('screenshot output path was not provided')
+      expect(args).toContain('--full-page')
+      expect(args).toContain('--max-pixels')
+      await copyFile(SAMPLE_IMAGE, outputPath)
+      return {
+        stdout: `wrote ${outputPath} (256x256; pageHeight=256)\n`,
+        stderr: '',
+        stdoutTruncated: false,
+        stderrTruncated: false,
+        outcome: { exitCode: 0, signal: null },
+      }
+    })
+    const result = await runtime.htmlScreenshot(
+      { source: 'page.html', width: 256, height: 180, fullPage: true },
+      { signal, workspace },
+    )
+    expect(result).toMatchObject({
+      viewport: { width: 256, height: 180, scale: 1 },
+      width: 256,
+      height: 256,
+      pageHeight: 256,
+    })
   })
 
   it('reports health without network access and tests /models only when explicit', async () => {

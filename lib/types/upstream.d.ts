@@ -140,6 +140,7 @@ export interface HtmlScreenshotOutput {
     outputPath: string;
     width: number;
     height: number;
+    pageHeight?: number;
 }
 /** Parse one numbered upstream location line (`N. position label x1: ..., ...`). */
 export declare function parseLocationLine(line: string): LocatedElement | undefined;
