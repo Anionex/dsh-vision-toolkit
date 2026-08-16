@@ -4,6 +4,10 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+### Added
+
+- Added `fullPage=true` to `vision_html_screenshot`; the Chrome DevTools Protocol path preserves the requested layout viewport, captures the complete document, and reports `pageHeight` in CSS pixels while leaving fixed-viewport captures unchanged.
+
 ### Fixed
 
 - Fixed managed runtime creation failing with exit status 101 when the Microsoft Store Python is used on Windows: the venv is now created with `--without-pip`, the staged `pyvenv.cfg` `home`/`executable` are rewritten to the app execution alias directory, and pip is bootstrapped explicitly.

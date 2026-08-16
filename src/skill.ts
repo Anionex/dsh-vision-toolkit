@@ -45,7 +45,7 @@ never enter the model tool set, before or after Skill activation.
 | Split and merge a tall screenshot OCR | vision_long_screenshot_ocr |
 | Extract an icon/logo on transparency | vision_extract_foreground |
 | Measure a palette or choose among exact colors | vision_dominant_colors |
-| Render a local HTML implementation to PNG | vision_html_screenshot |
+| Render a local HTML implementation to PNG (viewport or full document) | vision_html_screenshot |
 
 vision_glance, vision_ground, vision_detect, and non-split long OCR send the
 validated image bytes to the external vision service configured by the user.
@@ -86,7 +86,7 @@ be opened or downloaded by the UI and passed to later tools.
 - vision_long_screenshot_ocr -> merged Markdown, manifest JSON, boundary audit,
   chunk PNGs, and OCR sidecars
 - vision_extract_foreground -> transparent PNG
-- vision_html_screenshot -> PNG
+- vision_html_screenshot -> PNG (fullPage=true also reports the CSS pageHeight)
 
 ## Reliable workflows
 
@@ -109,7 +109,8 @@ request. Reuse the same runName with resume=true to retain matching sidecars.
 2. vision_dominant_colors for measured colors.
 3. vision_extract_foreground or vision_trace for reusable assets.
 4. Implement a local HTML file.
-5. vision_html_screenshot with the target viewport.
+5. vision_html_screenshot with the target viewport; use fullPage=true when the
+   complete document is needed without guessing taller viewports.
 6. vision_pixel_diff against the reference.
 7. Inspect the worst region and iterate until the measured differences are
    acceptable.
@@ -127,6 +128,9 @@ vision_glance with ocr=true when the text content matters.
   invent nested or absolute output paths.
 - vision_html_screenshot accepts local .html/.htm files only, not URLs or data
   URIs.
+- vision_html_screenshot keeps the requested viewport for layout; with
+  fullPage=true, it captures the complete document and returns pageHeight
+  in CSS pixels.
 - Disabling or unloading the plugin cancels its active visual operations before
   unregistering the native tools and skill.
 - Do not infer image contents after a tool error. Fix the path, limits,

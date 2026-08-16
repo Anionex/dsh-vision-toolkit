@@ -470,6 +470,13 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
       const blocks = definition?.output.render({}, { kind: 'ok' })
       expect(blocks?.[0]).toMatchObject({ type: 'text' })
     }
+    const htmlScreenshot = ctx.tools.get('vision_html_screenshot', agent)
+    expect(htmlScreenshot?.parameters).toMatchObject({
+      properties: { fullPage: { type: 'boolean' } },
+    })
+    expect(htmlScreenshot?.output.schema).toMatchObject({
+      properties: { pageHeight: { type: 'integer' } },
+    })
     expect(ctx.tools.get('vision_toolkit_health')).toBeUndefined()
     expect(ctx.tools.get('vision_toolkit_version')).toBeUndefined()
   })

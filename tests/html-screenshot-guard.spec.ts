@@ -47,8 +47,8 @@ describe.skipIf(process.platform === 'win32')('HTML screenshot Chrome isolation 
       'args=sys.argv[2:]',
       'output=args[args.index("-o")+1]',
       'command=[chrome,"--headless=new",f"--screenshot={output}",source]',
-      'result=subprocess.run(command,text=True,capture_output=True)',
-      'if result.returncode != 0: raise SystemExit(result.returncode)',
+      'process=subprocess.Popen(command)',
+      'if process.wait() != 0: raise SystemExit(process.returncode)',
       'print(f"wrote {output} (1x1)")',
       '',
     ].join('\n'))

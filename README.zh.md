@@ -167,9 +167,11 @@ dsh plugin --profile headless add @anionex/dsh-vision-toolkit
 | `vision_long_screenshot_ocr` | “读完这张很长的截图” | Markdown、分块图、清单和审计结果 |
 | `vision_extract_foreground` | “把主体抠出来” | 透明 PNG |
 | `vision_dominant_colors` | “这块区域用了哪些主要颜色？” | 主色板或候选色排序 |
-| `vision_html_screenshot` | “把本地页面渲染成固定尺寸截图” | PNG |
+| `vision_html_screenshot` | “按精确视口渲染本地页面，或一次捕获整页” | PNG 和可选的 CSS `pageHeight` |
 
 坐标始终使用原图像素格式 `x1,y1,x2,y2`，因此定位结果可以直接交给裁剪、描摹或后续自动化。
+
+对于长 HTML 文档，传入 `fullPage=true`。请求的宽高仍作为布局视口，生成的 PNG 会覆盖完整文档，并以 CSS 像素返回 `pageHeight`。
 
 ## 工作原理
 
