@@ -387,6 +387,41 @@ describe('Vision Toolkit client plugin', () => {
     })
   })
 
+  it('blocks plugin installation while Settings or the API key field has unsaved changes', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ ok: true, value: settingsSnapshot() }))
+      .mockResolvedValueOnce(jsonResponse({
+        ok: true,
+        value: {
+          supported: true,
+          profile: 'web',
+          dependencySpec: '0.1.0',
+          currentVersion: '0.1.0',
+          latestVersion: '0.2.0',
+          updateAvailable: true,
+          checkedAt: '2026-08-16T12:00:00.000Z',
+        },
+      }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { ctx, registrations } = fakeClientContext()
+    apply(ctx as never)
+    const settings = registrations.find(entry => entry.options.name === 'settings.section')
+    if (settings === undefined) throw new Error('Settings component was not registered')
+    render(createElement(settings.component, {
+      controller: new VisionSettingsController(),
+      t: (key: string) => key,
+    }))
+
+    fireEvent.click(await screen.findByRole('button', { name: 'checkUpdate' }))
+    const updateButton = await screen.findByRole('button', { name: 'updateNow' }) as HTMLButtonElement
+    expect(updateButton.disabled).toBe(false)
+
+    fireEvent.change(screen.getByLabelText('baseUrl'), { target: { value: 'https://changed.example/v1' } })
+    expect(updateButton.disabled).toBe(true)
+    expect(screen.getByText('updateSaveFirst')).toBeTruthy()
+  })
+
   it('unlocks API key input when the built-in provider changes to a custom endpoint', async () => {
     const initial = settingsSnapshot()
     initial.settings.value.provider = {

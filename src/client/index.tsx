@@ -110,6 +110,11 @@ const en = {
   updateReasonLocalSource: 'This profile uses a local, workspace, URL, or git installation; update that source manually so local work is not overwritten.',
   updateReasonReadOnly: 'The profile package manifest is read-only.',
   updateReasonPnpm: 'pnpm is unavailable in the DSH execution environment.',
+  updateReasonPlatform: 'Automatic restart is unavailable on this operating system.',
+  updateReasonRestartUnmanaged: 'Detached self-restart is disabled. Use a supported process manager, or explicitly opt in with DSH_VISION_TOOLKIT_ALLOW_DETACHED_RESTART=1 for an unsupervised Web process.',
+  updateSaveFirst: 'Save or discard the current Settings and API key changes before updating the plugin.',
+  restartTimedOut: 'DSH Web did not return with the target plugin version. Check the restart log and restart the Web profile through its original process manager.',
+  restartRolledBack: 'The new plugin did not become ready, so the previous version was restored. Check the restart log before trying again.',
   pluginKind: 'DSH native plugin',
   runtimeUnavailable: 'Runtime unavailable',
   runtimeCandidateRejected: 'Last runtime candidate was rejected; the active generation remains available.',
@@ -281,6 +286,11 @@ const zh: Record<LocaleKey, string> = {
   updateReasonLocalSource: '当前使用本地、workspace、URL 或 git 安装；为避免覆盖本地修改，请手动更新对应来源。',
   updateReasonReadOnly: '当前 Profile 的 package.json 不可写。',
   updateReasonPnpm: 'DSH 运行环境中找不到 pnpm。',
+  updateReasonPlatform: '当前操作系统不支持安全的自动重启。',
+  updateReasonRestartUnmanaged: '默认禁用脱离原进程管理器的自重启。仅对无人监管的 Web 进程明确设置 DSH_VISION_TOOLKIT_ALLOW_DETACHED_RESTART=1 后开放。',
+  updateSaveFirst: '更新插件前，请先保存或放弃当前 Settings 和 API 密钥修改。',
+  restartTimedOut: 'DSH Web 未能以目标插件版本恢复。请检查重启日志，并通过原进程管理器重启 Web Profile。',
+  restartRolledBack: '新插件未能就绪，系统已恢复上一版本。再次尝试前请检查重启日志。',
   pluginKind: 'DSH 原生插件',
   runtimeUnavailable: '运行环境尚未就绪',
   runtimeCandidateRejected: '新设置未能生效，仍在使用上一次可用的设置。',
@@ -449,9 +459,12 @@ type PluginUpdateUnavailableReason =
   | 'unsupported-install-source'
   | 'profile-read-only'
   | 'pnpm-unavailable'
+  | 'unsupported-platform'
+  | 'restart-unmanaged'
 
 interface PluginUpdateCapability {
   supported: boolean
+  checkSupported?: boolean
   profile?: string
   dependencySpec?: string
   reason?: PluginUpdateUnavailableReason
@@ -999,6 +1012,10 @@ export class VisionSettingsController {
       this.set({ ...this.state, action: undefined, error: error instanceof Error ? error.message : String(error) })
     }
   }
+
+  reportRestartTimeout(message: string): void {
+    this.set({ ...this.state, restart: undefined, message: undefined, error: message })
+  }
 }
 
 interface Draft {
@@ -1076,6 +1093,14 @@ function valueOf(draft: Draft, t: Translate): SettingsValue {
       ...(draft.python.trim().length === 0 ? {} : { python: draft.python.trim() }),
     },
     allowedDirs: draft.allowedDirs.split(/\r?\n/).map(entry => entry.trim()).filter(Boolean),
+  }
+}
+
+function settingsDraftChanged(draft: Draft, saved: SettingsValue, t: Translate): boolean {
+  try {
+    return JSON.stringify(valueOf(draft, t)) !== JSON.stringify(valueOf(draftOf(saved), t))
+  } catch {
+    return true
   }
 }
 
@@ -1184,6 +1209,8 @@ const UPDATE_REASON_KEYS: Record<PluginUpdateUnavailableReason, LocaleKey> = {
   'unsupported-install-source': 'updateReasonLocalSource',
   'profile-read-only': 'updateReasonReadOnly',
   'pnpm-unavailable': 'updateReasonPnpm',
+  'unsupported-platform': 'updateReasonPlatform',
+  'restart-unmanaged': 'updateReasonRestartUnmanaged',
 }
 
 function wait(delayMs: number): Promise<void> {
@@ -1207,7 +1234,8 @@ function LoadedSettings({ controller, t }: SettingsInjected) {
     let cancelled = false
     void (async () => {
       await wait(restart.retryAfterMs)
-      const deadline = Date.now() + 60_000
+      const deadline = Date.now() + 190_000
+      let outageSeen = false
       while (!cancelled && Date.now() < deadline) {
         try {
           const current = await apiRequest<SettingsSnapshot>()
@@ -1215,14 +1243,20 @@ function LoadedSettings({ controller, t }: SettingsInjected) {
             window.location.reload()
             return
           }
+          if (outageSeen && current.release.pluginVersion === restart.fromVersion) {
+            controller.reportRestartTimeout(t('restartRolledBack'))
+            return
+          }
         } catch {
           // The expected outage while the replacement process starts.
+          outageSeen = true
         }
         await wait(1_000)
       }
+      if (!cancelled) controller.reportRestartTimeout(t('restartTimedOut'))
     })()
     return () => { cancelled = true }
-  }, [state.restart])
+  }, [controller, state.restart, t])
 
   if (state.status === 'idle' || (state.status === 'loading' && snapshot === undefined)) {
     return <div className="dvt-settings"><div className="dvt-loading">{t('testing')}</div></div>
@@ -1264,6 +1298,8 @@ function LoadedSettings({ controller, t }: SettingsInjected) {
   const updateCapability = pluginUpdate ?? snapshot.release.update
   const latestVersion = pluginUpdate?.latestVersion
   const updateReason = updateCapability.reason === undefined ? undefined : t(UPDATE_REASON_KEYS[updateCapability.reason])
+  const updateCheckSupported = updateCapability.checkSupported ?? updateCapability.supported
+  const updateHasUnsavedChanges = apiKey.length > 0 || settingsDraftChanged(draft, snapshot.settings.value, t)
   const applyUpdate = (): void => {
     if (latestVersion === undefined) return
     if (!window.confirm(t('updateConfirm', { version: latestVersion }))) return
@@ -1312,11 +1348,12 @@ function LoadedSettings({ controller, t }: SettingsInjected) {
           <div><span>{t('updateProfile')}</span><strong>{updateCapability.profile ?? '—'}</strong></div>
         </div>
         {!updateCapability.supported ? <div className="dvt-alert warning"><strong>{t('updateUnsupported')}</strong><span>{updateReason}</span></div> : null}
+        {updateCapability.supported && updateHasUnsavedChanges ? <div className="dvt-alert warning">{t('updateSaveFirst')}</div> : null}
         {pluginUpdate?.supported && pluginUpdate.updateAvailable && latestVersion !== undefined ? <p className="dvt-muted">{t('updateAvailableDetail', { version: latestVersion })}</p> : null}
         {pluginUpdate?.supported && !pluginUpdate.updateAvailable && latestVersion !== undefined ? <p className="dvt-muted">{t('upToDateDetail', { version: latestVersion })}</p> : null}
         <div className="dvt-actions">
-          <Button variant="outline" disabled={busy || !updateCapability.supported || state.restart !== undefined} onClick={() => { void controller.checkUpdate() }}>{state.action === 'check-update' ? t('checkingUpdate') : t('checkUpdate')}</Button>
-          {pluginUpdate?.updateAvailable && latestVersion !== undefined ? <Button variant="primary" disabled={busy || state.restart !== undefined} onClick={applyUpdate}>{state.action === 'apply-update' ? t('updatingPlugin') : t('updateNow')}</Button> : null}
+          <Button variant="outline" disabled={busy || !updateCheckSupported || state.restart !== undefined} onClick={() => { void controller.checkUpdate() }}>{state.action === 'check-update' ? t('checkingUpdate') : t('checkUpdate')}</Button>
+          {pluginUpdate?.supported && pluginUpdate.updateAvailable && latestVersion !== undefined ? <Button variant="primary" disabled={busy || state.restart !== undefined || updateHasUnsavedChanges} onClick={applyUpdate}>{state.action === 'apply-update' ? t('updatingPlugin') : t('updateNow')}</Button> : null}
         </div>
       </section>
 

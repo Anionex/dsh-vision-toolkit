@@ -8,8 +8,8 @@
  */
 
 import { spawn } from 'node:child_process'
-import { closeSync, constants as fsConstants, mkdirSync, openSync } from 'node:fs'
-import { access, readFile, readdir, realpath } from 'node:fs/promises'
+import { closeSync, constants as fsConstants, fchmodSync, mkdirSync, openSync } from 'node:fs'
+import { access, open as openFile, readFile, readdir, realpath, unlink } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -22,6 +22,8 @@ const UPDATE_TIMEOUT_MS = 180_000
 const RESTART_DELAY_MS = 750
 const RESTART_RETRY_AFTER_MS = 1_200
 const COMMAND_OUTPUT_BYTES = 128 * 1024
+const SETTINGS_ROUTE = '/_dsh/vision-toolkit/settings'
+const UPDATE_LOCK_FILE = '.dsh-vision-toolkit-update.lock'
 
 export type PluginUpdateUnavailableReason =
   | 'profile-not-found'
@@ -29,9 +31,12 @@ export type PluginUpdateUnavailableReason =
   | 'unsupported-install-source'
   | 'profile-read-only'
   | 'pnpm-unavailable'
+  | 'unsupported-platform'
+  | 'restart-unmanaged'
 
 export interface PluginUpdateCapability {
   supported: boolean
+  checkSupported?: boolean
   profile?: string
   dependencySpec?: string
   reason?: PluginUpdateUnavailableReason
@@ -83,6 +88,13 @@ export interface RestartRequest {
   args: readonly string[]
   cwd: string
   logPath: string
+  lockPath: string
+  profileDir: string
+  pnpmPath: string
+  packageName: string
+  fromVersion: string
+  toVersion: string
+  healthUrl: string
 }
 
 export interface PluginUpdateServiceOptions {
@@ -94,6 +106,9 @@ export interface PluginUpdateServiceOptions {
   prepareRestart?: (request: RestartRequest) => void
   terminateCurrent?: () => void
   schedule?: (callback: () => void, delayMs: number) => void
+  allowDetachedRestart?: boolean
+  healthUrl?: string
+  platform?: NodeJS.Platform
 }
 
 interface PackageManifest {
@@ -109,37 +124,110 @@ interface ParsedVersion {
   prerelease: readonly (number | string)[]
 }
 
-const RESTART_HELPER = String.raw`
-const { spawn } = require('node:child_process')
-const payload = JSON.parse(Buffer.from(process.argv[1], 'base64url').toString('utf8'))
-const deadline = Date.now() + 120000
-const alive = () => {
-  try { process.kill(payload.pid, 0); return true }
-  catch (error) { return error && error.code === 'EPERM' }
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && 'code' in error
 }
-const launch = () => {
-  const child = spawn(payload.execPath, payload.args, {
-    cwd: payload.cwd,
+
+/** @internal Restart helper source exported for lifecycle integration tests. */
+export const PLUGIN_RESTART_HELPER_SOURCE = String.raw`
+const { spawn } = require('node:child_process')
+const { unlinkSync } = require('node:fs')
+const payload = JSON.parse(Buffer.from(process.argv[1], 'base64url').toString('utf8'))
+const sleep = delay => new Promise(resolve => setTimeout(resolve, delay))
+const log = message => console.log('[dsh-vision-toolkit]', message)
+const alive = pid => {
+  try { process.kill(pid, 0); return true }
+  catch (error) { return Boolean(error && error.code === 'EPERM') }
+}
+const removeLock = () => {
+  try { unlinkSync(payload.lockPath) }
+  catch (error) { if (!error || error.code !== 'ENOENT') console.error('[dsh-vision-toolkit] lock cleanup failed:', error) }
+}
+const runPnpm = version => new Promise(resolve => {
+  const child = spawn(payload.pnpmPath, [
+    'add', payload.packageName + '@' + version, '--save-exact', '--yes', '--reporter=append-only',
+  ], {
+    cwd: payload.profileDir,
     env: process.env,
     stdio: 'inherit',
-    detached: true,
     windowsHide: true,
   })
   child.once('error', error => {
-    console.error('[dsh-vision-toolkit] replacement process failed:', error)
+    console.error('[dsh-vision-toolkit] rollback pnpm failed:', error)
+    resolve(false)
+  })
+  child.once('exit', code => { resolve(code === 0) })
+})
+const launch = () => spawn(payload.execPath, payload.args, {
+  cwd: payload.cwd,
+  env: process.env,
+  stdio: 'ignore',
+  detached: true,
+  windowsHide: true,
+})
+const ready = async (child, version, timeoutMs) => {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (child.exitCode !== null || child.signalCode !== null) return false
+    try {
+      const response = await fetch(payload.healthUrl, { signal: AbortSignal.timeout(2000) })
+      const body = await response.json()
+      if (response.ok && body && body.ok && body.value && body.value.release
+        && body.value.release.pluginVersion === version) return true
+    } catch {}
+    await sleep(500)
+  }
+  return false
+}
+const stop = async child => {
+  if (child.exitCode !== null || child.signalCode !== null) return
+  try { child.kill('SIGTERM') } catch {}
+  const deadline = Date.now() + 5000
+  while (Date.now() < deadline && child.exitCode === null && child.signalCode === null) await sleep(100)
+  if (child.exitCode === null && child.signalCode === null) {
+    try { child.kill('SIGKILL') } catch {}
+  }
+}
+const restore = async () => {
+  log('replacement did not become ready; restoring ' + payload.fromVersion)
+  if (!await runPnpm(payload.fromVersion)) return false
+  const child = launch()
+  child.once('error', error => { console.error('[dsh-vision-toolkit] rollback launch failed:', error) })
+  if (!await ready(child, payload.fromVersion, 60000)) {
+    await stop(child)
+    return false
+  }
+  child.unref()
+  log('rollback is serving ' + payload.fromVersion)
+  return true
+}
+const main = async () => {
+  const exitDeadline = Date.now() + 120000
+  while (alive(payload.pid) && Date.now() < exitDeadline) await sleep(100)
+  if (alive(payload.pid)) {
+    log('old process did not exit; restoring package files without replacing the running process')
+    await runPnpm(payload.fromVersion)
+    removeLock()
     process.exit(1)
-  })
-  child.once('spawn', () => {
+  }
+  const child = launch()
+  child.once('error', error => { console.error('[dsh-vision-toolkit] replacement launch failed:', error) })
+  if (await ready(child, payload.toVersion, 60000)) {
     child.unref()
+    removeLock()
+    log('replacement is serving ' + payload.toVersion)
     process.exit(0)
-  })
+  }
+  await stop(child)
+  const restored = await restore()
+  removeLock()
+  process.exit(restored ? 2 : 1)
 }
-const wait = () => {
-  if (!alive()) return launch()
-  if (Date.now() >= deadline) process.exit(1)
-  setTimeout(wait, 100)
-}
-wait()
+main().catch(error => {
+  console.error('[dsh-vision-toolkit] restart helper failed:', error)
+  removeLock()
+  process.exit(1)
+})
 `
 
 function parseSemver(value: string): ParsedVersion | undefined {
@@ -220,12 +308,30 @@ function defaultDshHome(): string {
   return process.env.DSH_HOME?.trim() || join(homedir(), '.dsh')
 }
 
+function optionValue(argv: readonly string[], name: string): string | undefined {
+  for (let index = 0; index < argv.length; index += 1) {
+    const value = argv[index]
+    if (value?.startsWith(`${name}=`)) return value.slice(name.length + 1)
+    if (value === name) return argv[index + 1]
+  }
+  return undefined
+}
+
+function defaultHealthUrl(argv: readonly string[]): string {
+  const configuredHost = optionValue(argv, '--host')?.trim() || '127.0.0.1'
+  const host = configuredHost === '0.0.0.0' || configuredHost === '::' ? '127.0.0.1' : configuredHost
+  const port = optionValue(argv, '--port')?.trim() || '3080'
+  const authority = host.includes(':') && !host.startsWith('[') ? `[${host}]` : host
+  return `http://${authority}:${port}${SETTINGS_ROUTE}`
+}
+
 function defaultPrepareRestart(request: RestartRequest): void {
   const payload = Buffer.from(JSON.stringify(request)).toString('base64url')
   mkdirSync(dirname(request.logPath), { recursive: true })
-  const log = openSync(request.logPath, 'a')
+  const log = openSync(request.logPath, 'w', 0o600)
   try {
-    const helper = spawn(process.execPath, ['-e', RESTART_HELPER, payload], {
+    fchmodSync(log, 0o600)
+    const helper = spawn(process.execPath, ['-e', PLUGIN_RESTART_HELPER_SOURCE, payload], {
       cwd: request.cwd,
       env: process.env,
       stdio: ['ignore', log, log],
@@ -245,10 +351,15 @@ function defaultSchedule(callback: () => void, delayMs: number): void {
 }
 
 function publicCommandFailure(result: CommandResult, fallback: string): string {
-  const detail = result.stderr.trim() || result.stdout.trim()
+  const detail = (result.stderr.trim() || result.stdout.trim())
+    .replaceAll(homedir(), '~')
+    .replace(/([a-z][a-z0-9+.-]*:\/\/)[^\s/@]+:[^\s/@]+@/giu, '$1***:***@')
+    .replace(/((?:authorization|proxy-authorization)\s*[:=]\s*(?:bearer|basic)\s+)\S+/giu, '$1***')
+    .replace(/((?:_authToken|token|password|_password)\s*[:=]\s*)\S+/giu, '$1***')
+    .replace(/\bnpm_[A-Za-z0-9_-]+\b/gu, 'npm_***')
   if (result.timedOut) return `${fallback}: command timed out`
   if (detail.length === 0) return `${fallback}: pnpm exited with code ${String(result.exitCode)}`
-  return `${fallback}: ${detail.slice(-4_000)}`
+  return `${fallback}: ${detail.slice(-1_000)}`
 }
 
 /** Profile-aware updater used by the same-origin Settings backend. */
@@ -261,7 +372,9 @@ export class VisionToolkitPluginUpdateService {
   private readonly prepareRestart: (request: RestartRequest) => void
   private readonly terminateCurrent: () => void
   private readonly schedule: (callback: () => void, delayMs: number) => void
-  private locating?: Promise<ProfileInstall | PluginUpdateCapability>
+  private readonly allowDetachedRestart: boolean
+  private readonly healthUrl: string
+  private readonly platform: NodeJS.Platform
   private updating = false
 
   constructor(
@@ -277,6 +390,10 @@ export class VisionToolkitPluginUpdateService {
     this.prepareRestart = options.prepareRestart ?? defaultPrepareRestart
     this.terminateCurrent = options.terminateCurrent ?? (() => { process.kill(process.pid, 'SIGTERM') })
     this.schedule = options.schedule ?? defaultSchedule
+    this.allowDetachedRestart = options.allowDetachedRestart
+      ?? process.env.DSH_VISION_TOOLKIT_ALLOW_DETACHED_RESTART === '1'
+    this.healthUrl = options.healthUrl ?? defaultHealthUrl(this.argv)
+    this.platform = options.platform ?? process.platform
   }
 
   private async inspectProfile(
@@ -331,48 +448,114 @@ export class VisionToolkitPluginUpdateService {
   }
 
   private async profile(): Promise<ProfileInstall | PluginUpdateCapability> {
-    return await (this.locating ??= this.locateProfile())
+    return await this.locateProfile()
   }
 
-  /** Report whether the current installation can be safely replaced in place. */
-  async capability(): Promise<PluginUpdateCapability> {
-    const profile = await this.profile()
-    if ('supported' in profile) return profile
+  private async evaluate(): Promise<{
+    capability: PluginUpdateCapability
+    profile?: ProfileInstall
+    pnpmPath?: string
+  }> {
+    const checked = await this.checkContext()
+    if (checked.profile === undefined || checked.pnpmPath === undefined) return { capability: checked.capability }
+    const { profile, pnpmPath } = checked
     if (!registryInstallSpec(profile.dependencySpec)) {
       return {
-        supported: false,
-        profile: profile.profile,
-        dependencySpec: profile.dependencySpec,
-        reason: 'unsupported-install-source',
+        capability: {
+          supported: false,
+          checkSupported: true,
+          profile: profile.profile,
+          dependencySpec: profile.dependencySpec,
+          reason: 'unsupported-install-source',
+        },
       }
     }
     try {
       await access(join(profile.profileDir, 'package.json'), fsConstants.W_OK)
     } catch {
       return {
-        supported: false,
-        profile: profile.profile,
-        dependencySpec: profile.dependencySpec,
-        reason: 'profile-read-only',
+        capability: {
+          supported: false,
+          checkSupported: true,
+          profile: profile.profile,
+          dependencySpec: profile.dependencySpec,
+          reason: 'profile-read-only',
+        },
       }
     }
-    try {
-      await this.ctx.subprocess.resolveExecutable('pnpm')
-    } catch {
+    if (this.platform === 'win32') {
       return {
-        supported: false,
-        profile: profile.profile,
-        dependencySpec: profile.dependencySpec,
-        reason: 'pnpm-unavailable',
+        capability: {
+          supported: false,
+          checkSupported: true,
+          profile: profile.profile,
+          dependencySpec: profile.dependencySpec,
+          reason: 'unsupported-platform',
+        },
       }
     }
-    return { supported: true, profile: profile.profile, dependencySpec: profile.dependencySpec }
+    if (!this.allowDetachedRestart) {
+      return {
+        capability: {
+          supported: false,
+          checkSupported: true,
+          profile: profile.profile,
+          dependencySpec: profile.dependencySpec,
+          reason: 'restart-unmanaged',
+        },
+      }
+    }
+    return {
+      capability: { supported: true, checkSupported: true, profile: profile.profile, dependencySpec: profile.dependencySpec },
+      profile,
+      pnpmPath,
+    }
   }
 
-  private async runPnpm(args: readonly string[], timeoutMs: number): Promise<CommandResult> {
+  private async checkContext(): Promise<{
+    capability: PluginUpdateCapability
+    profile?: ProfileInstall
+    pnpmPath?: string
+  }> {
     const profile = await this.profile()
-    if ('supported' in profile) throw new PluginUpdateError('update-unavailable', 'Plugin update is unavailable for this installation')
-    const pnpm = await this.ctx.subprocess.resolveExecutable('pnpm')
+    if ('supported' in profile) return { capability: { ...profile, checkSupported: false } }
+    let pnpmPath: string
+    try {
+      pnpmPath = await this.ctx.subprocess.resolveExecutable('pnpm')
+    } catch {
+      return {
+        capability: {
+          supported: false,
+          checkSupported: false,
+          profile: profile.profile,
+          dependencySpec: profile.dependencySpec,
+          reason: 'pnpm-unavailable',
+        },
+      }
+    }
+    return {
+      capability: {
+        supported: false,
+        checkSupported: true,
+        profile: profile.profile,
+        dependencySpec: profile.dependencySpec,
+      },
+      profile,
+      pnpmPath,
+    }
+  }
+
+  /** Report whether the current installation can be safely replaced in place. */
+  async capability(): Promise<PluginUpdateCapability> {
+    return (await this.evaluate()).capability
+  }
+
+  private async runPnpm(
+    args: readonly string[],
+    timeoutMs: number,
+    profile: ProfileInstall,
+    pnpmPath: string,
+  ): Promise<CommandResult> {
     const controller = new AbortController()
     let timedOut = false
     const timeout = setTimeout(() => {
@@ -381,7 +564,7 @@ export class VisionToolkitPluginUpdateService {
     }, timeoutMs)
     try {
       const handle = this.ctx.subprocess.spawn({
-        argv: [pnpm, ...args],
+        argv: [pnpmPath, ...args],
         cwd: profile.profileDir,
         stdio: {
           stdin: 'ignore',
@@ -406,18 +589,65 @@ export class VisionToolkitPluginUpdateService {
     }
   }
 
+  private async acquireLock(profileDir: string): Promise<{ path: string; release: () => Promise<void> }> {
+    const path = join(profileDir, UPDATE_LOCK_FILE)
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const handle = await openFile(path, 'wx', 0o600)
+        try {
+          await handle.writeFile(JSON.stringify({ pid: process.pid, startedAt: this.now().toISOString() }))
+        } finally {
+          await handle.close()
+        }
+        return {
+          path,
+          release: async () => {
+            try { await unlink(path) } catch (error) {
+              if (!isNodeError(error) || error.code !== 'ENOENT') throw error
+            }
+          },
+        }
+      } catch (error) {
+        if (!isNodeError(error) || error.code !== 'EEXIST') throw error
+        let ownerAlive = true
+        try {
+          const parsed = JSON.parse(await readFile(path, 'utf8')) as { pid?: unknown }
+          if (typeof parsed.pid !== 'number' || !Number.isSafeInteger(parsed.pid)) ownerAlive = false
+          else {
+            try { process.kill(parsed.pid, 0) } catch (killError) {
+              ownerAlive = isNodeError(killError) && killError.code === 'EPERM'
+            }
+          }
+        } catch {
+          ownerAlive = false
+        }
+        if (ownerAlive) throw new PluginUpdateError('update-in-progress', 'Another process is updating this DSH profile')
+        try { await unlink(path) } catch (unlinkError) {
+          if (!isNodeError(unlinkError) || unlinkError.code !== 'ENOENT') throw unlinkError
+        }
+      }
+    }
+    throw new PluginUpdateError('update-in-progress', 'Could not acquire the DSH profile update lock')
+  }
+
   /** Query the configured npm registry without mutating the profile. */
   async check(): Promise<PluginUpdateCheck> {
-    const capability = await this.capability()
-    if (!capability.supported) {
+    const context = await this.checkContext()
+    if (context.profile === undefined || context.pnpmPath === undefined) {
       return {
-        ...capability,
+        ...context.capability,
         currentVersion: this.currentVersion,
         updateAvailable: false,
         checkedAt: this.now().toISOString(),
       }
     }
-    const result = await this.runPnpm(['view', VISION_TOOLKIT_PACKAGE, 'version', '--json'], CHECK_TIMEOUT_MS)
+    const capability = (await this.evaluate()).capability
+    const result = await this.runPnpm(
+      ['view', VISION_TOOLKIT_PACKAGE, 'version', '--json'],
+      CHECK_TIMEOUT_MS,
+      context.profile,
+      context.pnpmPath,
+    )
     if (result.exitCode !== 0) {
       throw new PluginUpdateError('update-check-failed', publicCommandFailure(result, 'Could not check the npm registry'))
     }
@@ -442,7 +672,15 @@ export class VisionToolkitPluginUpdateService {
   async installAndRestart(expectedVersion: string): Promise<PluginUpdateResult> {
     if (this.updating) throw new PluginUpdateError('update-in-progress', 'A plugin update is already in progress')
     this.updating = true
+    let locked: { path: string; release: () => Promise<void> } | undefined
+    let updateContext: { profile: ProfileInstall; pnpmPath: string } | undefined
+    let packageChanged = false
     try {
+      const initial = await this.evaluate()
+      if (!initial.capability.supported || initial.profile === undefined || initial.pnpmPath === undefined) {
+        throw new PluginUpdateError('update-unavailable', 'Plugin update is unavailable for this installation')
+      }
+      locked = await this.acquireLock(initial.profile.profileDir)
       const check = await this.check()
       if (!check.supported || check.latestVersion === undefined) {
         throw new PluginUpdateError('update-unavailable', 'Plugin update is unavailable for this installation')
@@ -456,17 +694,22 @@ export class VisionToolkitPluginUpdateService {
       if (!check.updateAvailable) {
         throw new PluginUpdateError('already-current', `Plugin ${this.currentVersion} is already up to date`)
       }
-      const profile = await this.profile()
-      if ('supported' in profile) throw new PluginUpdateError('update-unavailable', 'Plugin update is unavailable for this installation')
+      const final = await this.evaluate()
+      if (!final.capability.supported || final.profile === undefined || final.pnpmPath === undefined
+        || final.profile.profileDir !== initial.profile.profileDir) {
+        throw new PluginUpdateError('update-unavailable', 'The plugin installation changed while preparing the update')
+      }
+      updateContext = { profile: final.profile, pnpmPath: final.pnpmPath }
       const result = await this.runPnpm([
         'add', `${VISION_TOOLKIT_PACKAGE}@${expectedVersion}`, '--save-exact', '--yes', '--reporter=append-only',
-      ], UPDATE_TIMEOUT_MS)
+      ], UPDATE_TIMEOUT_MS, final.profile, final.pnpmPath)
       if (result.exitCode !== 0) {
         throw new PluginUpdateError('update-failed', publicCommandFailure(result, 'Plugin update failed'))
       }
+      packageChanged = true
       let installedVersion: string
       try {
-        const installed = await jsonFile(join(profile.installedDir, 'package.json'))
+        const installed = await jsonFile(join(final.profile.installedDir, 'package.json'))
         if (typeof installed.version !== 'string') throw new Error('missing version')
         installedVersion = installed.version
       } catch (error) {
@@ -486,6 +729,13 @@ export class VisionToolkitPluginUpdateService {
           args: [...process.execArgv, ...process.argv.slice(1)],
           cwd: process.cwd(),
           logPath: join(this.dshHome, 'logs', 'vision-toolkit-restart.log'),
+          lockPath: locked.path,
+          profileDir: final.profile.profileDir,
+          pnpmPath: final.pnpmPath,
+          packageName: VISION_TOOLKIT_PACKAGE,
+          fromVersion: this.currentVersion,
+          toVersion: installedVersion,
+          healthUrl: this.healthUrl,
         })
       } catch (error) {
         throw new PluginUpdateError(
@@ -498,11 +748,38 @@ export class VisionToolkitPluginUpdateService {
       return {
         fromVersion: this.currentVersion,
         toVersion: installedVersion,
-        profile: profile.profile,
+        profile: final.profile.profile,
         restarting: true,
         retryAfterMs: RESTART_RETRY_AFTER_MS,
       }
     } catch (error) {
+      if (packageChanged && updateContext !== undefined) {
+        try {
+          const rollback = await this.runPnpm([
+            'add', `${VISION_TOOLKIT_PACKAGE}@${this.currentVersion}`, '--save-exact', '--yes', '--reporter=append-only',
+          ], UPDATE_TIMEOUT_MS, updateContext.profile, updateContext.pnpmPath)
+          if (rollback.exitCode !== 0) {
+            error = new PluginUpdateError(
+              'update-rollback-failed',
+              publicCommandFailure(rollback, 'Plugin update failed and the previous version could not be restored'),
+              { cause: error },
+            )
+          }
+        } catch (rollbackError) {
+          error = new PluginUpdateError(
+            'update-rollback-failed',
+            'Plugin update failed and the previous version could not be restored',
+            { cause: rollbackError },
+          )
+        }
+      }
+      if (locked !== undefined) {
+        try { await locked.release() } catch (releaseError) {
+          error = new PluginUpdateError('update-lock-release-failed', 'The profile update lock could not be released', {
+            cause: releaseError,
+          })
+        }
+      }
       this.updating = false
       throw error
     }

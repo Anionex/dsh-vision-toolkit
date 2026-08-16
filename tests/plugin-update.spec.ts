@@ -1,4 +1,7 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { spawn } from 'node:child_process'
+import { once } from 'node:events'
+import { createServer } from 'node:http'
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
@@ -6,6 +9,7 @@ import type { SubprocessHandle, SubprocessOutputRead, SubprocessSpawnSpec } from
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   compareVersions,
+  PLUGIN_RESTART_HELPER_SOURCE,
   VisionToolkitPluginUpdateService,
   VISION_TOOLKIT_PACKAGE,
 } from '../src/plugin-update.ts'
@@ -96,15 +100,52 @@ describe('VisionToolkitPluginUpdateService', () => {
       profileDir: fixture.profileDir,
       packageRoot: fixture.installedDir,
       argv: ['web'],
+      allowDetachedRestart: true,
     })
 
     await expect(service.capability()).resolves.toEqual({
       supported: false,
+      checkSupported: true,
       profile: 'web',
       dependencySpec: 'link:/workspace/dsh-vision-toolkit',
       reason: 'unsupported-install-source',
     })
-    expect(subprocess.resolveExecutable).not.toHaveBeenCalled()
+    expect(subprocess.resolveExecutable).toHaveBeenCalledWith('pnpm')
+  })
+
+  it('requires an explicit opt-in for detached restart ownership', async () => {
+    const fixture = await profileFixture()
+    const subprocess = new FakeSubprocess(async () => ({ stdout: '' }))
+    const service = new VisionToolkitPluginUpdateService(host(subprocess), '0.1.0', {
+      profileDir: fixture.profileDir,
+      packageRoot: fixture.installedDir,
+      argv: ['web'],
+    })
+
+    await expect(service.capability()).resolves.toMatchObject({
+      supported: false,
+      profile: 'web',
+      reason: 'restart-unmanaged',
+    })
+    expect(subprocess.resolveExecutable).toHaveBeenCalledWith('pnpm')
+  })
+
+  it('does not advertise the POSIX restart handoff on Windows', async () => {
+    const fixture = await profileFixture()
+    const subprocess = new FakeSubprocess(async () => ({ stdout: '' }))
+    const service = new VisionToolkitPluginUpdateService(host(subprocess), '0.1.0', {
+      profileDir: fixture.profileDir,
+      packageRoot: fixture.installedDir,
+      argv: ['web'],
+      allowDetachedRestart: true,
+      platform: 'win32',
+    })
+
+    await expect(service.capability()).resolves.toMatchObject({
+      supported: false,
+      profile: 'web',
+      reason: 'unsupported-platform',
+    })
   })
 
   it('checks the configured registry through pnpm without mutating the profile', async () => {
@@ -114,6 +155,7 @@ describe('VisionToolkitPluginUpdateService', () => {
       profileDir: fixture.profileDir,
       packageRoot: fixture.installedDir,
       argv: ['web'],
+      allowDetachedRestart: true,
       now: () => new Date('2026-08-16T12:00:00.000Z'),
     })
 
@@ -147,6 +189,7 @@ describe('VisionToolkitPluginUpdateService', () => {
       profileDir: fixture.profileDir,
       packageRoot: fixture.installedDir,
       argv: ['web'],
+      allowDetachedRestart: true,
       prepareRestart,
       terminateCurrent,
       schedule,
@@ -180,11 +223,97 @@ describe('VisionToolkitPluginUpdateService', () => {
       profileDir: fixture.profileDir,
       packageRoot: fixture.installedDir,
       argv: ['web'],
+      allowDetachedRestart: true,
     })
 
     await expect(service.installAndRestart('0.2.0')).rejects.toMatchObject({ code: 'update-stale' })
     await expect(service.installAndRestart('0.2.0')).rejects.toMatchObject({ code: 'update-stale' })
     expect(subprocess.spawns).toHaveLength(2)
+  })
+
+  it('rechecks the profile source instead of overwriting a link introduced after an earlier check', async () => {
+    const fixture = await profileFixture()
+    const subprocess = new FakeSubprocess(async () => ({ stdout: '"0.2.0"\n' }))
+    const service = new VisionToolkitPluginUpdateService(host(subprocess), '0.1.0', {
+      profileDir: fixture.profileDir,
+      packageRoot: fixture.installedDir,
+      argv: ['web'],
+      allowDetachedRestart: true,
+    })
+
+    await expect(service.check()).resolves.toMatchObject({ supported: true, latestVersion: '0.2.0' })
+    await writeFile(join(fixture.profileDir, 'package.json'), JSON.stringify({
+      name: 'dsh-profile-web',
+      private: true,
+      dependencies: { [VISION_TOOLKIT_PACKAGE]: 'link:/workspace/dsh-vision-toolkit' },
+    }))
+
+    await expect(service.installAndRestart('0.2.0')).rejects.toMatchObject({ code: 'update-unavailable' })
+    expect(subprocess.spawns).toHaveLength(1)
+  })
+
+  it('uses a profile lock to reject a concurrent updater in another service instance', async () => {
+    const fixture = await profileFixture()
+    let releaseView!: () => void
+    const viewGate = new Promise<void>((resolve) => { releaseView = resolve })
+    const firstSubprocess = new FakeSubprocess(async (spec) => {
+      if (spec.argv.includes('view')) {
+        await viewGate
+        return { stdout: '"0.2.0"\n' }
+      }
+      await writeFile(join(fixture.installedDir, 'package.json'), JSON.stringify({
+        name: VISION_TOOLKIT_PACKAGE,
+        version: '0.2.0',
+      }))
+      return { stdout: 'updated\n' }
+    })
+    const first = new VisionToolkitPluginUpdateService(host(firstSubprocess), '0.1.0', {
+      profileDir: fixture.profileDir,
+      packageRoot: fixture.installedDir,
+      argv: ['web'],
+      allowDetachedRestart: true,
+      prepareRestart: vi.fn(),
+      terminateCurrent: vi.fn(),
+      schedule: vi.fn(),
+    })
+    const running = first.installAndRestart('0.2.0')
+    await vi.waitFor(() => { expect(firstSubprocess.spawns).toHaveLength(1) })
+
+    const secondSubprocess = new FakeSubprocess(async () => ({ stdout: '"0.2.0"\n' }))
+    const second = new VisionToolkitPluginUpdateService(host(secondSubprocess), '0.1.0', {
+      profileDir: fixture.profileDir,
+      packageRoot: fixture.installedDir,
+      argv: ['web'],
+      allowDetachedRestart: true,
+    })
+    await expect(second.installAndRestart('0.2.0')).rejects.toMatchObject({ code: 'update-in-progress' })
+    expect(secondSubprocess.spawns).toHaveLength(0)
+
+    releaseView()
+    await expect(running).resolves.toMatchObject({ toVersion: '0.2.0' })
+  })
+
+  it('redacts registry credentials from command failures returned to Settings', async () => {
+    const fixture = await profileFixture()
+    const subprocess = new FakeSubprocess(async () => ({
+      exitCode: 1,
+      stderr: 'GET https://alice:secret@registry.example/ failed npm_supersecret _authToken=token-value',
+    }))
+    const service = new VisionToolkitPluginUpdateService(host(subprocess), '0.1.0', {
+      profileDir: fixture.profileDir,
+      packageRoot: fixture.installedDir,
+      argv: ['web'],
+      allowDetachedRestart: true,
+    })
+
+    const failure = await service.check().catch((error: unknown) => error)
+    expect(failure).toBeInstanceOf(Error)
+    const message = (failure as Error).message
+    expect(message).not.toContain('alice')
+    expect(message).not.toContain('secret')
+    expect(message).not.toContain('supersecret')
+    expect(message).not.toContain('token-value')
+    expect(message).toContain('***')
   })
 
   it('refuses to restart when pnpm did not install the exact confirmed version', async () => {
@@ -202,10 +331,96 @@ describe('VisionToolkitPluginUpdateService', () => {
       profileDir: fixture.profileDir,
       packageRoot: fixture.installedDir,
       argv: ['web'],
+      allowDetachedRestart: true,
       prepareRestart,
     })
 
     await expect(service.installAndRestart('0.2.0')).rejects.toMatchObject({ code: 'update-verify-failed' })
     expect(prepareRestart).not.toHaveBeenCalled()
+  })
+})
+
+describe('plugin restart helper', () => {
+  it('rolls back and restores service when the replacement exits before becoming ready', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dvt-restart-helper-'))
+    roots.push(root)
+    const statePath = join(root, 'version.txt')
+    const pidPath = join(root, 'server.pid')
+    const lockPath = join(root, '.update.lock')
+    const appPath = join(root, 'fake-dsh.cjs')
+    const pnpmPath = join(root, 'fake-pnpm.cjs')
+    await writeFile(statePath, '0.2.0')
+    await writeFile(lockPath, 'locked')
+    await writeFile(appPath, `
+const { readFileSync, writeFileSync } = require('node:fs')
+const { createServer } = require('node:http')
+const statePath = process.argv[2]
+const port = Number(process.argv[3])
+const pidPath = process.argv[4]
+const version = readFileSync(statePath, 'utf8').trim()
+if (version === '0.2.0') process.exit(1)
+const server = createServer((_req, res) => {
+  const body = JSON.stringify({ ok: true, value: { release: { pluginVersion: version } } })
+  res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': String(Buffer.byteLength(body)) })
+  res.end(body)
+})
+server.listen(port, '127.0.0.1', () => { writeFileSync(pidPath, String(process.pid)) })
+process.on('SIGTERM', () => { server.close(() => process.exit(0)) })
+`)
+    await writeFile(pnpmPath, `#!/usr/bin/env node
+const { writeFileSync } = require('node:fs')
+const target = process.argv.find(value => value.startsWith('@anionex/dsh-vision-toolkit@'))
+if (!target) process.exit(1)
+writeFileSync(process.env.DVT_RESTART_STATE, target.slice(target.lastIndexOf('@') + 1))
+`)
+    await chmod(pnpmPath, 0o755)
+
+    const probe = createServer()
+    await new Promise<void>((resolve, reject) => {
+      probe.once('error', reject)
+      probe.listen(0, '127.0.0.1', resolve)
+    })
+    const address = probe.address()
+    if (address === null || typeof address === 'string') throw new Error('probe did not bind')
+    const port = address.port
+    await new Promise<void>(resolve => { probe.close(() => { resolve() }) })
+
+    const payload = Buffer.from(JSON.stringify({
+      pid: 999_999,
+      execPath: process.execPath,
+      args: [appPath, statePath, String(port), pidPath],
+      cwd: root,
+      logPath: join(root, 'restart.log'),
+      lockPath,
+      profileDir: root,
+      pnpmPath,
+      packageName: VISION_TOOLKIT_PACKAGE,
+      fromVersion: '0.1.0',
+      toVersion: '0.2.0',
+      healthUrl: `http://127.0.0.1:${port}/_dsh/vision-toolkit/settings`,
+    })).toString('base64url')
+    const helper = spawn(process.execPath, ['-e', PLUGIN_RESTART_HELPER_SOURCE, payload], {
+      cwd: root,
+      env: { ...process.env, DVT_RESTART_STATE: statePath },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    let stderr = ''
+    helper.stderr?.on('data', chunk => { stderr += String(chunk) })
+    const [code] = await once(helper, 'exit') as [number | null]
+    expect(code, stderr).toBe(2)
+    expect(await readFile(statePath, 'utf8')).toBe('0.1.0')
+    await vi.waitFor(async () => {
+      expect(Number(await readFile(pidPath, 'utf8'))).toBeGreaterThan(0)
+    })
+    const restored = await fetch(`http://127.0.0.1:${port}/_dsh/vision-toolkit/settings`)
+    await expect(restored.json()).resolves.toMatchObject({
+      ok: true,
+      value: { release: { pluginVersion: '0.1.0' } },
+    })
+    const restoredPid = Number(await readFile(pidPath, 'utf8'))
+    process.kill(restoredPid, 'SIGTERM')
+    await vi.waitFor(async () => {
+      await expect(readFile(lockPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
+    })
   })
 })

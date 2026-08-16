@@ -13,7 +13,7 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ### Added
 
-- Added a **Plugin updates** Settings card that checks the configured npm registry, installs an explicitly confirmed release into the current registry-backed DSH profile, verifies it, restarts DSH Web through an independent helper, and reloads the page when the new version is serving. Local/workspace/git/URL and otherwise unsafe-to-replace installs remain read-only.
+- Added a **Plugin updates** Settings card that checks the configured npm registry, installs an explicitly confirmed release into the current registry-backed DSH profile, verifies it, and can restart an explicitly opted-in unsupervised POSIX DSH Web process through an independent readiness/rollback helper. Local/workspace/git/URL and otherwise unsafe-to-replace installs remain read-only; Windows and manager-owned processes keep restart ownership outside the plugin.
 
 ### Changed
 

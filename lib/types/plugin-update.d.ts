@@ -8,9 +8,10 @@
  */
 import type { Context } from '@deepseek-ai/cordis';
 export declare const VISION_TOOLKIT_PACKAGE = "@anionex/dsh-vision-toolkit";
-export type PluginUpdateUnavailableReason = 'profile-not-found' | 'not-direct-dependency' | 'unsupported-install-source' | 'profile-read-only' | 'pnpm-unavailable';
+export type PluginUpdateUnavailableReason = 'profile-not-found' | 'not-direct-dependency' | 'unsupported-install-source' | 'profile-read-only' | 'pnpm-unavailable' | 'unsupported-platform' | 'restart-unmanaged';
 export interface PluginUpdateCapability {
     supported: boolean;
+    checkSupported?: boolean;
     profile?: string;
     dependencySpec?: string;
     reason?: PluginUpdateUnavailableReason;
@@ -38,6 +39,13 @@ export interface RestartRequest {
     args: readonly string[];
     cwd: string;
     logPath: string;
+    lockPath: string;
+    profileDir: string;
+    pnpmPath: string;
+    packageName: string;
+    fromVersion: string;
+    toVersion: string;
+    healthUrl: string;
 }
 export interface PluginUpdateServiceOptions {
     packageRoot?: string;
@@ -48,7 +56,12 @@ export interface PluginUpdateServiceOptions {
     prepareRestart?: (request: RestartRequest) => void;
     terminateCurrent?: () => void;
     schedule?: (callback: () => void, delayMs: number) => void;
+    allowDetachedRestart?: boolean;
+    healthUrl?: string;
+    platform?: NodeJS.Platform;
 }
+/** @internal Restart helper source exported for lifecycle integration tests. */
+export declare const PLUGIN_RESTART_HELPER_SOURCE: string;
 /** Compare two strict SemVer versions. */
 export declare function compareVersions(left: string, right: string): number;
 /** Profile-aware updater used by the same-origin Settings backend. */
@@ -63,15 +76,20 @@ export declare class VisionToolkitPluginUpdateService {
     private readonly prepareRestart;
     private readonly terminateCurrent;
     private readonly schedule;
-    private locating?;
+    private readonly allowDetachedRestart;
+    private readonly healthUrl;
+    private readonly platform;
     private updating;
     constructor(ctx: Pick<Context, 'subprocess'>, currentVersion: string, options?: PluginUpdateServiceOptions);
     private inspectProfile;
     private locateProfile;
     private profile;
+    private evaluate;
+    private checkContext;
     /** Report whether the current installation can be safely replaced in place. */
     capability(): Promise<PluginUpdateCapability>;
     private runPnpm;
+    private acquireLock;
     /** Query the configured npm registry without mutating the profile. */
     check(): Promise<PluginUpdateCheck>;
     /** Install the currently published version, then restart this DSH process. */

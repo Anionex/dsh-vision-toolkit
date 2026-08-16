@@ -83,6 +83,11 @@ declare const en: {
     readonly updateReasonLocalSource: "This profile uses a local, workspace, URL, or git installation; update that source manually so local work is not overwritten.";
     readonly updateReasonReadOnly: "The profile package manifest is read-only.";
     readonly updateReasonPnpm: "pnpm is unavailable in the DSH execution environment.";
+    readonly updateReasonPlatform: "Automatic restart is unavailable on this operating system.";
+    readonly updateReasonRestartUnmanaged: "Detached self-restart is disabled. Use a supported process manager, or explicitly opt in with DSH_VISION_TOOLKIT_ALLOW_DETACHED_RESTART=1 for an unsupervised Web process.";
+    readonly updateSaveFirst: "Save or discard the current Settings and API key changes before updating the plugin.";
+    readonly restartTimedOut: "DSH Web did not return with the target plugin version. Check the restart log and restart the Web profile through its original process manager.";
+    readonly restartRolledBack: "The new plugin did not become ready, so the previous version was restored. Check the restart log before trying again.";
     readonly pluginKind: "DSH native plugin";
     readonly runtimeUnavailable: "Runtime unavailable";
     readonly runtimeCandidateRejected: "Last runtime candidate was rejected; the active generation remains available.";
@@ -226,9 +231,10 @@ interface SettingsValue {
     };
     allowedDirs?: string[];
 }
-type PluginUpdateUnavailableReason = 'profile-not-found' | 'not-direct-dependency' | 'unsupported-install-source' | 'profile-read-only' | 'pnpm-unavailable';
+type PluginUpdateUnavailableReason = 'profile-not-found' | 'not-direct-dependency' | 'unsupported-install-source' | 'profile-read-only' | 'pnpm-unavailable' | 'unsupported-platform' | 'restart-unmanaged';
 interface PluginUpdateCapability {
     supported: boolean;
+    checkSupported?: boolean;
     profile?: string;
     dependencySpec?: string;
     reason?: PluginUpdateUnavailableReason;
@@ -308,6 +314,7 @@ export declare class VisionSettingsController {
     runHealth(mode: 'health' | 'connection' | 'model'): Promise<void>;
     checkUpdate(): Promise<void>;
     applyUpdate(expectedVersion: string): Promise<void>;
+    reportRestartTimeout(message: string): void;
 }
 /** Required client services. The pasted-image codec attaches to either trigger-service generation after load. */
 export declare const inject: string[];
