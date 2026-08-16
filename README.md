@@ -12,7 +12,7 @@
   <a href="https://dshfind.com/en/plugins/Anionex/dsh-vision-toolkit"><img src="https://img.shields.io/badge/recommended%20by-dshfind-FFD700?style=flat-square" alt="Recommended by dshfind" /></a>
   <a href="https://dshfind.com/en/plugins/Anionex/dsh-vision-toolkit"><img src="https://img.shields.io/badge/dshfind%20score-94%20%7C%20highest--rated%20plugin-5B4CF0?style=flat-square" alt="dshfind score: 94 — highest-rated plugin" /></a>
   <a href="https://x.com/anion_ex"><img src="https://img.shields.io/badge/-@anion__ex-000000?style=flat-square&amp;logo=x&amp;logoColor=white" alt="X: @anion_ex" /></a>
-  <a href="https://github.com/Anionex/dsh-vision-toolkit/releases/tag/v0.1.10"><img src="https://img.shields.io/badge/release-v0.1.10-5B4CF0?style=flat-square" alt="Release v0.1.10" /></a>
+  <a href="https://github.com/Anionex/dsh-vision-toolkit/releases/tag/v0.1.11"><img src="https://img.shields.io/badge/release-v0.1.11-5B4CF0?style=flat-square" alt="Release v0.1.11" /></a>
   <a href="tests"><img src="https://img.shields.io/badge/verified-233%20tests-2EA44F?style=flat-square" alt="Verified: 233 tests" /></a>
 </p>
 
@@ -124,7 +124,7 @@ dsh plugin --profile headless add @anionex/dsh-vision-toolkit
 ```
 
 1. Restart your Web profile and open **Settings → Vision Toolkit**.
-2. New installations use the built-in free Moondream provider, so you can run **Test API connection** and **Test vision model** without an API key. To use another provider, edit the endpoint/model/protocol and provide its DSH Credential.
+2. New installations use the built-in free Gemma 4 provider, so you can run **Test API connection** and **Test vision model** without an API key. To use another provider, edit the endpoint/model/protocol and provide its DSH Credential.
 3. In a conversation, paste an image or put it in the workspace, invoke `/vision-tools`, and ask for a concrete visual task.
 
 If you use an older DSH launcher, the profile may need `nodeLinker: hoisted` and `autoInstallPeers: false` before installation. Current launchers repair these settings for you.
@@ -208,7 +208,7 @@ Description conversion needs the configured vision provider and its credential w
 - DeepSeek Harness with a Web or Headless profile and `pnpm` available to `dsh plugin`.
 - Python 3.11 or newer. Managed mode creates an isolated environment, so users do not install the upstream CLI or Python packages manually.
 - Network access on the first managed-runtime activation unless the exact packages in `runtime/requirements.lock` are already available in the configured package cache.
-- The built-in free Moondream provider is ready for `vision_glance`, `vision_ground`, `vision_detect`, and non-split-only long-screenshot OCR. A DSH Credential is required only when a custom OpenAI-compatible or Anthropic endpoint is configured. Local tools remain usable without either provider.
+- The built-in free Gemma 4 provider is ready for `vision_glance`, `vision_ground`, `vision_detect`, and non-split-only long-screenshot OCR. A DSH Credential is required only when a custom OpenAI-compatible or Anthropic endpoint is configured. Local tools remain usable without either provider.
 - Chrome, Chromium, or Edge only for `vision_html_screenshot`; all other tools remain available when no supported browser is installed.
 - PNG, JPEG, GIF, or WebP inputs inside the session workspace or an explicitly configured `allowedDirs` root.
 
@@ -249,7 +249,7 @@ dsh plugin --profile web remove @dsh-external/dsh-vision-toolkit
 dsh plugin --profile web add @anionex/dsh-vision-toolkit
 ```
 
-After restarting, Settings → Vision should report plugin version **0.1.10**. The built-in free provider is selected automatically; custom providers still use the configured DSH Credential.
+After restarting, Settings → Vision should report plugin version **0.1.11**. The built-in free provider is selected automatically; custom providers still use the configured DSH Credential.
 
 For a registry installation, update the dependency through the profile package manager:
 
@@ -279,7 +279,7 @@ The bundle defaults to the managed runtime. A profile patch can override the pro
     provider:
       baseUrl: https://vision.anionex.me/v1
       credential: ANIONEX_FREE_VISION
-      model: moondream-3.1
+      model: gemma-4-26b-a4b-it
       protocol: openai
       anthropicThinking: omit
       userAgent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36
@@ -303,7 +303,7 @@ The bundle defaults to the managed runtime. A profile patch can override the pro
 |---|---|---|
 | `provider.baseUrl` | `https://vision.anionex.me/v1` | Built-in free OpenAI-compatible endpoint; custom providers may use another base URL, normalized without trailing slashes |
 | `provider.credential` | `ANIONEX_FREE_VISION` | Read-only built-in reference for the free service; custom providers use a DSH Credential reference, never a secret value |
-| `provider.model` | `moondream-3.1` | Multimodal model name sent to remote tools |
+| `provider.model` | `gemma-4-26b-a4b-it` | Multimodal model name sent to remote tools |
 | `provider.protocol` | `openai` | `openai` sends Chat Completions requests; `anthropic` sends native Messages requests |
 | `provider.anthropicThinking` | `omit` | Anthropic thinking field. `omit` sends no thinking field and has the broadest compatibility. Use `disabled` or `adaptive` only when the selected model documents that mode; restore `omit` first if the provider returns HTTP 400. |
 | `provider.userAgent` | browser-compatible default | User-Agent sent by vision requests and explicit connection tests; override it for provider or proxy compatibility |
@@ -442,7 +442,7 @@ Update the upstream snapshot only through `pnpm run upstream:sync -- <checkout>`
 
 ## Project status and scope
 
-Version `0.1.10` is the current public npm release. The product focuses on screenshot understanding, visual grounding, OCR, asset extraction, UI restoration, and pixel-level verification in DSH Web and Headless profiles. Web upload, drag-and-drop, camera/video/audio/document ingestion, interactive box editing, automatic GUI clicking, service clusters, model routing, model voting, and cross-session vision caches remain outside the current product.
+Version `0.1.11` is the current public npm release. The product focuses on screenshot understanding, visual grounding, OCR, asset extraction, UI restoration, and pixel-level verification in DSH Web and Headless profiles. Web upload, drag-and-drop, camera/video/audio/document ingestion, interactive box editing, automatic GUI clicking, service clusters, model routing, model voting, and cross-session vision caches remain outside the current product.
 
 <details>
 <summary><strong>Maintainer scope note</strong></summary>

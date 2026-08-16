@@ -12,7 +12,7 @@
   <a href="https://dshfind.com/zh/plugins/Anionex/dsh-vision-toolkit"><img src="https://img.shields.io/badge/%E7%94%B1%20dshfind-%E6%8E%A8%E8%8D%90-FFD700?style=flat-square" alt="由 dshfind 推荐" /></a>
   <a href="https://dshfind.com/zh/plugins/Anionex/dsh-vision-toolkit"><img src="https://img.shields.io/badge/dshfind%20%E8%AF%84%E5%88%86-94%20%7C%20%E6%9C%80%E9%AB%98%E5%88%86%E6%8F%92%E4%BB%B6-5B4CF0?style=flat-square" alt="dshfind 评分：94——最高分插件" /></a>
   <a href="https://x.com/anion_ex"><img src="https://img.shields.io/badge/-@anion__ex-000000?style=flat-square&amp;logo=x&amp;logoColor=white" alt="X：@anion_ex" /></a>
-  <a href="https://github.com/Anionex/dsh-vision-toolkit/releases/tag/v0.1.10"><img src="https://img.shields.io/badge/release-v0.1.10-5B4CF0?style=flat-square" alt="Release v0.1.10" /></a>
+  <a href="https://github.com/Anionex/dsh-vision-toolkit/releases/tag/v0.1.11"><img src="https://img.shields.io/badge/release-v0.1.11-5B4CF0?style=flat-square" alt="Release v0.1.11" /></a>
   <a href="tests"><img src="https://img.shields.io/badge/verified-233%20tests-2EA44F?style=flat-square" alt="已验证：233 项测试" /></a>
 </p>
 
@@ -129,7 +129,7 @@ dsh plugin --profile headless add @anionex/dsh-vision-toolkit
 
 如果使用较旧的 DSH launcher，安装前可能需要在 Profile 中设置 `nodeLinker: hoisted` 和 `autoInstallPeers: false`。当前 launcher 会自动修复这些设置。
 
-安装后重启正在运行的 Web Profile，打开 **设置 → 视觉工具**，先执行**测试 API 连接**，再执行**测试视觉模型**。新安装会自动使用内置免费 Moondream 提供方，不需要 API Key 或 DSH Credential。若要使用其他提供方，请修改端点、模型或协议，并配置对应的 DSH Credential。
+安装后重启正在运行的 Web Profile，打开 **设置 → 视觉工具**，先执行**测试 API 连接**，再执行**测试视觉模型**。新安装会自动使用内置免费 Gemma 4 提供方，不需要 API Key 或 DSH Credential。若要使用其他提供方，请修改端点、模型或协议，并配置对应的 DSH Credential。
 
 ## 加入交流群
 
@@ -209,7 +209,7 @@ flowchart LR
 - 启用 Web 或 Headless Profile 的 DeepSeek Harness，并确保 `dsh plugin` 可以使用 `pnpm`。
 - Python 3.11 或更高版本。Managed 模式会创建隔离环境，用户无需手工安装上游 CLI（命令行界面）或 Python 包。
 - 首次启用 managed 运行时需要联网；如果配置的软件包缓存已有 `runtime/requirements.lock` 中的精确版本，则无需联网。
-- 内置免费 Moondream 提供方可直接用于 `vision_glance`、`vision_ground`、`vision_detect` 和非仅切分长截图 OCR。只有改用自定义 OpenAI 兼容或 Anthropic 端点时才需要 DSH Credential；本地工具不依赖任何远程提供方。
+- 内置免费 Gemma 4 提供方可直接用于 `vision_glance`、`vision_ground`、`vision_detect` 和非仅切分长截图 OCR。只有改用自定义 OpenAI 兼容或 Anthropic 端点时才需要 DSH Credential；本地工具不依赖任何远程提供方。
 - 只有 `vision_html_screenshot` 需要 Chrome、Chromium 或 Edge；未安装受支持浏览器时，其他工具保持可用。
 - 输入必须是会话工作区或显式 `allowedDirs` 根目录内的 PNG、JPEG、GIF 或 WebP。
 
@@ -250,7 +250,7 @@ dsh plugin --profile web remove @dsh-external/dsh-vision-toolkit
 dsh plugin --profile web add @anionex/dsh-vision-toolkit
 ```
 
-重启后，Settings → 视觉工具 应显示插件版本 **0.1.10**。内置免费提供方会自动选中；自定义提供方仍使用配置的 DSH Credential。
+重启后，Settings → 视觉工具 应显示插件版本 **0.1.11**。内置免费提供方会自动选中；自定义提供方仍使用配置的 DSH Credential。
 
 通过注册表安装时，使用 Profile 的包管理命令更新依赖：
 
@@ -280,7 +280,7 @@ Bundle 默认使用 managed 运行时。Profile patch 可以覆盖提供方与�
     provider:
       baseUrl: https://vision.anionex.me/v1
       credential: ANIONEX_FREE_VISION
-      model: moondream-3.1
+      model: gemma-4-26b-a4b-it
       protocol: openai
       anthropicThinking: omit
       userAgent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36
@@ -304,7 +304,7 @@ Bundle 默认使用 managed 运行时。Profile patch 可以覆盖提供方与�
 |---|---|---|
 | `provider.baseUrl` | `https://vision.anionex.me/v1` | 内置免费 OpenAI 兼容端点；自定义提供方可改用其他基础 URL，使用时会去除结尾斜杠 |
 | `provider.credential` | `ANIONEX_FREE_VISION` | 免费服务的只读内置引用；自定义提供方使用 DSH Credential 引用，而不是密钥值 |
-| `provider.model` | `moondream-3.1` | 远程工具使用的多模态模型名 |
+| `provider.model` | `gemma-4-26b-a4b-it` | 远程工具使用的多模态模型名 |
 | `provider.protocol` | `openai` | `openai` 发送 Chat Completions 请求；`anthropic` 发送原生 Messages 请求 |
 | `provider.anthropicThinking` | `omit` | Anthropic thinking 字段。`omit` 不发送 thinking 字段，兼容性最好；仅当所选模型明确支持时使用 `disabled` 或 `adaptive`，提供方返回 HTTP 400 时应先恢复 `omit`。 |
 | `provider.userAgent` | 浏览器兼容默认值 | 视觉请求和显式连接测试发送的 User-Agent；可为提供方或代理兼容性覆盖 |
@@ -456,7 +456,7 @@ pnpm pack --dry-run
 
 ## 项目状态与范围
 
-版本 `0.1.10` 是当前公开 npm 版本。产品重点是截图理解、视觉定位、OCR、素材提取、UI 还原和 DSH Web/Headless Profile 中的像素级验证。Web 上传、拖拽、摄像头/视频/音频/文档输入、交互式标注框编辑、GUI 自动点击、远程服务集群、模型路由、模型投票和跨会话视觉缓存不属于当前产品范围。
+版本 `0.1.11` 是当前公开 npm 版本。产品重点是截图理解、视觉定位、OCR、素材提取、UI 还原和 DSH Web/Headless Profile 中的像素级验证。Web 上传、拖拽、摄像头/视频/音频/文档输入、交互式标注框编辑、GUI 自动点击、远程服务集群、模型路由、模型投票和跨会话视觉缓存不属于当前产品范围。
 
 <details>
 <summary><strong>维护者范围说明</strong></summary>

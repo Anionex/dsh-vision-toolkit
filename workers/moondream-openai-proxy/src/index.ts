@@ -1,11 +1,13 @@
 import {
   CANONICAL_MODEL,
   ProtocolError,
+  buildGemmaInput,
   completionContent,
-  normalizeMoondreamOutput,
+  completionFinishReason,
+  normalizeGemmaOutput,
   parseChatCompletionRequest,
   tokenUsage,
-  type MoondreamOutput,
+  type GemmaOutput,
 } from './protocol'
 import { materializeImage } from './image'
 import { normalizeClientAddress } from './identity'
@@ -255,24 +257,13 @@ async function chatCompletion(request: Request, env: Env): Promise<Response> {
       Number(env.MAX_IMAGE_PIXELS),
     )
     const maxTokens = Math.min(completion.maxTokens ?? 512, Number(env.MAX_OUTPUT_TOKENS))
-    const modelInput: Record<string, unknown> = {
-      image,
-      max_tokens: maxTokens,
-      reasoning: false,
-      stream: false,
-      task: completion.task,
-    }
-    if (completion.temperature !== undefined) modelInput.temperature = completion.temperature
-    if (completion.topP !== undefined) modelInput.top_p = completion.topP
-    if (completion.task === 'query') modelInput.question = completion.question
-    if (completion.task === 'caption') modelInput.caption_length = completion.captionLength
-    if (completion.task === 'point' || completion.task === 'detect') modelInput.target = completion.target
+    const modelInput = buildGemmaInput(completion, image, maxTokens)
 
     inferenceStarted = true
     const rawOutput = await env.AI.run(CANONICAL_MODEL, modelInput, {
       tags: ['dsh-vision-free', completion.task],
     })
-    const output: MoondreamOutput = normalizeMoondreamOutput(rawOutput)
+    const output: GemmaOutput = normalizeGemmaOutput(rawOutput)
     const content = completionContent(output, completion.task)
     const usage = tokenUsage(output)
     const headers = new Headers({
@@ -292,7 +283,7 @@ async function chatCompletion(request: Request, env: Env): Promise<Response> {
 
     return jsonResponse({
       choices: [{
-        finish_reason: typeof output.finish_reason === 'string' ? output.finish_reason : 'stop',
+        finish_reason: completionFinishReason(output),
         index: 0,
         logprobs: null,
         message: {

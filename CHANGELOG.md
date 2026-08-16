@@ -2,11 +2,12 @@
 
 All notable user-facing changes to DSH Vision Toolkit are documented in this file. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and uses semantic version tags.
 
-## [Unreleased]
+## [0.1.11] - 2026-08-16
 
 ### Changed
 
 - Raised the built-in free vision service limits from 30 to 100 requests per client per UTC day, from 120 to 400 requests globally per UTC day, and from 6 to 20 requests per 60 seconds.
+- Switched the built-in free vision backend from Moondream 3.1 to Cloudflare Workers AI Gemma 4 (`@cf/google/gemma-4-26b-a4b-it`) while keeping the public OpenAI-compatible endpoint unchanged.
 
 ## [0.1.10] - 2026-08-16
 
@@ -150,7 +151,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 - Runtime teardown cancels in-flight operations before removing Agent-scoped tools, the activation bootstrap, and the Skill.
 - The Web client is published through the current nested `dsh.client` manifest and loader-compatible built artifact required by DSH snapshot0810.
 
-[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.10...HEAD
+[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.11...HEAD
+[0.1.11]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.10...v0.1.11
 [0.1.10]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.7...v0.1.8

@@ -86,6 +86,36 @@ function environment(database: FakeD1, aiRun: () => Promise<Record<string, unkno
 }
 
 describe('Worker request accounting', () => {
+  it('calls the Gemma model with an OpenAI vision message and returns its text', async () => {
+    const database = new FakeD1()
+    const aiRun = vi.fn(async () => ({
+      choices: [{
+        finish_reason: 'stop',
+        message: { content: 'A one-pixel test image.', role: 'assistant' },
+      }],
+      usage: { completion_tokens: 5, prompt_tokens: 12, total_tokens: 17 },
+    }))
+    const response = await worker.fetch(request(), environment(database, aiRun))
+    expect(response.status).toBe(200)
+    expect((await response.json()) as Record<string, unknown>).toMatchObject({
+      choices: [{ message: { content: 'A one-pixel test image.' } }],
+      model: CANONICAL_MODEL,
+      usage: { completion_tokens: 5, prompt_tokens: 12, total_tokens: 17 },
+    })
+    expect(aiRun).toHaveBeenCalledWith(CANONICAL_MODEL, expect.objectContaining({
+      messages: [{
+        content: [
+          { text: 'User: Describe this image.', type: 'text' },
+          { image_url: { url: tinyPng }, type: 'image_url' },
+        ],
+        role: 'user',
+      }],
+      max_tokens: 512,
+      chat_template_kwargs: { enable_thinking: false },
+      stream: false,
+    }), expect.objectContaining({ tags: ['dsh-vision-free', 'query'] }))
+  })
+
   it('applies burst limiting before reading the request body', async () => {
     let bodyRead = false
     const incoming = request()
