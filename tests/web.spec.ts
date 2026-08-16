@@ -40,7 +40,7 @@ function credentials(): Credentials {
   } as unknown as Credentials
 }
 
-function healthResult(testConnection: boolean): VisionToolkitHealthResult {
+function healthResult(testConnection: boolean, testModel = false): VisionToolkitHealthResult {
   const ok = { status: 'ok' as const, detail: 'fixture ok' }
   return {
     pluginVersion: '0.1.0',
@@ -52,14 +52,16 @@ function healthResult(testConnection: boolean): VisionToolkitHealthResult {
       python: ok, dependencies: ok, chrome: ok, credential: ok,
       artifactDirectory: ok, tempDirectory: ok,
       service: testConnection ? ok : { status: 'not_tested', detail: 'not tested' },
+      model: testModel ? ok : { status: 'not_tested', detail: 'not tested' },
     },
     healthy: true,
     connectionTested: testConnection,
+    modelTested: testModel,
   }
 }
 
 class FakeManager implements WebRuntimeManager {
-  readonly healthCalls: boolean[] = []
+  readonly healthCalls: Array<{ testConnection: boolean; testModel: boolean }> = []
   private active = resolveConfig({})
   private generation = 1
   readonly runtime = {
@@ -67,9 +69,9 @@ class FakeManager implements WebRuntimeManager {
       repository: 'fixture', version: 'fixture', commit: 'fixture', path: '/fixture', source: 'managed',
       runtimeHome: '/fixture/runtime', python: 'python3', pythonVersion: '3.12.0', dependencies: {},
     },
-    health: async (testConnection: boolean) => {
-      this.healthCalls.push(testConnection)
-      return healthResult(testConnection)
+    health: async (testConnection: boolean, _options: unknown, testModel = false) => {
+      this.healthCalls.push({ testConnection, testModel })
+      return healthResult(testConnection, testModel)
     },
   } as unknown as VisionToolkitRuntime
 
@@ -220,7 +222,20 @@ describe('VisionToolkitWebBackend', () => {
     expect(local.status).toBe(200)
     const connection = await post({ action: 'health', testConnection: true })
     expect(connection.status).toBe(200)
-    expect(manager.healthCalls).toEqual([false, true])
+    const model = await post({ action: 'health', testConnection: true, testModel: true })
+    expect(model.status).toBe(200)
+    expect(manager.healthCalls).toEqual([
+      { testConnection: false, testModel: false },
+      { testConnection: true, testModel: false },
+      { testConnection: true, testModel: true },
+    ])
+  })
+
+  it('rejects a model test that omits the API connection probe', async () => {
+    const { manager, post } = await setup()
+    const response = await post({ action: 'health', testConnection: false, testModel: true })
+    expect(response.status).toBe(400)
+    expect(manager.healthCalls).toEqual([])
   })
 
   it('rejects cross-site and non-JSON writes before touching Settings', async () => {

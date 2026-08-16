@@ -5,8 +5,8 @@
 [![由 dshfind 推荐](https://img.shields.io/badge/%E7%94%B1%20dshfind-%E6%8E%A8%E8%8D%90-FFD700?style=flat-square)](https://dshfind.com/zh/plugins/Anionex/dsh-vision-toolkit)
 [![dshfind 评分：94——最高分插件](https://img.shields.io/badge/dshfind%20%E8%AF%84%E5%88%86-94%20%7C%20%E6%9C%80%E9%AB%98%E5%88%86%E6%8F%92%E4%BB%B6-5B4CF0?style=flat-square)](https://dshfind.com/zh/plugins/Anionex/dsh-vision-toolkit)
 [![X (Twitter)](https://img.shields.io/badge/-@anion__ex-000000?style=flat-square&logo=x&logoColor=white)](https://x.com/anion_ex)
-[![Release v0.1.8](https://img.shields.io/badge/release-v0.1.8-5B4CF0?style=flat-square)](https://github.com/Anionex/dsh-vision-toolkit/releases/tag/v0.1.8)
-[![Verified: 168 tests](https://img.shields.io/badge/verified-168%20tests-2EA44F?style=flat-square)](tests)
+[![Release v0.1.9](https://img.shields.io/badge/release-v0.1.9-5B4CF0?style=flat-square)](https://github.com/Anionex/dsh-vision-toolkit/releases/tag/v0.1.9)
+[![Verified: 230 tests](https://img.shields.io/badge/verified-230%20tests-2EA44F?style=flat-square)](tests)
 [![License: MIT](https://img.shields.io/badge/license-MIT-0B7285?style=flat-square)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-%5E22.19%20%7C%20%3E%3D24-339933?style=flat-square&logo=nodedotjs&logoColor=white)](package.json)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)](runtime/requirements.lock)
@@ -101,7 +101,7 @@ dsh --profile headless --dump-config | grep vision-toolkit
 
 旧 Profile 的 `pnpm-workspace.yaml` 必须使用 `nodeLinker: hoisted` 和 `autoInstallPeers: false`。更新后的 DSH launcher 会在 `dsh plugin` 运行前修复这两个自有设置；使用旧 launcher 时，应在安装前手动设置，避免 pnpm 在 Profile 内组装第二套 Harness 依赖图。
 
-安装后重启正在运行的 Web Profile，打开 **设置 → 视觉工具**，为远程工具选择 DSH Credential，并显式执行**测试连接**。在会话中把图片放进工作区路径，调用 `/vision-tools`，再让 Agent 使用明确的 `vision_*` 工具。本地裁剪、SVG、像素、颜色、前景和 HTML 操作不需要视觉 API Credential。
+安装后重启正在运行的 Web Profile，打开 **设置 → 视觉工具**，为远程工具选择 DSH Credential，先执行**测试 API 连接**，再执行**测试视觉模型**以验证一次真实图片请求。在会话中把图片放进工作区路径，调用 `/vision-tools`，再让 Agent 使用明确的 `vision_*` 工具。本地裁剪、SVG、像素、颜色、前景和 HTML 操作不需要视觉 API Credential。
 
 ## 工作原理
 
@@ -201,7 +201,7 @@ dsh plugin --profile web remove @dsh-external/dsh-vision-toolkit
 dsh plugin --profile web add @anionex/dsh-vision-toolkit
 ```
 
-重启后，Settings → 视觉工具 应显示插件版本 **0.1.8**。
+重启后，Settings → 视觉工具 应显示插件版本 **0.1.9**。
 
 通过注册表安装时，使用 Profile 的包管理命令更新依赖：
 
@@ -301,7 +301,7 @@ Web Profile 会注册 Vision Toolkit Settings 分区，可配置提供方 URL、
 
 “保存并应用”会验证完整配置，准备候选 Python/上游运行时，提交 Settings revision，最后才原子切换 generation。候选被拒绝时，之前的 generation 继续服务，页面也会把这种状态与运行时确实不可用区分开来。“重新加载”始终恢复后端已保存的权威值，即使 revision 没有变化也会丢弃被拒绝的浏览器草稿。初始启动无法准备运行时时，Settings 路由仍可用于提交有效配置并激活首个 generation。陈旧浏览器 revision 不会覆盖较新的保存结果，而是返回冲突；刷新后再重试。只读 Settings 提供方允许查看和健康检查，但禁用保存。
 
-“运行健康检查”只执行本地检查。“测试连接”是显式操作，会把已配置 Credential 发送到 `GET /models`；OpenAI 使用 Bearer 认证，Anthropic 使用 `x-api-key` 与 `anthropic-version`。该检查不会上传图片，也不会创建 completion。插件加载和普通 Settings 读取不会发送该请求。
+“运行健康检查”只执行本地检查。“测试 API 连接”是显式操作，会把已配置 Credential 发送到 `GET /models`；OpenAI 使用 Bearer 认证，Anthropic 使用 `x-api-key` 与 `anthropic-version`。这个轻量测试不会上传图片，也不会创建 completion。“测试视觉模型”会另行把插件自带的 `assets/vision-model-test.png` 通过与 `vision_glance` 相同的多模态运行路径发送出去；它会创建一次真实 completion，并用于权威确认所选端点、Credential、模型、协议和上游账户确实能够处理图片。视觉模型检查卡会单独显示“已实测”“未测试”或“测试失败”Tag，避免把 `/models` 返回 HTTP 200 误认为图片调用成功。插件加载和普通 Settings 读取不会发送这两类请求。
 
 健康检查、连接测试以及插件/上游版本检查属于 Web Settings 管理能力，而不是模型工具，因此其 schema 永远不会占用 agent 请求上下文。
 

@@ -340,6 +340,75 @@ describe('Vision Toolkit client plugin', () => {
     expect(view.container.querySelector('.dvt-settings-header')).toBeNull()
   })
 
+  it('labels the lightweight API probe separately from the real multimodal model test', async () => {
+    const health = {
+      pluginVersion: '0.1.0',
+      checks: {
+        service: { status: 'ok', detail: 'Service responded at https://vision.example/v1/models (HTTP 200)' },
+        model: { status: 'ok', detail: 'Vision model fixture-model completed a multimodal request' },
+      },
+      healthy: true,
+      connectionTested: true,
+      modelTested: true,
+    }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ ok: true, value: settingsSnapshot() }))
+      .mockResolvedValueOnce(jsonResponse({ ok: true, value: health }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { ctx, registrations } = fakeClientContext()
+    apply(ctx as never)
+    const settings = registrations.find(entry => entry.options.name === 'settings.section')
+    if (settings === undefined) throw new Error('Settings component was not registered')
+    render(createElement(settings.component, {
+      controller: new VisionSettingsController(),
+      t: (key: string) => key,
+    }))
+
+    await screen.findByRole('button', { name: 'testModel' })
+    expect(screen.getByRole('button', { name: 'testConnection' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'testModel' }))
+    await screen.findByText('healthModelReady')
+    expect(screen.getByText('modelTestVerifiedTag')).toBeTruthy()
+    const request = fetchMock.mock.calls[1]?.[1] as RequestInit
+    expect(JSON.parse(String(request.body))).toEqual({
+      action: 'health',
+      testConnection: true,
+      testModel: true,
+    })
+  })
+
+  it('does not show the verified tag after only the API connection test passes', async () => {
+    const health = {
+      pluginVersion: '0.1.0',
+      checks: {
+        service: { status: 'ok', detail: 'Service responded at https://vision.example/v1/models (HTTP 200)' },
+        model: { status: 'not_tested', detail: 'Vision model was not tested; run an explicit model test to send the bundled diagnostic image' },
+      },
+      healthy: true,
+      connectionTested: true,
+      modelTested: false,
+    }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ ok: true, value: settingsSnapshot() }))
+      .mockResolvedValueOnce(jsonResponse({ ok: true, value: health }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { ctx, registrations } = fakeClientContext()
+    apply(ctx as never)
+    const settings = registrations.find(entry => entry.options.name === 'settings.section')
+    if (settings === undefined) throw new Error('Settings component was not registered')
+    render(createElement(settings.component, {
+      controller: new VisionSettingsController(),
+      t: (key: string) => key,
+    }))
+
+    fireEvent.click(await screen.findByRole('button', { name: 'testConnection' }))
+    await screen.findByText('healthModelNotTested')
+    expect(screen.getByText('modelTestNotRunTag')).toBeTruthy()
+    expect(screen.queryByText('modelTestVerifiedTag')).toBeNull()
+  })
+
   it('saves Settings first, then stores the typed API key without sending it in Settings', async () => {
     const initial = settingsSnapshot()
     const savedSettings = {

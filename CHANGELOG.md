@@ -2,6 +2,16 @@
 
 All notable user-facing changes to DSH Vision Toolkit are documented in this file. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and uses semantic version tags.
 
+## [0.1.9] - 2026-08-16
+
+### Added
+
+- Added an explicit **Test vision model** Settings action that sends a bundled diagnostic image through the same multimodal runtime path as `vision_glance`, so a successful `/models` response can no longer be mistaken for proof that the configured model and upstream account can process images.
+
+### Changed
+
+- Renamed the lightweight Settings probe to **Test API connection**, made its copy explicit that it only calls `GET /models`, and added a dedicated verified/not-tested/failed Tag to the real vision-model result.
+
 ## [0.1.8] - 2026-08-16
 
 ### Added
@@ -116,7 +126,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 - Runtime teardown cancels in-flight operations before removing Agent-scoped tools, the activation bootstrap, and the Skill.
 - The Web client is published through the current nested `dsh.client` manifest and loader-compatible built artifact required by DSH snapshot0810.
 
-[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.8...HEAD
+[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.9...HEAD
+[0.1.9]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.5...v0.1.6
