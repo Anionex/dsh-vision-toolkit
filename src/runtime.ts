@@ -9,6 +9,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
 import type { ResolvedCredential } from '@deepseek-ai/dsh-credentials'
 import { SaxesParser } from 'saxes'
@@ -49,6 +50,8 @@ import {
 import { PLUGIN_VERSION } from './version.ts'
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
+const VISION_MODEL_TEST_IMAGE = fileURLToPath(new URL('../assets/vision-model-test.png', import.meta.url))
+const VISION_MODEL_TEST_PROMPT = 'This is an explicit service readiness test. Reply with one short sentence confirming that you received the image.'
 
 function svgDocumentPathCount(svg: string): number | undefined {
   const parser = new SaxesParser({ xmlns: true })
@@ -444,9 +447,11 @@ export interface VisionToolkitHealthResult {
     artifactDirectory: HealthCheck
     tempDirectory: HealthCheck
     service: HealthCheck
+    model: HealthCheck
   }
   healthy: boolean
   connectionTested: boolean
+  modelTested: boolean
 }
 
 /** Shared per-call execution options. */
@@ -764,6 +769,10 @@ export class VisionToolkitRuntime {
         `credential ${this.config.provider.credential} is not configured; set it through DSH credentials`,
       )
     }
+    return this.visionEnv(resolved)
+  }
+
+  private visionEnv(resolved: ResolvedCredential): UpstreamEnvironment {
     return {
       VISION_API_KEY: resolved.value,
       VISION_BASE_URL: this.config.provider.baseUrl,
@@ -1690,8 +1699,8 @@ export class VisionToolkitRuntime {
     }
   }
 
-  /** health: inspect local readiness and optionally probe the configured `/models` endpoint. */
-  async health(testConnection: boolean, options: ToolCallOptions): Promise<VisionToolkitHealthResult> {
+  /** Health: inspect local readiness, optionally probe `/models`, and explicitly test one real multimodal request. */
+  async health(testConnection: boolean, options: ToolCallOptions, testModel = false): Promise<VisionToolkitHealthResult> {
     return this.runOperation('vision_toolkit_health', options, async (operation) => {
       const info = this.upstreamVersion
       const python: HealthCheck = { status: 'ok', detail: `${info.pythonVersion} via ${info.python}` }
@@ -1732,6 +1741,10 @@ export class VisionToolkitRuntime {
       let service: HealthCheck = {
         status: 'not_tested',
         detail: 'Connection was not tested; pass testConnection=true to query the configured /models endpoint',
+      }
+      let model: HealthCheck = {
+        status: 'not_tested',
+        detail: 'Vision model was not tested; run an explicit model test to send the bundled diagnostic image',
       }
       if (testConnection) {
         if (resolvedCredential === undefined) {
@@ -1775,7 +1788,32 @@ export class VisionToolkitRuntime {
           }
         }
       }
-      const checks = { python, dependencies, chrome, credential, artifactDirectory, tempDirectory, service }
+      if (testModel) {
+        if (resolvedCredential === undefined) {
+          model = { status: 'error', detail: 'Vision model test skipped because the configured credential is unavailable' }
+        } else {
+          try {
+            const result = await this.runUpstream(
+              'glance',
+              [VISION_MODEL_TEST_IMAGE, '-q', VISION_MODEL_TEST_PROMPT],
+              operation,
+              this.visionEnv(resolvedCredential),
+            )
+            if (result.stdout.trim().length === 0) {
+              throw new VisionToolkitError('output', 'glance: vision API returned an empty description')
+            }
+            model = {
+              status: 'ok',
+              detail: `Vision model ${this.config.provider.model} completed a multimodal request`,
+            }
+          } catch (error) {
+            if (operation.signal.aborted) throw error
+            const detail = error instanceof Error ? error.message : String(error)
+            model = { status: 'error', detail: `Vision model test failed: ${detail.slice(0, 600)}` }
+          }
+        }
+      }
+      const checks = { python, dependencies, chrome, credential, artifactDirectory, tempDirectory, service, model }
       const healthy = Object.values(checks).every(check => check.status !== 'error')
       return {
         pluginVersion: PLUGIN_VERSION,
@@ -1783,6 +1821,7 @@ export class VisionToolkitRuntime {
         checks,
         healthy,
         connectionTested: testConnection,
+        modelTested: testModel,
       }
     })
   }

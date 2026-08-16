@@ -50,9 +50,11 @@ declare const en: {
     readonly sourceFile: "Credential file";
     readonly health: "Health";
     readonly runHealth: "Run health check";
-    readonly testConnection: "Test connection";
+    readonly testConnection: "Test API connection";
+    readonly testModel: "Test vision model";
     readonly testing: "Checking…";
-    readonly connectionHint: "Connection testing explicitly sends the configured credential to GET /models. It uploads no image and creates no completion.";
+    readonly testingModel: "Testing model…";
+    readonly connectionHint: "The API connection test only queries GET /models. The vision model test sends the bundled diagnostic image and verifies one real multimodal request.";
     readonly saveBeforeTesting: "Save service changes before testing the connection.";
     readonly advanced: "Advanced settings";
     readonly advancedHint: "Credential name, provider compatibility, output language, resource limits, runtime source, Python, and additional readable directories.";
@@ -117,6 +119,7 @@ declare const en: {
     readonly healthArtifactDirectory: "Artifact directory";
     readonly healthTempDirectory: "Temporary directory";
     readonly healthService: "Vision service";
+    readonly healthModel: "Vision model";
     readonly statusOk: "OK";
     readonly statusWarning: "Warning";
     readonly statusError: "Error";
@@ -131,7 +134,7 @@ declare const en: {
     readonly healthDirectoryWritable: "{directory} is writable: {path}";
     readonly healthDirectoryNotWritable: "{directory} is not writable: {path}";
     readonly healthArtifactDirectoryFailed: "Could not prepare the artifact directory.";
-    readonly healthConnectionNotTested: "Connection not tested. Use Test connection to query /models.";
+    readonly healthConnectionNotTested: "API connection not tested. Use Test API connection to query /models.";
     readonly healthConnectionCredentialMissing: "Connection test skipped because the credential is unavailable.";
     readonly healthServiceResponded: "Service responded at {endpoint} (HTTP {status}).";
     readonly healthServiceRejectedCredential: "Service rejected the configured credential (HTTP {status}).";
@@ -139,6 +142,13 @@ declare const en: {
     readonly healthServiceRateLimited: "Service is reachable, but the connection test was rate-limited (HTTP 429).";
     readonly healthServiceHttpFailed: "Connection test failed with HTTP {status}.";
     readonly healthServiceUnreachable: "Could not reach {endpoint}.";
+    readonly healthModelNotTested: "Vision model not tested. Run Test vision model to make one real multimodal request.";
+    readonly healthModelCredentialMissing: "Vision model test skipped because the credential is unavailable.";
+    readonly healthModelReady: "Model {model} completed a real multimodal request.";
+    readonly healthModelFailed: "Real multimodal request failed: {detail}";
+    readonly modelTestVerifiedTag: "Verified";
+    readonly modelTestNotRunTag: "Not tested";
+    readonly modelTestFailedTag: "Test failed";
 };
 type LocaleKey = keyof typeof en;
 interface ToolCallOwnerProps {
@@ -172,6 +182,7 @@ interface HealthResult {
     checks: Record<string, HealthCheck>;
     healthy: boolean;
     connectionTested: boolean;
+    modelTested: boolean;
 }
 interface SettingsValue {
     provider?: {
@@ -235,7 +246,7 @@ interface SettingsState {
     status: 'idle' | 'loading' | 'ready' | 'error';
     snapshot?: SettingsSnapshot | undefined;
     health?: HealthResult | undefined;
-    action?: 'save' | 'health' | 'connection' | undefined;
+    action?: 'save' | 'health' | 'connection' | 'model' | undefined;
     message?: string | undefined;
     error?: string | undefined;
 }
@@ -250,7 +261,7 @@ export declare class VisionSettingsController {
     load(): Promise<void>;
     refreshIfLoaded(): void;
     save(value: SettingsValue, expectedRevision: number, credentialValue: string | undefined, writeSettings: boolean): Promise<boolean>;
-    runHealth(testConnection: boolean): Promise<void>;
+    runHealth(mode: 'health' | 'connection' | 'model'): Promise<void>;
 }
 /** Required client services. The pasted-image codec attaches to either trigger-service generation after load. */
 export declare const inject: string[];
