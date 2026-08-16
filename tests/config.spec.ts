@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   BUILT_IN_FREE_VISION_BASE_URL,
   BUILT_IN_FREE_VISION_CREDENTIAL,
+  BUILT_IN_FREE_VISION_KEY,
   BUILT_IN_FREE_VISION_MODEL,
   DEFAULT_VISION_USER_AGENT,
   isBuiltInFreeVisionProvider,
@@ -13,12 +14,13 @@ describe('resolveConfig', () => {
     const config = resolveConfig({})
     expect(config.provider.baseUrl).toBe(BUILT_IN_FREE_VISION_BASE_URL)
     expect(config.provider.credential).toBe(BUILT_IN_FREE_VISION_CREDENTIAL)
+    expect(BUILT_IN_FREE_VISION_KEY).toBe('https://agent-vision.anionex.me')
     expect(config.provider.model).toBe(BUILT_IN_FREE_VISION_MODEL)
     expect(config.provider.protocol).toBe('openai')
     expect(config.provider.anthropicThinking).toBe('omit')
     expect(config.provider.userAgent).toBe(DEFAULT_VISION_USER_AGENT)
     expect(config.language).toBe('zh')
-    expect(config.timeoutMs).toBe(60000)
+    expect(config.timeoutMs).toBe(15000)
     expect(config.maxImageBytes).toBe(4194304)
     expect(config.maxImagePixels).toBe(20000000)
     expect(isBuiltInFreeVisionProvider(config.provider)).toBe(true)

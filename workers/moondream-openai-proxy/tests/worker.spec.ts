@@ -4,6 +4,7 @@ import worker from '../src/index'
 import { CANONICAL_MODEL } from '../src/protocol'
 
 const tinyPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+const publicApiKey = 'https://agent-vision.anionex.me'
 
 class FakeStatement {
   private values: unknown[] = []
@@ -47,7 +48,7 @@ class FakeD1 {
   }
 }
 
-function request(image = tinyPng, body?: BodyInit): Request {
+function request(image = tinyPng, body?: BodyInit, apiKey = publicApiKey): Request {
   return new Request('https://vision.example/v1/chat/completions', {
     body: body ?? JSON.stringify({
       messages: [{
@@ -60,7 +61,7 @@ function request(image = tinyPng, body?: BodyInit): Request {
       model: CANONICAL_MODEL,
     }),
     headers: {
-      authorization: 'Bearer free',
+      authorization: `Bearer ${apiKey}`,
       'cf-connecting-ip': '203.0.113.10',
       'content-type': 'application/json',
     },
@@ -73,16 +74,19 @@ function environment(database: FakeD1, burstSuccess = true): Env {
   return {
     BURST_LIMITER: { limit: vi.fn(async () => ({ success: burstSuccess })) },
     DAILY_LIMIT: '100',
-    GLOBAL_DAILY_LIMIT: '3000',
+    GLOBAL_DAILY_LIMIT: '5000',
     IP_HASH_SECRET: '0123456789abcdef0123456789abcdef',
     MAX_IMAGE_BYTES: '4194304',
     MAX_IMAGE_PIXELS: '20000000',
     MAX_OUTPUT_TOKENS: '512',
     MAX_REQUEST_BYTES: '33554432',
-    PUBLIC_API_KEY: 'free',
+    LEGACY_PUBLIC_API_KEY: 'free',
+    PUBLIC_API_KEY: publicApiKey,
     GROQ_API_KEY_1: 'test-groq-key-1',
     GROQ_API_KEY_2: 'test-groq-key-2',
     GROQ_API_KEY_3: 'test-groq-key-3',
+    GROQ_API_KEY_4: 'test-groq-key-4',
+    GROQ_API_KEY_5: 'test-groq-key-5',
     USAGE_DB: database,
   } as Env
 }
@@ -90,10 +94,24 @@ function environment(database: FakeD1, burstSuccess = true): Env {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('Worker request accounting', () => {
+  it('advertises the branded public key on the discovery route', async () => {
+    const response = await worker.fetch(
+      new Request('https://vision.example/'),
+      environment(new FakeD1()),
+    )
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      api_key: publicApiKey,
+      base_url: 'https://vision.example/v1',
+      model: CANONICAL_MODEL,
+    })
+  })
+
   it('calls Groq with an OpenAI vision message and returns its text', async () => {
     const database = new FakeD1()
     const groqFetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-      expect(init?.headers).toMatchObject({ authorization: expect.stringMatching(/^Bearer test-groq-key-[123]$/) })
+      expect(init?.headers).toMatchObject({ authorization: expect.stringMatching(/^Bearer test-groq-key-[1-5]$/) })
       const body = JSON.parse(String(init?.body)) as Record<string, unknown>
       expect(body.model).toBe(CANONICAL_MODEL)
       expect(body.reasoning_effort).toBe('none')
@@ -177,15 +195,39 @@ describe('Worker request accounting', () => {
     expect(firstAuth).not.toBe(secondAuth)
   })
 
+  it('keeps the legacy free API key working during the public key migration', async () => {
+    const database = new FakeD1()
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({
+      choices: [{ finish_reason: 'stop', message: { content: 'Legacy key accepted.', role: 'assistant' } }],
+    })))
+
+    const response = await worker.fetch(request(tinyPng, undefined, 'free'), environment(database))
+    expect(response.status).toBe(200)
+  })
+
+  it('advertises the branded public API key when authentication fails', async () => {
+    const database = new FakeD1()
+    const response = await worker.fetch(request(tinyPng, undefined, 'wrong-key'), environment(database))
+    expect(response.status).toBe(401)
+    expect(await response.json()).toMatchObject({
+      error: {
+        code: 'invalid_api_key',
+        message: `Use api_key="${publicApiKey}" for this public endpoint`,
+      },
+    })
+  })
+
   it('returns a sanitized upstream error when all Groq accounts are rate limited', async () => {
     const database = new FakeD1()
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('rate limited', { status: 429 })))
+    const groqFetch = vi.fn(async () => new Response('rate limited', { status: 429 }))
+    vi.stubGlobal('fetch', groqFetch)
     const response = await worker.fetch(request(), environment(database))
     expect(response.status).toBe(429)
     const payload = await response.json()
     expect(payload).toMatchObject({
       error: { code: 'upstream_rate_limit_exceeded' },
     })
+    expect(groqFetch).toHaveBeenCalledTimes(5)
     expect(JSON.stringify(payload)).not.toContain('test-groq-key')
   })
 

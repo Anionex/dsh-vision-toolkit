@@ -112,7 +112,7 @@ describe('VisionToolkitRuntime', () => {
     const runtime = new VisionToolkitRuntime(ctx, config, adapter)
 
     await expect(runtime.resolveVisionEnv()).resolves.toMatchObject({
-      VISION_API_KEY: 'free',
+      VISION_API_KEY: 'https://agent-vision.anionex.me',
       VISION_BASE_URL: 'https://vision.anionex.me/v1',
       VISION_MODEL: 'qwen/qwen3.6-27b',
       VISION_API_PROTOCOL: 'chat_completions',
@@ -138,7 +138,7 @@ describe('VisionToolkitRuntime', () => {
     const runtime = new VisionToolkitRuntime(ctx, config, adapter)
 
     await expect(runtime.resolveVisionEnv()).resolves.toMatchObject({
-      VISION_API_KEY: 'free',
+      VISION_API_KEY: 'https://agent-vision.anionex.me',
       VISION_BASE_URL: 'https://vision.anionex.me/v1',
       VISION_MODEL: 'moondream-3.1',
       VISION_API_PROTOCOL: 'chat_completions',

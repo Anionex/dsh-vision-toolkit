@@ -205,8 +205,8 @@ async function consumeDailyQuota(env: Env, hash: string): Promise<QuotaReservati
   }
 }
 
-function authorizationError(): Response {
-  return openAiError('Use api_key="free" for this public endpoint', {
+function authorizationError(env: Env): Response {
+  return openAiError(`Use api_key="${env.PUBLIC_API_KEY}" for this public endpoint`, {
     code: 'invalid_api_key',
     headers: { 'www-authenticate': 'Bearer' },
     status: 401,
@@ -215,7 +215,9 @@ function authorizationError(): Response {
 }
 
 function isAuthorized(request: Request, env: Env): boolean {
-  return request.headers.get('authorization') === `Bearer ${env.PUBLIC_API_KEY}`
+  const authorization = request.headers.get('authorization')
+  return authorization === `Bearer ${env.PUBLIC_API_KEY}`
+    || authorization === `Bearer ${env.LEGACY_PUBLIC_API_KEY}`
 }
 
 function modelList(): Response {
@@ -231,7 +233,7 @@ function modelList(): Response {
 }
 
 async function chatCompletion(request: Request, env: Env): Promise<Response> {
-  if (!isAuthorized(request, env)) return authorizationError()
+  if (!isAuthorized(request, env)) return authorizationError(env)
 
   const requestId = request.headers.get('cf-ray') ?? crypto.randomUUID()
   const startedAt = Date.now()
@@ -357,14 +359,14 @@ async function fetchHandler(request: Request, env: Env): Promise<Response> {
     return jsonResponse({ model: CANONICAL_MODEL, status: 'ok' })
   }
   if (request.method === 'GET' && (url.pathname === '/v1/models' || url.pathname === '/models')) {
-    return isAuthorized(request, env) ? modelList() : authorizationError()
+    return isAuthorized(request, env) ? modelList() : authorizationError(env)
   }
   if (request.method === 'POST' && (url.pathname === '/v1/chat/completions' || url.pathname === '/chat/completions')) {
     return chatCompletion(request, env)
   }
   if (url.pathname === '/') {
     return jsonResponse({
-      api_key: 'free',
+      api_key: env.PUBLIC_API_KEY,
       base_url: `${url.origin}/v1`,
       model: CANONICAL_MODEL,
       status: 'ok',
