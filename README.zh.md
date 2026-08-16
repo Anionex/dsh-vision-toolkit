@@ -28,7 +28,7 @@
 
 🏆 本项目为deepseek harness生态首个综合性视觉工具插件：内测前已立项，并在内测期间参考本人的[`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit)做出
 
-> **原创声明：** 这套视觉工具和 `vision-tools` Skill 由作者个人原创并持续打磨，相关工具、方法和工作流来自长期的真实使用与反复迭代。
+> **原创声明：** 这套视觉工具的体系和划分方式，以及 `vision-tools` Skill，均由作者个人原创并持续打磨，相关工具、方法和工作流来自长期的真实使用与反复迭代。
 
 ## 亮点
 

@@ -24,7 +24,7 @@ If you use DeepSeek or another text-only model in DeepSeek Harness (DSH), you ma
 
 🏆 This project is the first comprehensive vision-tool plugin in the DeepSeek Harness ecosystem: it was initiated before internal beta and built during the beta with reference to [`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit).
 
-> **Original work:** This vision toolkit and the `vision-tools` Skill were personally created and continuously refined by the author through long-term real-world use and repeated iteration.
+> **Original work:** The system and division of responsibilities behind these visual tools, together with the `vision-tools` Skill, were personally created and continuously refined by the author through long-term real-world use and repeated iteration.
 
 ## Highlights
 
