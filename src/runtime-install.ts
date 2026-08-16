@@ -300,6 +300,61 @@ function venvPython(root: string): string {
   return process.platform === 'win32' ? join(root, 'Scripts', 'python.exe') : join(root, 'bin', 'python')
 }
 
+/**
+ * Rewrite a staged venv's `pyvenv.cfg` `home`/`executable` to point at a given
+ * base directory (the app execution alias directory for the Microsoft Store
+ * Python). Pure helper so the transformation is testable cross-platform.
+ */
+export function rewriteVenvConfig(cfg: string, homeDir: string): string {
+  return cfg
+    .replace(/^home = .*$/m, `home = ${homeDir}`)
+    .replace(/^executable = .*$/m, `executable = ${homeDir}\\python.exe`)
+}
+
+/**
+ * Windows-only workaround for the Microsoft Store Python. `python -m venv`
+ * records `home = C:\Program Files\WindowsApps\...` in the new venv, but the
+ * venv launcher (venvlauncher.exe) cannot CreateProcess that `python.exe`
+ * directly — the AppModel package execution restriction denies it (error 5) —
+ * so the venv's pip bootstrap exits 101. Rewrite the staged venv's pyvenv.cfg
+ * to the app execution alias directory, whose `python.exe` is launchable
+ * through Store activation.
+ */
+async function rewriteStorePythonVenvHome(
+  ctx: Context,
+  bootstrap: { command: RuntimeCommand },
+  staging: string,
+  installEnv: NodeJS.ProcessEnv,
+  cwd: string,
+): Promise<void> {
+  if (process.platform !== 'win32') return
+  // The HOME/USERPROFILE/LOCALAPPDATA overrides make the Store alias resolve to
+  // the real Program Files\WindowsApps path; without them sys.executable points
+  // back at the alias directory that venvlauncher can launch.
+  const probeEnv = Object.fromEntries(
+    Object.entries(installEnv).filter(([key, value]) => value !== undefined && key !== 'HOME' && key !== 'USERPROFILE' && key !== 'LOCALAPPDATA'),
+  )
+  const probe = await runCollected(
+    ctx,
+    [bootstrap.command.program, ...bootstrap.command.prefix, '-c', 'import os,sys; print(os.path.dirname(sys.executable))'],
+    cwd,
+    { env: probeEnv },
+  )
+  if (probe.exitCode !== 0 || probe.timedOut) return
+  const aliasDir = probe.stdout.trim().split(/\r?\n/)[0]
+  if (aliasDir === undefined || aliasDir.length === 0) return
+  const cfgPath = join(staging, 'pyvenv.cfg')
+  let cfg: string
+  try {
+    cfg = await readFile(cfgPath, 'utf8')
+  } catch {
+    return
+  }
+  // Only touch the known-broken layout; other interpreters are left untouched.
+  if (!/^home = .*Program Files\\WindowsApps.*$/m.test(cfg)) return
+  await writeFile(cfgPath, rewriteVenvConfig(cfg, aliasDir))
+}
+
 async function dependencyVersions(
   ctx: Context,
   python: RuntimeCommand,
@@ -543,12 +598,25 @@ async function prepareManaged(
     if (!created) {
       const create = await runCollected(
         ctx,
-        [bootstrap.command.program, ...bootstrap.command.prefix, '-m', 'venv', staging],
+        [bootstrap.command.program, ...bootstrap.command.prefix, '-m', 'venv', '--without-pip', staging],
         stateRoot,
         { timeoutMs: PREPARE_TIMEOUT_MS, env: installEnv },
       )
       if (create.exitCode !== 0 || create.timedOut) {
         throw new VisionToolkitError('runtime', `Python failed to create the managed runtime: ${create.stderr.trim()}`)
+      }
+      // `python -m venv` normally bootstraps pip internally; with the Microsoft
+      // Store Python that step exits 101 (see rewriteStorePythonVenvHome), so pip
+      // is installed explicitly after the venv configuration is repaired.
+      await rewriteStorePythonVenvHome(ctx, bootstrap, staging, installEnv, stateRoot)
+      const pipBootstrap = await runCollected(
+        ctx,
+        [venvPython(staging), '-m', 'ensurepip', '--upgrade', '--default-pip'],
+        stateRoot,
+        { timeoutMs: PREPARE_TIMEOUT_MS, env: installEnv },
+      )
+      if (pipBootstrap.exitCode !== 0 || pipBootstrap.timedOut) {
+        throw new VisionToolkitError('runtime', `Python failed to bootstrap pip in the managed runtime: ${pipBootstrap.stderr.trim()}`)
       }
       const install = await runCollected(
         ctx,
