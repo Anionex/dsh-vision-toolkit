@@ -315,9 +315,9 @@ The public service is shared and intended as a zero-configuration default, not a
 
 | Limit | Current value |
 |---|---:|
-| Per client | 30 requests per UTC day |
-| Global service | 120 requests per UTC day |
-| Burst | 6 requests per 60 seconds |
+| Per client | 100 requests per UTC day |
+| Global service | 400 requests per UTC day |
+| Burst | 20 requests per 60 seconds |
 | Image bytes | 4 MiB per image |
 | Decoded pixels | 20,000,000 per image |
 | Output | 512 tokens maximum |
