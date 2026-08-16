@@ -27,8 +27,10 @@ function run(args, options = {}) {
 try {
   run(['whoami'], { timeout: 30_000 })
   const secrets = run(['secret', 'list'], { capture: true, timeout: 30_000 })
-  if (!/"name"\s*:\s*"IP_HASH_SECRET"/.test(secrets)) {
-    throw new Error('Required Worker secret IP_HASH_SECRET is missing')
+  const requiredSecrets = ['IP_HASH_SECRET', 'GROQ_API_KEY_1', 'GROQ_API_KEY_2', 'GROQ_API_KEY_3']
+  const missingSecrets = requiredSecrets.filter(name => !new RegExp(`"name"\\s*:\\s*"${name}"`).test(secrets))
+  if (missingSecrets.length > 0) {
+    throw new Error(`Required Worker secrets are missing: ${missingSecrets.join(', ')}`)
   }
   if (dryRun) {
     const migrations = run(

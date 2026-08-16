@@ -30,8 +30,8 @@ If you use DeepSeek or another text-only model in DeepSeek Harness (DSH), you ma
 
 - **Paste and use it immediately.** Paste an image in DSH Web and the text-only route switches to its `(Vision Toolkit)` variant without manual path copying or model changes.
 - **A seamless image workflow.** Native thumbnails, session history, and workspace paths stay intact; Web can preview artifacts and Headless can continue using the same structured results.
-- **One command to install.** The built-in free Gemma 4 vision service is ready after installation, with no API key required.
-- **Built-in free quota.** The shared service includes 100 requests per client per day, 400 requests globally per day, and a 20-request burst per 60 seconds, with readable errors when a limit is reached.
+- **One command to install.** The built-in free Groq Qwen3.6 vision service is ready after installation, with no API key required.
+- **Built-in free quota.** The shared service includes 100 requests per client per day, 3,000 requests globally per day, and a 60-request burst per 60 seconds, with readable errors when a limit is reached.
 - **Vision guided by intent.** The agent extracts evidence for the task at hand, such as “Where is the error?” or “Where is the button?”, instead of returning a generic caption.
 - **A complete screenshot-to-verification loop.** Reference images, HTML screenshots, difference regions, and pixel comparison work together for UI restoration.
 
@@ -40,9 +40,9 @@ If you use DeepSeek or another text-only model in DeepSeek Harness (DSH), you ma
 This project has two layers:
 
 1. **Visual tools and a Skill:** the agent learns when to inspect, ground, OCR, crop, trace, or compare pixels.
-2. **Native DSH integration:** those capabilities live inside Profiles, sessions, Settings, Artifacts, and the Web UI, with a free Gemma 4 vision service ready after installation.
+2. **Native DSH integration:** those capabilities live inside Profiles, sessions, Settings, Artifacts, and the Web UI, with a free Groq Qwen3.6 vision service ready after installation.
 
-> **Install and use it immediately.** The default setup includes a free Gemma 4 vision service and requires no API key. Cropping, pixel diffing, color analysis, foreground extraction, SVG tracing, and HTML screenshots run locally without spending vision API requests.
+> **Install and use it immediately.** The default setup includes a free Qwen3.6 vision service and requires no API key. Cropping, pixel diffing, color analysis, foreground extraction, SVG tracing, and HTML screenshots run locally without spending vision API requests.
 
 ```sh
 dsh plugin --profile web add @anionex/dsh-vision-toolkit
@@ -69,9 +69,9 @@ dsh plugin --profile web add @anionex/dsh-vision-toolkit
 ## Recent updates
 
 - **2026-08-16 · Windows Python:** Added Microsoft Store Python support, fixing first-time isolated-runtime setup failures for affected Windows users.
-- **2026-08-16 · Better free vision:** Switched the default model to Gemma 4, improving the no-key image-understanding path.
+- **2026-08-16 · Better free vision:** Switched the built-in no-key service to Groq Qwen3.6, improving image understanding without adding setup steps.
 - **2026-08-16 · Image paste:** Text-only routes now switch to a `(Vision Toolkit)` variant and keep a workspace path, fixing blocked pastes and images that could not be reused later.
-- **2026-08-16 · Higher free quotas:** Raised per-client, global, and burst limits to `100/day`, `400/day`, and `20/minute`, reducing avoidable rate-limit failures while the shared capacity is lightly used.
+- **2026-08-16 · Higher free quotas:** Raised the shared service ceiling to `3,000/day` and `60/minute` to make better use of the three-account Groq pool while keeping the per-client limit at `100/day`.
 - **2026-08-16 · Real model test:** Added a full image-request test in Settings, fixing the false confidence caused by a successful `/models` request to a model that still cannot process images.
 
 ## Who it is for
@@ -218,7 +218,7 @@ The default setup uses:
 
 ```text
 Base URL: https://vision.anionex.me/v1
-Model:    gemma-4-26b-a4b-it
+Model:    qwen/qwen3.6-27b
 API Key:  no user configuration required
 ```
 
@@ -227,8 +227,8 @@ This is a shared zero-configuration entry point, not an unlimited private endpoi
 | Limit | Current value |
 |---|---:|
 | Per client | 100 requests per UTC day |
-| Whole service | 400 requests per UTC day |
-| Burst | 20 requests per 60 seconds |
+| Whole service | 3,000 requests per UTC day |
+| Burst | 60 requests per 60 seconds |
 | Image size | 4 MiB per image |
 | Decoded pixels | 20,000,000 per image |
 | Output | 512 tokens per request |

@@ -173,7 +173,6 @@ describe('response mapping', () => {
       }],
       max_tokens: 256,
       stream: false,
-      chat_template_kwargs: { enable_thinking: false },
       temperature: 0.2,
       top_p: 0.8,
     })

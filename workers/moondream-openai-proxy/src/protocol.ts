@@ -1,11 +1,15 @@
-export const CANONICAL_MODEL = '@cf/google/gemma-4-26b-a4b-it'
+export const CANONICAL_MODEL = 'qwen/qwen3.6-27b'
 
 const MODEL_ALIASES = new Set([
   CANONICAL_MODEL,
+  'qwen3.6-27b',
+  'qwen/qwen3.6-27b',
+  // Keep previous built-in names accepted so existing installations switch
+  // to the new backend without requiring a settings migration.
+  '@cf/google/gemma-4-26b-a4b-it',
   'gemma-4',
   'gemma-4-26b-a4b-it',
   'gemma-4-26b',
-  // Keep the previous names accepted so existing clients use the new backend.
   '@cf/moondream/moondream3.1-9B-A2B',
   'moondream',
   'moondream-3.1',
@@ -32,7 +36,7 @@ export interface ParsedCompletionRequest {
   topP: number | undefined
 }
 
-export interface GemmaOutput {
+export interface VisionOutput {
   choices?: unknown
   finish_reason?: unknown
   metrics?: unknown
@@ -42,9 +46,10 @@ export interface GemmaOutput {
   usage?: unknown
 }
 
-export type MoondreamOutput = GemmaOutput
+export type GemmaOutput = VisionOutput
+export type MoondreamOutput = VisionOutput
 
-export interface GemmaInput {
+export interface VisionInput {
   messages: [{
     content: [
       { text: string; type: 'text' },
@@ -54,10 +59,11 @@ export interface GemmaInput {
   }]
   max_tokens: number
   stream: false
-  chat_template_kwargs: { enable_thinking: false }
   temperature?: number
   top_p?: number
 }
+
+export type GemmaInput = VisionInput
 
 export class ProtocolError extends Error {
   readonly code: string
@@ -77,7 +83,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-export function normalizeGemmaOutput(value: Record<string, unknown>): GemmaOutput {
+export function normalizeVisionOutput(value: Record<string, unknown>): VisionOutput {
   let current: Record<string, unknown> = value
   for (let depth = 0; depth < 3; depth += 1) {
     if ('choices' in current || 'response' in current || 'output_text' in current) {
@@ -86,13 +92,14 @@ export function normalizeGemmaOutput(value: Record<string, unknown>): GemmaOutpu
     if (!isRecord(current.result)) break
     current = current.result
   }
-  throw new ProtocolError('The Gemma vision model returned an unsupported response shape', {
+  throw new ProtocolError('The vision model returned an unsupported response shape', {
     code: 'upstream_invalid_response',
     status: 502,
   })
 }
 
-export const normalizeMoondreamOutput = normalizeGemmaOutput
+export const normalizeGemmaOutput = normalizeVisionOutput
+export const normalizeMoondreamOutput = normalizeVisionOutput
 
 function requireRecord(value: unknown, param: string): Record<string, unknown> {
   if (!isRecord(value)) {
@@ -383,7 +390,7 @@ function validateStructuredItems(items: unknown[], field: 'objects' | 'points'):
   })
 }
 
-export function buildGemmaInput(completion: ParsedCompletionRequest, image: string, maxTokens: number): GemmaInput {
+export function buildVisionInput(completion: ParsedCompletionRequest, image: string, maxTokens: number): VisionInput {
   let instruction = completion.question
   if (completion.task === 'caption') {
     instruction = `Describe this image ${completion.captionLength === 'long' ? 'in detail' : completion.captionLength === 'short' ? 'briefly' : 'clearly'}.`
@@ -403,13 +410,14 @@ export function buildGemmaInput(completion: ParsedCompletionRequest, image: stri
     }],
     max_tokens: maxTokens,
     stream: false,
-    chat_template_kwargs: { enable_thinking: false },
     ...(completion.temperature === undefined ? {} : { temperature: completion.temperature }),
     ...(completion.topP === undefined ? {} : { top_p: completion.topP }),
   }
 }
 
-export function completionContent(output: GemmaOutput, task: VisionTask): string {
+export const buildGemmaInput = buildVisionInput
+
+export function completionContent(output: VisionOutput, task: VisionTask): string {
   const text = assistantText(output)
   if (text !== undefined && (task === 'query' || task === 'caption')) return text
   if (text !== undefined && task === 'point') {
@@ -420,13 +428,13 @@ export function completionContent(output: GemmaOutput, task: VisionTask): string
     const objects = parseStructuredText(text, 'objects')
     if (objects !== undefined) return JSON.stringify({ objects })
   }
-  throw new ProtocolError('The Gemma vision model returned no usable result; structured tasks must return JSON', {
+  throw new ProtocolError('The vision model returned no usable result; structured tasks must return JSON', {
     code: 'upstream_invalid_response',
     status: 502,
   })
 }
 
-export function completionFinishReason(output: GemmaOutput): string {
+export function completionFinishReason(output: VisionOutput): string {
   const choices = Array.isArray(output.choices) ? output.choices : []
   const firstChoice = isRecord(choices[0]) ? choices[0] : undefined
   if (firstChoice !== undefined && typeof firstChoice.finish_reason === 'string') {
@@ -435,7 +443,7 @@ export function completionFinishReason(output: GemmaOutput): string {
   return typeof output.finish_reason === 'string' ? output.finish_reason : 'stop'
 }
 
-export function tokenUsage(output: GemmaOutput): {
+export function tokenUsage(output: VisionOutput): {
   completion_tokens: number
   prompt_tokens: number
   total_tokens: number

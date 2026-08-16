@@ -31,6 +31,10 @@ export const DEFAULT_VISION_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x
 
 const BUILT_IN_FREE_VISION_MODEL_ALIASES = new Set([
   BUILT_IN_FREE_VISION_MODEL,
+  'qwen3.6-27b',
+  'gemma-4-26b-a4b-it',
+  'gemma-4-26b',
+  '@cf/google/gemma-4-26b-a4b-it',
   '@cf/moondream/moondream3.1-9B-A2B',
   'moondream',
   'moondream-3.1',
