@@ -113,7 +113,7 @@ describe('VisionToolkitRuntime', () => {
     await expect(runtime.resolveVisionEnv()).resolves.toMatchObject({
       VISION_API_KEY: 'free',
       VISION_BASE_URL: 'https://vision.anionex.me/v1',
-      VISION_MODEL: 'moondream-3.1',
+      VISION_MODEL: 'gemma-4-26b-a4b-it',
       VISION_API_PROTOCOL: 'chat_completions',
     })
     expect(resolve).not.toHaveBeenCalled()

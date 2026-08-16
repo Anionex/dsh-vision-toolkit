@@ -1,7 +1,12 @@
-export const CANONICAL_MODEL = '@cf/moondream/moondream3.1-9B-A2B'
+export const CANONICAL_MODEL = '@cf/google/gemma-4-26b-a4b-it'
 
 const MODEL_ALIASES = new Set([
   CANONICAL_MODEL,
+  'gemma-4',
+  'gemma-4-26b-a4b-it',
+  'gemma-4-26b',
+  // Keep the previous names accepted so existing clients use the new backend.
+  '@cf/moondream/moondream3.1-9B-A2B',
   'moondream',
   'moondream-3.1',
   'moondream3.1-9B-A2B',
@@ -12,7 +17,8 @@ const SUPPORTED_TASKS = new Set(['query', 'caption', 'point', 'detect'])
 const SUPPORTED_CAPTION_LENGTHS = new Set(['short', 'normal', 'long'])
 const MAX_QUESTION_CHARS = 16_000
 
-export type MoondreamTask = 'query' | 'caption' | 'point' | 'detect'
+export type VisionTask = 'query' | 'caption' | 'point' | 'detect'
+export type MoondreamTask = VisionTask
 export type CaptionLength = 'short' | 'normal' | 'long'
 
 export interface ParsedCompletionRequest {
@@ -21,18 +27,36 @@ export interface ParsedCompletionRequest {
   maxTokens: number | undefined
   question: string
   target: string
-  task: MoondreamTask
+  task: VisionTask
   temperature: number | undefined
   topP: number | undefined
 }
 
-export interface MoondreamOutput {
-  answer?: unknown
-  caption?: unknown
+export interface GemmaOutput {
+  choices?: unknown
   finish_reason?: unknown
   metrics?: unknown
-  objects?: unknown
-  points?: unknown
+  output_text?: unknown
+  response?: unknown
+  result?: unknown
+  usage?: unknown
+}
+
+export type MoondreamOutput = GemmaOutput
+
+export interface GemmaInput {
+  messages: [{
+    content: [
+      { text: string; type: 'text' },
+      { image_url: { url: string }; type: 'image_url' },
+    ]
+    role: 'user'
+  }]
+  max_tokens: number
+  stream: false
+  chat_template_kwargs: { enable_thinking: false }
+  temperature?: number
+  top_p?: number
 }
 
 export class ProtocolError extends Error {
@@ -53,26 +77,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-export function normalizeMoondreamOutput(value: Record<string, unknown>): MoondreamOutput {
+export function normalizeGemmaOutput(value: Record<string, unknown>): GemmaOutput {
   let current: Record<string, unknown> = value
   for (let depth = 0; depth < 3; depth += 1) {
-    if (
-      'answer' in current
-      || 'caption' in current
-      || 'objects' in current
-      || 'points' in current
-      || 'metrics' in current
-    ) {
+    if ('choices' in current || 'response' in current || 'output_text' in current) {
       return current
     }
     if (!isRecord(current.result)) break
     current = current.result
   }
-  throw new ProtocolError('The vision model returned an unsupported response shape', {
+  throw new ProtocolError('The Gemma vision model returned an unsupported response shape', {
     code: 'upstream_invalid_response',
     status: 502,
   })
 }
+
+export const normalizeMoondreamOutput = normalizeGemmaOutput
 
 function requireRecord(value: unknown, param: string): Record<string, unknown> {
   if (!isRecord(value)) {
@@ -285,31 +305,119 @@ export function parseChatCompletionRequest(value: unknown, maxImageBytes: number
     maxTokens: maxCompletionTokens ?? maxTokens,
     question,
     target,
-    task: taskValue as MoondreamTask,
+    task: taskValue as VisionTask,
     temperature: readOptionalNumber(input, 'temperature', 0, 2),
     topP: readOptionalNumber(input, 'top_p', 0, 1),
   }
 }
 
-export function completionContent(output: MoondreamOutput, task: MoondreamTask): string {
-  if (task === 'query' && typeof output.answer === 'string') return output.answer
-  if (task === 'caption' && typeof output.caption === 'string') return output.caption
-  if (task === 'point' && Array.isArray(output.points)) return JSON.stringify({ points: output.points })
-  if (task === 'detect' && Array.isArray(output.objects)) return JSON.stringify({ objects: output.objects })
-  throw new ProtocolError('The vision model returned no usable result', {
+function assistantText(output: GemmaOutput): string | undefined {
+  const choices = Array.isArray(output.choices) ? output.choices : []
+  const firstChoice = isRecord(choices[0]) ? choices[0] : undefined
+  const message = firstChoice !== undefined && isRecord(firstChoice.message) ? firstChoice.message : undefined
+  const content = message?.content
+  if (typeof content === 'string' && content.trim()) return content.trim()
+  if (isRecord(content) && typeof content.text === 'string' && content.text.trim()) return content.text.trim()
+  if (Array.isArray(content)) {
+    const text = content
+      .map(part => typeof part === 'string'
+        ? part
+        : isRecord(part) && typeof part.text === 'string' ? part.text : '')
+      .map(part => part.trim())
+      .filter(Boolean)
+      .join('\n')
+    if (text) return text
+  }
+  if (firstChoice !== undefined && typeof firstChoice.text === 'string' && firstChoice.text.trim()) {
+    return firstChoice.text.trim()
+  }
+  if (typeof output.response === 'string' && output.response.trim()) return output.response.trim()
+  if (isRecord(output.response) && typeof output.response.text === 'string' && output.response.text.trim()) {
+    return output.response.text.trim()
+  }
+  const outputText = output.output_text
+  return typeof outputText === 'string' && outputText.trim() ? outputText.trim() : undefined
+}
+
+function parseStructuredText(text: string, field: 'objects' | 'points'): unknown[] | undefined {
+  const candidates = [text.trim()]
+  const fenced = /```(?:json)?\s*([\s\S]*?)\s*```/i.exec(text)
+  if (fenced?.[1]) candidates.push(fenced[1].trim())
+  const objectStart = text.indexOf('{')
+  const objectEnd = text.lastIndexOf('}')
+  if (objectStart >= 0 && objectEnd > objectStart) candidates.push(text.slice(objectStart, objectEnd + 1))
+  const arrayStart = text.indexOf('[')
+  const arrayEnd = text.lastIndexOf(']')
+  if (arrayStart >= 0 && arrayEnd > arrayStart) candidates.push(text.slice(arrayStart, arrayEnd + 1))
+
+  for (const candidate of candidates) {
+    try {
+      const parsed: unknown = JSON.parse(candidate)
+      if (Array.isArray(parsed)) return parsed
+      if (isRecord(parsed) && Array.isArray(parsed[field])) return parsed[field]
+    } catch {
+      // Gemma sometimes wraps JSON in a short sentence or a markdown fence.
+    }
+  }
+  return undefined
+}
+
+export function buildGemmaInput(completion: ParsedCompletionRequest, image: string, maxTokens: number): GemmaInput {
+  let instruction = completion.question
+  if (completion.task === 'caption') {
+    instruction = `Describe this image ${completion.captionLength === 'long' ? 'in detail' : completion.captionLength === 'short' ? 'briefly' : 'clearly'}.`
+  } else if (completion.task === 'point') {
+    instruction = `Locate the target "${completion.target}". Return ONLY valid JSON in the form {"points":[{"x":123,"y":456}]} using integer pixel coordinates in the original image. If it is not present, return {"points":[]}.`
+  } else if (completion.task === 'detect') {
+    instruction = `Find every visible "${completion.target}". Return ONLY valid JSON in the form {"objects":[{"label":"${completion.target}","x1":0,"y1":0,"x2":0,"y2":0}]} using integer pixel coordinates in the original image. If none are present, return {"objects":[]}.`
+  }
+
+  return {
+    messages: [{
+      content: [
+        { text: instruction, type: 'text' },
+        { image_url: { url: image }, type: 'image_url' },
+      ],
+      role: 'user',
+    }],
+    max_tokens: maxTokens,
+    stream: false,
+    chat_template_kwargs: { enable_thinking: false },
+    ...(completion.temperature === undefined ? {} : { temperature: completion.temperature }),
+    ...(completion.topP === undefined ? {} : { top_p: completion.topP }),
+  }
+}
+
+export function completionContent(output: GemmaOutput, task: VisionTask): string {
+  const text = assistantText(output)
+  if (text !== undefined && (task === 'query' || task === 'caption')) return text
+  if (text !== undefined && task === 'point') {
+    const points = parseStructuredText(text, 'points')
+    if (points !== undefined) return JSON.stringify({ points })
+  }
+  if (text !== undefined && task === 'detect') {
+    const objects = parseStructuredText(text, 'objects')
+    if (objects !== undefined) return JSON.stringify({ objects })
+  }
+  throw new ProtocolError('The Gemma vision model returned no usable result; structured tasks must return JSON', {
     code: 'upstream_invalid_response',
     status: 502,
   })
 }
 
-export function tokenUsage(output: MoondreamOutput): {
+export function tokenUsage(output: GemmaOutput): {
   completion_tokens: number
   prompt_tokens: number
   total_tokens: number
 } {
+  const usage = isRecord(output.usage) ? output.usage : {}
   const metrics = isRecord(output.metrics) ? output.metrics : {}
-  const promptTokens = typeof metrics.input_tokens === 'number' ? metrics.input_tokens : 0
-  const completionTokens = typeof metrics.output_tokens === 'number' ? metrics.output_tokens : 0
+  const promptTokens = typeof usage.prompt_tokens === 'number'
+    ? usage.prompt_tokens
+    : typeof metrics.input_tokens === 'number' ? metrics.input_tokens : 0
+  const completionTokens = typeof usage.completion_tokens === 'number'
+    ? usage.completion_tokens
+    : typeof metrics.output_tokens === 'number' ? metrics.output_tokens : 0
   return {
     completion_tokens: completionTokens,
     prompt_tokens: promptTokens,

@@ -3,8 +3,9 @@ import { describe, expect, it } from 'vitest'
 import {
   CANONICAL_MODEL,
   ProtocolError,
+  buildGemmaInput,
   completionContent,
-  normalizeMoondreamOutput,
+  normalizeGemmaOutput,
   parseChatCompletionRequest,
   tokenUsage,
 } from '../src/protocol'
@@ -26,7 +27,7 @@ function request(overrides: Record<string, unknown> = {}): Record<string, unknow
 }
 
 describe('parseChatCompletionRequest', () => {
-  it('maps a standard OpenAI vision request to Moondream query input', () => {
+  it('maps a standard OpenAI vision request to the Gemma vision task', () => {
     expect(parseChatCompletionRequest(request(), 1024)).toMatchObject({
       image: tinyPng,
       question: 'User: Describe this image.',
@@ -130,22 +131,43 @@ describe('parseChatCompletionRequest', () => {
 
 describe('response mapping', () => {
   it('unwraps the result envelopes returned by Workers AI', () => {
-    expect(normalizeMoondreamOutput({ result: { answer: 'A chart.' } })).toEqual({ answer: 'A chart.' })
-    expect(normalizeMoondreamOutput({ result: { result: { caption: 'A caption.' } } })).toEqual({
-      caption: 'A caption.',
+    expect(normalizeGemmaOutput({ result: { choices: [{ message: { content: 'A chart.' } }] } })).toEqual({
+      choices: [{ message: { content: 'A chart.' } }],
     })
+    expect(normalizeGemmaOutput({ result: { result: { response: 'A caption.' } } })).toEqual({ response: 'A caption.' })
   })
 
   it('maps textual and structured task results', () => {
-    expect(completionContent({ answer: 'A chart.' }, 'query')).toBe('A chart.')
-    expect(completionContent({ caption: 'A long caption.' }, 'caption')).toBe('A long caption.')
-    expect(completionContent({ points: [{ x: 0.5, y: 0.25 }] }, 'point')).toBe(
-      '{"points":[{"x":0.5,"y":0.25}]}',
+    expect(completionContent({ choices: [{ message: { content: 'A chart.' } }] }, 'query')).toBe('A chart.')
+    expect(completionContent({ response: 'A long caption.' }, 'caption')).toBe('A long caption.')
+    expect(completionContent({ response: '```json\n{\"points\":[{\"x\":12,\"y\":25}]}\n```' }, 'point')).toBe(
+      '{\"points\":[{\"x\":12,\"y\":25}]}',
+    )
+    expect(completionContent({ response: '{\"objects\":[{\"label\":\"button\",\"x1\":1,\"y1\":2,\"x2\":3,\"y2\":4}]}' }, 'detect')).toBe(
+      '{\"objects\":[{\"label\":\"button\",\"x1\":1,\"y1\":2,\"x2\":3,\"y2\":4}]}',
     )
   })
 
+  it('builds Cloudflare Gemma chat input with the validated image data URI', () => {
+    const completion = parseChatCompletionRequest(request({ task: 'query', temperature: 0.2, top_p: 0.8 }), 1024)
+    expect(buildGemmaInput(completion, tinyPng, 256)).toEqual({
+      messages: [{
+        content: [
+          { text: 'User: Describe this image.', type: 'text' },
+          { image_url: { url: tinyPng }, type: 'image_url' },
+        ],
+        role: 'user',
+      }],
+      max_tokens: 256,
+      stream: false,
+      chat_template_kwargs: { enable_thinking: false },
+      temperature: 0.2,
+      top_p: 0.8,
+    })
+  })
+
   it('returns OpenAI-style token usage', () => {
-    expect(tokenUsage({ metrics: { input_tokens: 10, output_tokens: 4 } })).toEqual({
+    expect(tokenUsage({ usage: { prompt_tokens: 10, completion_tokens: 4 } })).toEqual({
       completion_tokens: 4,
       prompt_tokens: 10,
       total_tokens: 14,
