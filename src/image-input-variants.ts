@@ -443,8 +443,11 @@ export async function convertImagesToEvidence(
   const converted = await Promise.all(plans.map(async ({ message, query }) => {
     if (query === undefined) return message
     const content = await convertBlocks(message.content, (block) => abortableWait(
-      cache.read(cacheKey(String(block.attachment.attachmentId), query), () =>
-        limit(() => readImageBlock(ctx, runtime, block, query), signal)),
+      limit(
+        () => cache.read(cacheKey(String(block.attachment.attachmentId), query), () =>
+          readImageBlock(ctx, runtime, block, query)),
+        signal,
+      ),
       signal,
     ))
     return { ...message, content }
