@@ -35,10 +35,10 @@ export declare class EvidenceCache {
     private readonly entries;
     constructor(limit: number);
     /**
-     * Read one key's entry or compute it. Concurrent readers join the in-flight
+   * Read one attachment-and-prompt key's entry or compute it. Concurrent readers join the in-flight
      * computation; a settled failure is evicted so a fixed configuration gets a
      * fresh chance.
-     * @param key - the attachment identity (content-addressed).
+   * @param key - the attachment identity plus the exact focus prompt.
      * @param load - computes the description; must resolve `{ ok, block }` and never reject.
      * @returns the cached or computed block.
      */
