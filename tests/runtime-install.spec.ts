@@ -6,7 +6,12 @@ import { Context } from '@deepseek-ai/cordis'
 import { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type { SubprocessHandle, SubprocessOutputRead, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import { resolveConfig } from '../src/config.ts'
-import { bundledUpstreamRoot, prepareUpstreamRuntime } from '../src/runtime-install.ts'
+import {
+  bundledUpstreamRoot,
+  prepareUpstreamRuntime,
+  rewriteVenvConfig,
+  storePythonProbeEnvironment,
+} from '../src/runtime-install.ts'
 
 class ProbeSubprocessService extends SubprocessRuntime {
   readonly spawns: SubprocessSpawnSpec[] = []
@@ -115,5 +120,52 @@ describe('external pinned runtime preparation', () => {
     await writeFile(join(snapshot, 'PIL.py'), 'raise RuntimeError("shadowed")\n')
     const { ctx, config } = await setup(snapshot)
     await expect(prepareUpstreamRuntime(ctx, config)).rejects.toMatchObject({ code: 'runtime' })
+  })
+})
+
+describe('rewriteVenvConfig (Microsoft Store Python workaround)', () => {
+  it('preserves Python environment tombstones while restoring host user directories', () => {
+    const out = storePythonProbeEnvironment({
+      HOME: '/isolated',
+      USERPROFILE: '/isolated',
+      LOCALAPPDATA: '/isolated',
+      PYTHONHOME: undefined,
+      PYTHONPATH: undefined,
+      VIRTUAL_ENV: undefined,
+      PYTHONNOUSERSITE: '1',
+    })
+    expect(out).not.toHaveProperty('HOME')
+    expect(out).not.toHaveProperty('USERPROFILE')
+    expect(out).not.toHaveProperty('LOCALAPPDATA')
+    expect(out).toHaveProperty('PYTHONHOME', undefined)
+    expect(out).toHaveProperty('PYTHONPATH', undefined)
+    expect(out).toHaveProperty('VIRTUAL_ENV', undefined)
+    expect(out).toHaveProperty('PYTHONNOUSERSITE', '1')
+  })
+
+  it('repairs a Program Files\\WindowsApps home to the app execution alias directory', () => {
+    const cfg = [
+      'home = C:\\Program Files\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0',
+      'include-system-site-packages = false',
+      'version = 3.13.14',
+      'executable = C:\\Program Files\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\\python3.13.exe',
+    ].join('\n')
+    const aliasDir = 'C:\\Users\\u\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0'
+    const out = rewriteVenvConfig(cfg, aliasDir)
+    expect(out).toContain(`home = ${aliasDir}`)
+    expect(out).toContain(`executable = ${aliasDir}\\python.exe`)
+    expect(out).toContain('version = 3.13.14')
+    expect(out).toContain('include-system-site-packages = false')
+  })
+
+  it('leaves a non-Store Python configuration untouched', () => {
+    const cfg = [
+      'home = C:\\Python313',
+      'include-system-site-packages = false',
+      'version = 3.13.14',
+      'executable = C:\\Python313\\python.exe',
+    ].join('\n')
+    const out = rewriteVenvConfig(cfg, 'C:\\Python313')
+    expect(out).toBe(cfg)
   })
 })

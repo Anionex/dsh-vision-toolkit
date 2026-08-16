@@ -43,6 +43,17 @@ export declare function isolatedPythonEnvironment(home: string): NodeJS.ProcessE
 export declare function verifyBundledUpstream(): Promise<UpstreamManifest>;
 /** Persistent per-DSH-home cache root shared by runtime and Web support files. */
 export declare function visionToolkitStateRoot(): string;
+/**
+ * Rewrite a staged venv's `pyvenv.cfg` `home`/`executable` to point at a given
+ * base directory (the app execution alias directory for the Microsoft Store
+ * Python). Pure helper so the transformation is testable cross-platform.
+ */
+export declare function rewriteVenvConfig(cfg: string, homeDir: string): string;
+/**
+ * Build the Microsoft Store probe environment while preserving Python-variable
+ * tombstones; only the user-directory variables must fall back to the host.
+ */
+export declare function storePythonProbeEnvironment(installEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv;
 /** Prepare the configured pinned runtime without making any vision API call. */
 export declare function prepareUpstreamRuntime(ctx: Context, config: ResolvedVisionToolkitConfig): Promise<PreparedUpstreamRuntime>;
 export {};
