@@ -4,6 +4,12 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+## [0.1.17] - 2026-08-16
+
+### Changed
+
+- Clarified in both READMEs that the visual-tool system, its division of responsibilities, and the `vision-tools` Skill are original work, and refreshed the bilingual pairing record.
+
 ## [0.1.16] - 2026-08-16
 
 ### Changed
