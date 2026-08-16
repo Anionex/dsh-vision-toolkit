@@ -71,10 +71,15 @@ async function verifyWindowsCheckout() {
   try {
     await mkdir(join(seed, 'scripts'), { recursive: true })
     await mkdir(join(seed, 'vendor'), { recursive: true })
+    await mkdir(join(seed, 'assets'), { recursive: true })
+    await mkdir(join(seed, 'patches'), { recursive: true })
     await cp(join(root, '.gitattributes'), join(seed, '.gitattributes'))
     await cp(join(root, 'package.json'), join(seed, 'package.json'))
     await cp(join(root, 'scripts', 'upstream-manifest.mjs'), join(seed, 'scripts', 'upstream-manifest.mjs'))
+    await cp(join(root, 'scripts', 'verify-skill.mjs'), join(seed, 'scripts', 'verify-skill.mjs'))
     await cp(join(root, 'vendor', 'agent-vision-toolkit'), join(seed, 'vendor', 'agent-vision-toolkit'), { recursive: true })
+    await cp(join(root, 'assets', 'skill'), join(seed, 'assets', 'skill'), { recursive: true })
+    await cp(join(root, 'patches', 'vision-tools-dsh.patch'), join(seed, 'patches', 'vision-tools-dsh.patch'))
     await writeFile(join(seed, 'autocrlf-probe.txt'), 'line one\nline two\n')
 
     const setupCommands = [
@@ -105,6 +110,10 @@ async function verifyWindowsCheckout() {
     if (manifest.status !== 0) {
       failures.push(`vendored upstream is not byte-stable under core.autocrlf=true: ${(manifest.stderr || manifest.stdout).trim()}`)
     }
+    const skill = run(process.execPath, ['scripts/verify-skill.mjs'], checkout)
+    if (skill.status !== 0) {
+      failures.push(`adapted Skill is not byte-stable under core.autocrlf=true: ${(skill.stderr || skill.stdout).trim()}`)
+    }
   } finally {
     await rm(temporaryRoot, { recursive: true, force: true })
   }
@@ -127,7 +136,7 @@ check(pkg.dsh?.client?.platform === 'web', 'dsh.client.platform must publish the
 check(pkg.dshClient === undefined, 'legacy top-level dshClient metadata must remain absent')
 check(pkg.exports?.['./client']?.default === './lib/client.js', 'the Web client export must resolve to lib/client.js')
 check(Array.isArray(pkg.files) && pkg.files.includes('assets'), 'package files must include README visual assets')
-check(pkg.scripts?.['verify:portable'] === 'node scripts/upstream-manifest.mjs && node scripts/verify-portable.mjs', 'verify:portable script is missing or changed')
+check(pkg.scripts?.['verify:portable'] === 'node scripts/upstream-manifest.mjs && node scripts/verify-skill.mjs && node scripts/verify-portable.mjs', 'verify:portable script is missing or changed')
 check(pkg.peerDependencies?.['@deepseek-ai/schemastery'] === '^3.18.1', '@deepseek-ai/schemastery must be a host-provided peer dependency')
 check(pkg.peerDependencies?.schemastery === undefined, 'unscoped schemastery peer dependency must remain absent')
 check(pkg.peerDependencies?.['@deepseek-ai/cordis'] === '^4.0.1', '@deepseek-ai/cordis must be a host-provided peer dependency')
@@ -170,6 +179,10 @@ const requiredFiles = [
   'lib/client.js',
   'assets/hero-v2.png',
   'assets/social-preview.png',
+  'assets/skill/SKILL.md',
+  'assets/skill/UPSTREAM.json',
+  'assets/skill/references/restore-ui.md',
+  'patches/vision-tools-dsh.patch',
   'runtime/requirements.lock',
   'vendor/agent-vision-toolkit/UPSTREAM_MANIFEST.json',
 ]
@@ -259,7 +272,7 @@ if (pack.status !== 0) {
   try {
     const result = JSON.parse(pack.stdout)
     const packedFiles = new Set((result[0]?.files ?? []).map(file => file.path))
-    for (const path of ['lib/index.js', 'lib/types/index.d.ts', 'lib/client.js', 'cordis.patch.yml', 'assets/hero-v2.png', 'assets/social-preview.png']) {
+    for (const path of ['lib/index.js', 'lib/types/index.d.ts', 'lib/client.js', 'cordis.patch.yml', 'assets/hero-v2.png', 'assets/social-preview.png', 'assets/skill/SKILL.md', 'assets/skill/UPSTREAM.json', 'assets/skill/references/restore-ui.md', 'patches/vision-tools-dsh.patch']) {
       check(packedFiles.has(path), `dry-run tarball is missing ${path}`)
     }
   } catch (error) {

@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/Anionex/agent-vision-toolkit",
+  "commit": "77c24ad5b5d7a123119862893129f939307f1d3f",
+  "patch": "patches/vision-tools-dsh.patch",
+  "patchSha256": "80235867a25d80c515ff2c6f020a57ebfebf43654a915e2136ef015ce996c94c",
+  "sourceFiles": [
+    {
+      "path": "SKILL.md",
+      "bytes": 15131,
+      "sha256": "45951e64dd860a03ebe033d8edd159db65d3ba8e860e7ac1554eaa9d39f6d4aa"
+    },
+    {
+      "path": "references/gui.md",
+      "bytes": 3954,
+      "sha256": "dcc6ac4bfc5e6472c7c8c2fb333bb0ae753a8a281ba206a440eb43ad9f613a75"
+    },
+    {
+      "path": "references/long-screenshot-ocr.md",
+      "bytes": 3335,
+      "sha256": "639d060da341d304660d0583ecaaecd3d0deb3285dcc72e84b0894a57c91bdde"
+    },
+    {
+      "path": "references/restore-graphic.md",
+      "bytes": 3782,
+      "sha256": "eef88441d696fc6b870d93f2693006998df528a4ad79bb147569946493cd02ff"
+    },
+    {
+      "path": "references/restore-structure.md",
+      "bytes": 1950,
+      "sha256": "78d17b0e66e09e808f9bc9e35cf3d14882f07f130e6ebc0ed4e22273c3770d1a"
+    },
+    {
+      "path": "references/restore-ui.md",
+      "bytes": 9980,
+      "sha256": "d045bc5a31c075ce80deba71537d59882b18aee660fef35101de752e4ae79a58"
+    }
+  ],
+  "adaptedFiles": [
+    {
+      "path": "SKILL.md",
+      "bytes": 15973,
+      "sha256": "626b3e1fe3d598b290e4ca1863d4b15cfd732bd8c155872e56eb210eb732c049"
+    },
+    {
+      "path": "references/gui.md",
+      "bytes": 4118,
+      "sha256": "676a0e646a65773b6469869ddaba1bf1b4ac6e442e6c008d21787ea8982604fd"
+    },
+    {
+      "path": "references/long-screenshot-ocr.md",
+      "bytes": 3213,
+      "sha256": "08fcade44df3fd30fc45ef8bf93affebf9c13b3379c91650bae34c8da1bfca1e"
+    },
+    {
+      "path": "references/restore-graphic.md",
+      "bytes": 3736,
+      "sha256": "1fb057ebb682d6458074ab96c566827ea421f13210beb8a3084468bda5dfd5cf"
+    },
+    {
+      "path": "references/restore-structure.md",
+      "bytes": 2001,
+      "sha256": "aaa4b8b2cae30a2dff288ddaf4b102aca252cc75e4bf1f00f6e10c12d852ac9c"
+    },
+    {
+      "path": "references/restore-ui.md",
+      "bytes": 10035,
+      "sha256": "af08b8d663ac45b909a034498ba9e67bb6e497a0b223b847a7af37094477ae82"
+    }
+  ]
+}

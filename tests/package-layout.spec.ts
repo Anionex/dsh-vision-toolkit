@@ -14,6 +14,7 @@ const PACKAGE = JSON.parse(await readFile(join(ROOT, 'package.json'), 'utf8')) a
   dsh?: {
     bundle?: { patch?: string }
     client?: { platform?: string; inject?: string[] }
+    visionToolkit?: { upstreamSkillCommit?: string }
   }
   dependencies?: Record<string, string>
   peerDependencies?: Record<string, string>
@@ -56,20 +57,27 @@ describe('package layout contract', () => {
     ]))
   })
 
-  it('ships runtime, pinned upstream, lib, src, patch, and docs in files', () => {
-    for (const required of ['lib', 'src', 'runtime', 'vendor', 'cordis.patch.yml', 'README.md', 'README.zh.md', 'LICENSE']) {
+  it('ships runtime, pinned upstream, adapted Skill resources, lib, src, patch, and docs in files', async () => {
+    for (const required of ['lib', 'src', 'runtime', 'vendor', 'assets', 'patches', 'cordis.patch.yml', 'README.md', 'README.zh.md', 'LICENSE']) {
       expect(PACKAGE.files).toContain(required)
     }
+    expect(PACKAGE.dsh?.visionToolkit?.upstreamSkillCommit).toMatch(/^[0-9a-f]{40}$/u)
+    await expect(stat(join(ROOT, 'assets', 'skill', 'SKILL.md'))).resolves.toBeDefined()
+    await expect(stat(join(ROOT, 'assets', 'skill', 'UPSTREAM.json'))).resolves.toBeDefined()
+    await expect(stat(join(ROOT, 'assets', 'skill', 'references', 'restore-ui.md'))).resolves.toBeDefined()
   })
 
   it('has reproducible build and prepack scripts', () => {
     expect(PACKAGE.scripts.build).toContain('node scripts/upstream-manifest.mjs')
+    expect(PACKAGE.scripts.build).toContain('node scripts/verify-skill.mjs')
     expect(PACKAGE.scripts.build).toContain('node scripts/clean-build.mjs')
     expect(PACKAGE.scripts.build).toContain('tsc -p tsconfig.json')
     expect(PACKAGE.scripts.build).toContain('tsc -p tsconfig.client.json')
     expect(PACKAGE.scripts.build).toContain('tsc -p tsconfig.client.public.json')
     expect(PACKAGE.scripts.build).toContain('node scripts/build-client.mjs')
     expect(PACKAGE.scripts['upstream:sync']).toBe('node scripts/sync-upstream.mjs')
+    expect(PACKAGE.scripts['upstream:skill:sync']).toBe('node scripts/sync-skill.mjs')
+    expect(PACKAGE.scripts['upstream:skill:verify']).toBe('node scripts/verify-skill.mjs')
     expect(PACKAGE.scripts['upstream:manifest']).toContain('--write')
     expect(PACKAGE.scripts.prepack).toBe('npm run build')
     expect(PACKAGE.scripts.test).toContain('vitest')

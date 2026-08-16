@@ -1,1 +1,3 @@
 vendor/agent-vision-toolkit/** -text
+assets/skill/** -text
+patches/vision-tools-dsh.patch -text

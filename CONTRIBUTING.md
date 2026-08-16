@@ -23,6 +23,13 @@ DSH Vision Toolkit is an out-of-tree DeepSeek Harness Profile Bundle. Contributi
 
 Changes to vendored upstream files must use `npm run upstream:sync -- <checkout>`, preserve the upstream license, update `UPSTREAM_MANIFEST.json`, and include adapter compatibility coverage. Do not edit the snapshot as an untracked fork of the algorithm.
 
+Changes to the model-facing `vision-tools` Skill must start from the pinned
+upstream Skill commit. Update the reviewable adapter patch, then run
+`npm run upstream:skill:sync -- <checkout>` and
+`npm run upstream:skill:verify`. Preserve upstream methodology and playbooks;
+limit adapter changes to native tool invocation, DSH resources/Artifacts,
+progressive exposure, and runtime safety boundaries.
+
 ## Development setup
 
 The release checkout is installable as-is because `lib/` is committed. Full source development intentionally uses the matching DeepSeek Harness monorepo for peer API types and real profile fixtures:

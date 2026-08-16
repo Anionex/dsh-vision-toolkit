@@ -4,6 +4,15 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+### Changed
+
+- Rebased the model-facing `vision-tools` Skill on the upstream `SKILL.md` and
+  all five upstream playbooks, changing only native DSH tool invocation,
+  Artifact/resource delivery, progressive exposure, and DSH runtime boundaries.
+- Added an exact upstream Skill commit/hash manifest, a reviewable adapter
+  patch, and repeatable sync/verification commands so future upstream updates
+  fail closed when the adaptation no longer applies cleanly.
+
 ### Fixed
 
 - Removed the stale single-image restriction from the public Groq vision proxy; one request can now forward up to five images in their original order.

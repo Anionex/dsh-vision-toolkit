@@ -206,6 +206,14 @@ flowchart LR
 
 The visual capabilities come from a packaged, pinned `agent-vision-toolkit` snapshot. The DSH plugin handles installation, session-scoped tool exposure, Credentials, path checks, cancellation, timeouts, result files, and Web presentation. The runtime never fetches upstream `main` in the background.
 
+The `vision-tools` Skill is maintained as an explicit adapter of the upstream
+`SKILL.md` plus all five upstream playbooks. Tool names, argument syntax,
+Artifact delivery, progressive exposure, and DSH path/lifecycle boundaries are
+adapted; the upstream tool-selection rules, coarse-to-fine method, and task SOPs
+remain intact. The exact upstream Skill commit, source hashes, adapted hashes,
+and reviewable adapter patch are recorded in `assets/skill/UPSTREAM.json` and
+`patches/vision-tools-dsh.patch`.
+
 For routes that DSH positively identifies as text-only, the plugin registers a sibling `<model> (Vision Toolkit)` variant. By default, pasting an image in DSH Web switches to that variant and gives the model both a reusable workspace path and a visual description focused on the current task.
 
 </details>

@@ -16,7 +16,7 @@ import type { Credentials } from '@deepseek-ai/dsh-credentials'
 import * as VisionToolkit from '../src/index.ts'
 import { VISION_TOOLKIT_ACTIVATE } from '../src/exposure.ts'
 import { bundledUpstreamRoot } from '../src/runtime-install.ts'
-import { VISION_TOOLS_SKILL_CONTENT } from '../src/skill.ts'
+import { VISION_TOOLS_SKILL_CONTENT, VISION_TOOLS_SKILL_RESOURCE_BASE } from '../src/skill.ts'
 
 const BUNDLED_UPSTREAM = bundledUpstreamRoot()
 const SAMPLE_IMAGE = fileURLToPath(new URL('./fixtures/sample.png', import.meta.url))
@@ -250,9 +250,13 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
     const definition = await ctx.skills.get('vision-tools')
     expect(definition?.content).toContain('untrusted visual evidence')
     expect(definition?.content).toContain('vision_toolkit_activate')
-    expect(definition?.content).toContain('never enter the model tool set')
-    expect(definition?.content).toContain('immediately repeated vision_glance')
+    expect(definition?.content).toContain('references/restore-ui.md')
+    expect(definition?.content).toContain('immediately repeated `vision_glance`')
     expect(definition?.content).toContain('Disabling or unloading the plugin cancels')
+    expect(definition?.resourceBase).toEqual({
+      kind: 'directory',
+      path: VISION_TOOLS_SKILL_RESOURCE_BASE,
+    })
 
     const activated = await registerAgent(ctx, 'activated')
     const untouched = await registerAgent(ctx, 'untouched')

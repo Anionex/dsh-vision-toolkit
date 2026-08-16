@@ -211,6 +211,12 @@ flowchart LR
 
 视觉能力来自打包的固定版本 `agent-vision-toolkit`。DSH 插件负责安装、会话级工具暴露、Credential、路径校验、取消、超时、结果文件和 Web 展示。运行时不会在后台拉取上游 `main`。
 
+`vision-tools` Skill 现在以上游 `SKILL.md` 和全部 5 篇上游 SOP 为明确底稿：
+只适配工具名、结构化参数、Artifact 交付、渐进式暴露，以及 DSH 的路径和生命周期边界；
+上游的工具选择规则、由粗到细方法和任务流程保持不变。精确的上游 Skill commit、
+源文件哈希、适配后哈希和可审查补丁分别记录在 `assets/skill/UPSTREAM.json` 与
+`patches/vision-tools-dsh.patch`。
+
 对于明确标记为纯文本的模型，插件会注册 `<模型名> (Vision Toolkit)` 变体。默认情况下，在 DSH Web 粘贴图片时会自动切换到该变体，并把图片路径与带当前任务重点的视觉描述一起交给模型。
 
 </details>
