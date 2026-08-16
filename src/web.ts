@@ -75,6 +75,7 @@ interface SaveRequest {
 interface HealthRequest {
   action: 'health'
   testConnection: boolean
+  testModel: boolean
 }
 
 interface CredentialRequest {
@@ -157,7 +158,10 @@ function parseRequest(value: unknown): SettingsRequest {
   if (!isRecord(value) || typeof value.action !== 'string') throw new TypeError('request action is required')
   if (value.action === 'health') {
     if (typeof value.testConnection !== 'boolean') throw new TypeError('health.testConnection must be boolean')
-    return { action: 'health', testConnection: value.testConnection }
+    const testModel = value.testModel === undefined ? false : value.testModel
+    if (typeof testModel !== 'boolean') throw new TypeError('health.testModel must be boolean')
+    if (testModel && !value.testConnection) throw new TypeError('health.testModel requires health.testConnection')
+    return { action: 'health', testConnection: value.testConnection, testModel }
   }
   if (value.action === 'save') {
     if (!Number.isSafeInteger(value.expectedRevision) || (value.expectedRevision as number) < 0) {
@@ -298,7 +302,7 @@ export class VisionToolkitWebBackend {
         signal: controller.signal,
         workspace: process.cwd(),
         sessionId: 'vision-toolkit-settings',
-      })
+      }, request.testModel)
     } finally {
       req.off('aborted', abort)
       req.socket.off('close', abort)

@@ -312,9 +312,11 @@ export interface VisionToolkitHealthResult {
         artifactDirectory: HealthCheck;
         tempDirectory: HealthCheck;
         service: HealthCheck;
+        model: HealthCheck;
     };
     healthy: boolean;
     connectionTested: boolean;
+    modelTested: boolean;
 }
 /** Shared per-call execution options. */
 export interface ToolCallOptions {
@@ -349,6 +351,7 @@ export declare class VisionToolkitRuntime {
     private runOperation;
     /** Resolve the configured credential at the remote-operation boundary. */
     resolveVisionEnv(): Promise<UpstreamEnvironment>;
+    private visionEnv;
     private pathPolicy;
     private validateImage;
     private accountImage;
@@ -379,8 +382,8 @@ export declare class VisionToolkitRuntime {
     /** html_screenshot: render only a path-fenced local HTML file in the pinned Chrome adapter. */
     htmlScreenshot(request: HtmlScreenshotRequest, options: ToolCallOptions): Promise<HtmlScreenshotResult>;
     private writableDirectoryCheck;
-    /** health: inspect local readiness and optionally probe the configured `/models` endpoint. */
-    health(testConnection: boolean, options: ToolCallOptions): Promise<VisionToolkitHealthResult>;
+    /** Health: inspect local readiness, optionally probe `/models`, and explicitly test one real multimodal request. */
+    health(testConnection: boolean, options: ToolCallOptions, testModel?: boolean): Promise<VisionToolkitHealthResult>;
     /** Report the packaged upstream snapshot version. */
     checkoutVersion(): Promise<string>;
     /** Prepared Python command. */

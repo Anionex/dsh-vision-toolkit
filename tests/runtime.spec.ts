@@ -525,10 +525,65 @@ describe('VisionToolkitRuntime', () => {
       const passive = await runtime.health(false, { signal, workspace })
       expect(passive).toMatchObject({
         connectionTested: false,
-        checks: { chrome: { status: 'ok' }, credential: { status: 'ok' }, service: { status: 'not_tested' } },
+        modelTested: false,
+        checks: {
+          chrome: { status: 'ok' },
+          credential: { status: 'ok' },
+          service: { status: 'not_tested' },
+          model: { status: 'not_tested' },
+        },
       })
       const active = await runtime.health(true, { signal, workspace })
-      expect(active).toMatchObject({ connectionTested: true, checks: { service: { status: 'ok' } } })
+      expect(active).toMatchObject({
+        connectionTested: true,
+        modelTested: false,
+        checks: { service: { status: 'ok' }, model: { status: 'not_tested' } },
+      })
+      const model = await runtime.health(true, { signal, workspace }, true)
+      expect(model).toMatchObject({
+        connectionTested: true,
+        modelTested: true,
+        checks: { service: { status: 'ok' }, model: { status: 'ok' } },
+      })
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close(error => error === undefined ? resolve() : reject(error)))
+    }
+  })
+
+  it('reports a real multimodal model-test failure without treating /models as success', async () => {
+    const server = createServer((_request, response) => {
+      response.writeHead(200, { 'content-type': 'application/json' })
+      response.end('{"data":[]}')
+    })
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+    try {
+      const address = server.address()
+      if (address === null || typeof address === 'string') throw new Error('missing fixture server address')
+      const { adapter, runtime } = await setup({
+        provider: {
+          baseUrl: `http://127.0.0.1:${address.port}/v1`,
+          credential: 'VISION_API_KEY',
+          model: 'fixture-model',
+        },
+      })
+      vi.spyOn(adapter, 'run').mockResolvedValueOnce({
+        stdout: '',
+        stderr: 'Vision API HTTP 503: no available accounts',
+        stdoutTruncated: false,
+        stderrTruncated: false,
+        outcome: { exitCode: 1, signal: null },
+      })
+      const workspace = await tempWorkspace()
+      const result = await runtime.health(true, { signal, workspace }, true)
+      expect(result).toMatchObject({
+        healthy: false,
+        connectionTested: true,
+        modelTested: true,
+        checks: {
+          service: { status: 'ok' },
+          model: { status: 'error', detail: expect.stringContaining('no available accounts') },
+        },
+      })
     } finally {
       await new Promise<void>((resolve, reject) => server.close(error => error === undefined ? resolve() : reject(error)))
     }
