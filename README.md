@@ -400,3 +400,11 @@ If you would like to follow my future work, [follow me on X](https://x.com/anion
 ## License
 
 The plugin is MIT-licensed. The packaged `agent-vision-toolkit` snapshot retains its upstream MIT license in `vendor/agent-vision-toolkit/LICENSE` and remains the sole implementation of its visual algorithms.
+
+## Join the Community Group
+
+You are welcome to join the `agent-vision-toolkit` community group to exchange usage tips, share feedback, and suggest improvements. Scan the QR code below to join.
+
+<p align="center">
+  <img src="assets/community-group-qr.png" alt="QR code for the agent-vision-toolkit community group" width="320">
+</p>

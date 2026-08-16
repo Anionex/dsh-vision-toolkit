@@ -408,3 +408,11 @@ pnpm pack --dry-run
 ## 许可证
 
 插件采用 MIT 许可。打包的 `agent-vision-toolkit` 快照在 `vendor/agent-vision-toolkit/LICENSE` 保留上游 MIT 许可证，并继续作为视觉算法的唯一实现。
+
+## 加入交流群
+
+欢迎加入 `agent-vision-toolkit` 项目交流群，交流使用经验、反馈问题并提出建议。请扫描下方二维码入群。
+
+<p align="center">
+  <img src="assets/community-group-qr.png" alt="agent-vision-toolkit 项目交流群二维码" width="320">
+</p>
