@@ -62,6 +62,27 @@ declare const en: {
     readonly upstreamVersion: "Upstream";
     readonly activeGeneration: "Runtime generation";
     readonly activeGenerationValue: "Generation {generation}";
+    readonly updates: "Plugin updates";
+    readonly updatesHint: "Check npm for a newer release, install it into this DSH profile, and restart DSH Web automatically.";
+    readonly checkUpdate: "Check for updates";
+    readonly checkingUpdate: "Checking for updates…";
+    readonly updateAvailable: "Update available";
+    readonly updateAvailableDetail: "Version {version} is available. Updating restarts DSH Web and may interrupt work that is currently running.";
+    readonly upToDate: "Up to date";
+    readonly upToDateDetail: "Version {version} is the latest release.";
+    readonly updateNow: "Update and restart";
+    readonly updatingPlugin: "Updating and restarting…";
+    readonly updateConfirm: "Install Vision Toolkit {version} and restart DSH Web now? Running work may be interrupted.";
+    readonly restarting: "Version {version} was installed. Waiting for DSH Web to restart…";
+    readonly updateProfile: "Profile";
+    readonly updateInstalled: "Installed";
+    readonly updateLatest: "Latest";
+    readonly updateUnsupported: "Automatic updates are unavailable for this installation.";
+    readonly updateReasonProfileNotFound: "The running plugin could not be matched to a DSH profile installation.";
+    readonly updateReasonNotDependency: "The plugin is not a direct dependency of this DSH profile.";
+    readonly updateReasonLocalSource: "This profile uses a local, workspace, URL, or git installation; update that source manually so local work is not overwritten.";
+    readonly updateReasonReadOnly: "The profile package manifest is read-only.";
+    readonly updateReasonPnpm: "pnpm is unavailable in the DSH execution environment.";
     readonly pluginKind: "DSH native plugin";
     readonly runtimeUnavailable: "Runtime unavailable";
     readonly runtimeCandidateRejected: "Last runtime candidate was rejected; the active generation remains available.";
@@ -205,6 +226,26 @@ interface SettingsValue {
     };
     allowedDirs?: string[];
 }
+type PluginUpdateUnavailableReason = 'profile-not-found' | 'not-direct-dependency' | 'unsupported-install-source' | 'profile-read-only' | 'pnpm-unavailable';
+interface PluginUpdateCapability {
+    supported: boolean;
+    profile?: string;
+    dependencySpec?: string;
+    reason?: PluginUpdateUnavailableReason;
+}
+interface PluginUpdateCheck extends PluginUpdateCapability {
+    currentVersion: string;
+    latestVersion?: string;
+    updateAvailable: boolean;
+    checkedAt: string;
+}
+interface PluginUpdateResult {
+    fromVersion: string;
+    toVersion: string;
+    profile: string;
+    restarting: true;
+    retryAfterMs: number;
+}
 interface SettingsSnapshot {
     schemaVersion: 1;
     writable: boolean;
@@ -237,6 +278,7 @@ interface SettingsSnapshot {
         upstreamRepository: string;
         upstreamVersion: string;
         upstreamCommit: string;
+        update: PluginUpdateCapability;
     };
     artifactRouteAvailable: boolean;
 }
@@ -246,7 +288,9 @@ interface SettingsState {
     status: 'idle' | 'loading' | 'ready' | 'error';
     snapshot?: SettingsSnapshot | undefined;
     health?: HealthResult | undefined;
-    action?: 'save' | 'health' | 'connection' | 'model' | undefined;
+    update?: PluginUpdateCheck | undefined;
+    restart?: PluginUpdateResult | undefined;
+    action?: 'save' | 'health' | 'connection' | 'model' | 'check-update' | 'apply-update' | undefined;
     message?: string | undefined;
     error?: string | undefined;
 }
@@ -262,6 +306,8 @@ export declare class VisionSettingsController {
     refreshIfLoaded(): void;
     save(value: SettingsValue, expectedRevision: number, credentialValue: string | undefined, writeSettings: boolean): Promise<boolean>;
     runHealth(mode: 'health' | 'connection' | 'model'): Promise<void>;
+    checkUpdate(): Promise<void>;
+    applyUpdate(expectedVersion: string): Promise<void>;
 }
 /** Required client services. The pasted-image codec attaches to either trigger-service generation after load. */
 export declare const inject: string[];

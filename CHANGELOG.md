@@ -11,6 +11,10 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [0.1.11] - 2026-08-16
 
+### Added
+
+- Added a **Plugin updates** Settings card that checks the configured npm registry, installs an explicitly confirmed release into the current registry-backed DSH profile, verifies it, restarts DSH Web through an independent helper, and reloads the page when the new version is serving. Local/workspace/git/URL and otherwise unsafe-to-replace installs remain read-only.
+
 ### Changed
 
 - Raised the built-in free vision service limits from 30 to 100 requests per client per UTC day, from 120 to 400 requests globally per UTC day, and from 6 to 20 requests per 60 seconds.

@@ -89,6 +89,27 @@ const en = {
   upstreamVersion: 'Upstream',
   activeGeneration: 'Runtime generation',
   activeGenerationValue: 'Generation {generation}',
+  updates: 'Plugin updates',
+  updatesHint: 'Check npm for a newer release, install it into this DSH profile, and restart DSH Web automatically.',
+  checkUpdate: 'Check for updates',
+  checkingUpdate: 'Checking for updates…',
+  updateAvailable: 'Update available',
+  updateAvailableDetail: 'Version {version} is available. Updating restarts DSH Web and may interrupt work that is currently running.',
+  upToDate: 'Up to date',
+  upToDateDetail: 'Version {version} is the latest release.',
+  updateNow: 'Update and restart',
+  updatingPlugin: 'Updating and restarting…',
+  updateConfirm: 'Install Vision Toolkit {version} and restart DSH Web now? Running work may be interrupted.',
+  restarting: 'Version {version} was installed. Waiting for DSH Web to restart…',
+  updateProfile: 'Profile',
+  updateInstalled: 'Installed',
+  updateLatest: 'Latest',
+  updateUnsupported: 'Automatic updates are unavailable for this installation.',
+  updateReasonProfileNotFound: 'The running plugin could not be matched to a DSH profile installation.',
+  updateReasonNotDependency: 'The plugin is not a direct dependency of this DSH profile.',
+  updateReasonLocalSource: 'This profile uses a local, workspace, URL, or git installation; update that source manually so local work is not overwritten.',
+  updateReasonReadOnly: 'The profile package manifest is read-only.',
+  updateReasonPnpm: 'pnpm is unavailable in the DSH execution environment.',
   pluginKind: 'DSH native plugin',
   runtimeUnavailable: 'Runtime unavailable',
   runtimeCandidateRejected: 'Last runtime candidate was rejected; the active generation remains available.',
@@ -239,6 +260,27 @@ const zh: Record<LocaleKey, string> = {
   upstreamVersion: '工具包版本',
   activeGeneration: '本次运行已应用',
   activeGenerationValue: '{generation} 次',
+  updates: '插件更新',
+  updatesHint: '检查 npm 新版本，自动更新当前 DSH Profile 中的插件，然后重启 DSH Web。',
+  checkUpdate: '检查更新',
+  checkingUpdate: '正在检查更新…',
+  updateAvailable: '发现新版本',
+  updateAvailableDetail: '可更新到 {version}。更新会重启 DSH Web，正在运行的任务可能会被中断。',
+  upToDate: '已是最新版',
+  upToDateDetail: '当前 {version} 已是最新正式版本。',
+  updateNow: '自动更新并重启',
+  updatingPlugin: '正在更新并重启…',
+  updateConfirm: '现在安装 Vision Toolkit {version} 并重启 DSH Web 吗？正在运行的任务可能会被中断。',
+  restarting: '已安装 {version}，正在等待 DSH Web 重启…',
+  updateProfile: 'Profile',
+  updateInstalled: '当前版本',
+  updateLatest: '最新版本',
+  updateUnsupported: '当前安装方式不支持自动更新。',
+  updateReasonProfileNotFound: '无法把正在运行的插件匹配到某个 DSH Profile 安装。',
+  updateReasonNotDependency: '该插件不是当前 DSH Profile 的直接依赖。',
+  updateReasonLocalSource: '当前使用本地、workspace、URL 或 git 安装；为避免覆盖本地修改，请手动更新对应来源。',
+  updateReasonReadOnly: '当前 Profile 的 package.json 不可写。',
+  updateReasonPnpm: 'DSH 运行环境中找不到 pnpm。',
   pluginKind: 'DSH 原生插件',
   runtimeUnavailable: '运行环境尚未就绪',
   runtimeCandidateRejected: '新设置未能生效，仍在使用上一次可用的设置。',
@@ -401,6 +443,35 @@ interface SettingsValue {
   allowedDirs?: string[]
 }
 
+type PluginUpdateUnavailableReason =
+  | 'profile-not-found'
+  | 'not-direct-dependency'
+  | 'unsupported-install-source'
+  | 'profile-read-only'
+  | 'pnpm-unavailable'
+
+interface PluginUpdateCapability {
+  supported: boolean
+  profile?: string
+  dependencySpec?: string
+  reason?: PluginUpdateUnavailableReason
+}
+
+interface PluginUpdateCheck extends PluginUpdateCapability {
+  currentVersion: string
+  latestVersion?: string
+  updateAvailable: boolean
+  checkedAt: string
+}
+
+interface PluginUpdateResult {
+  fromVersion: string
+  toVersion: string
+  profile: string
+  restarting: true
+  retryAfterMs: number
+}
+
 interface SettingsSnapshot {
   schemaVersion: 1
   writable: boolean
@@ -424,6 +495,7 @@ interface SettingsSnapshot {
     upstreamRepository: string
     upstreamVersion: string
     upstreamCommit: string
+    update: PluginUpdateCapability
   }
   artifactRouteAvailable: boolean
 }
@@ -779,7 +851,9 @@ interface SettingsState {
   status: 'idle' | 'loading' | 'ready' | 'error'
   snapshot?: SettingsSnapshot | undefined
   health?: HealthResult | undefined
-  action?: 'save' | 'health' | 'connection' | 'model' | undefined
+  update?: PluginUpdateCheck | undefined
+  restart?: PluginUpdateResult | undefined
+  action?: 'save' | 'health' | 'connection' | 'model' | 'check-update' | 'apply-update' | undefined
   message?: string | undefined
   error?: string | undefined
 }
@@ -808,7 +882,13 @@ export class VisionSettingsController {
     try {
       const snapshot = await apiRequest<SettingsSnapshot>()
       if (generation !== this.generation) return
-      this.set({ status: 'ready', snapshot, health: this.state.health })
+      this.set({
+        status: 'ready',
+        snapshot,
+        health: this.state.health,
+        update: this.state.update,
+        restart: this.state.restart,
+      })
     } catch (error) {
       if (generation !== this.generation) return
       this.set({ ...this.state, status: 'error', error: error instanceof Error ? error.message : String(error) })
@@ -854,12 +934,21 @@ export class VisionSettingsController {
             status: 'ready',
             snapshot,
             health: this.state.health,
+            update: this.state.update,
+            restart: this.state.restart,
             error: error instanceof Error ? error.message : String(error),
           })
           return false
         }
       }
-      this.set({ status: 'ready', snapshot, health: this.state.health, message: 'saved' })
+      this.set({
+        status: 'ready',
+        snapshot,
+        health: this.state.health,
+        update: this.state.update,
+        restart: this.state.restart,
+        message: 'saved',
+      })
       return true
     } catch (error) {
       this.set({ ...this.state, action: undefined, error: error instanceof Error ? error.message : String(error) })
@@ -878,6 +967,34 @@ export class VisionSettingsController {
         body: JSON.stringify({ action: 'health', testConnection, testModel }),
       })
       this.set({ ...this.state, action: undefined, health })
+    } catch (error) {
+      this.set({ ...this.state, action: undefined, error: error instanceof Error ? error.message : String(error) })
+    }
+  }
+
+  async checkUpdate(): Promise<void> {
+    this.set({ ...this.state, action: 'check-update', error: undefined, message: undefined })
+    try {
+      const update = await apiRequest<PluginUpdateCheck>({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'check-update' }),
+      })
+      this.set({ ...this.state, action: undefined, update })
+    } catch (error) {
+      this.set({ ...this.state, action: undefined, error: error instanceof Error ? error.message : String(error) })
+    }
+  }
+
+  async applyUpdate(expectedVersion: string): Promise<void> {
+    this.set({ ...this.state, action: 'apply-update', error: undefined, message: undefined })
+    try {
+      const restart = await apiRequest<PluginUpdateResult>({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'apply-update', expectedVersion }),
+      })
+      this.set({ ...this.state, action: undefined, restart, message: 'restarting' })
     } catch (error) {
       this.set({ ...this.state, action: undefined, error: error instanceof Error ? error.message : String(error) })
     }
@@ -1061,6 +1178,18 @@ function credentialSource(source: string, t: Translate): string {
   return source
 }
 
+const UPDATE_REASON_KEYS: Record<PluginUpdateUnavailableReason, LocaleKey> = {
+  'profile-not-found': 'updateReasonProfileNotFound',
+  'not-direct-dependency': 'updateReasonNotDependency',
+  'unsupported-install-source': 'updateReasonLocalSource',
+  'profile-read-only': 'updateReasonReadOnly',
+  'pnpm-unavailable': 'updateReasonPnpm',
+}
+
+function wait(delayMs: number): Promise<void> {
+  return new Promise(resolve => { setTimeout(resolve, delayMs) })
+}
+
 function LoadedSettings({ controller, t }: SettingsInjected) {
   const state = useSyncExternalStore(controller.subscribe, controller.snapshot, controller.snapshot)
   const snapshot = state.snapshot
@@ -1072,6 +1201,28 @@ function LoadedSettings({ controller, t }: SettingsInjected) {
   useEffect(() => {
     if (snapshot !== undefined) setDraft(draftOf(snapshot.settings.value))
   }, [snapshot])
+  useEffect(() => {
+    const restart = state.restart
+    if (restart === undefined) return
+    let cancelled = false
+    void (async () => {
+      await wait(restart.retryAfterMs)
+      const deadline = Date.now() + 60_000
+      while (!cancelled && Date.now() < deadline) {
+        try {
+          const current = await apiRequest<SettingsSnapshot>()
+          if (current.release.pluginVersion === restart.toVersion) {
+            window.location.reload()
+            return
+          }
+        } catch {
+          // The expected outage while the replacement process starts.
+        }
+        await wait(1_000)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [state.restart])
 
   if (state.status === 'idle' || (state.status === 'loading' && snapshot === undefined)) {
     return <div className="dvt-settings"><div className="dvt-loading">{t('testing')}</div></div>
@@ -1109,6 +1260,15 @@ function LoadedSettings({ controller, t }: SettingsInjected) {
     && !builtInCredentialChangedProvider
   const canSave = snapshot.writable || (apiKey.length > 0 && !keyLocked)
   const runtimeErrorTitle = snapshot.runtime.ready ? t('runtimeCandidateRejected') : t('runtimeUnavailable')
+  const pluginUpdate = state.update
+  const updateCapability = pluginUpdate ?? snapshot.release.update
+  const latestVersion = pluginUpdate?.latestVersion
+  const updateReason = updateCapability.reason === undefined ? undefined : t(UPDATE_REASON_KEYS[updateCapability.reason])
+  const applyUpdate = (): void => {
+    if (latestVersion === undefined) return
+    if (!window.confirm(t('updateConfirm', { version: latestVersion }))) return
+    void controller.applyUpdate(latestVersion)
+  }
 
   return (
     <div className="dvt-settings">
@@ -1117,6 +1277,7 @@ function LoadedSettings({ controller, t }: SettingsInjected) {
       {draftError === undefined ? null : <div className="dvt-alert error">{draftError}</div>}
       {state.error === undefined ? null : <div className="dvt-alert error">{state.error}</div>}
       {state.message === 'saved' ? <div className="dvt-alert success">{t('saved')}</div> : null}
+      {state.message === 'restarting' && state.restart !== undefined ? <div className="dvt-alert success">{t('restarting', { version: state.restart.toVersion })}</div> : null}
       {snapshot.runtime.lastError === undefined ? null : <div className="dvt-alert error"><strong>{runtimeErrorTitle}</strong><span>{snapshot.runtime.lastError}</span></div>}
 
       <section className="dvt-panel dvt-essential"><div className="dvt-panel-title"><div><h3>{t('provider')}</h3><p>{t('providerHint')}</p></div><span className={`dvt-badge ${snapshot.credential.configured ? 'ok' : 'error'}`}>{snapshot.credential.configured ? t('configured') : t('missing')}</span></div>
@@ -1136,6 +1297,27 @@ function LoadedSettings({ controller, t }: SettingsInjected) {
           const testTag = name === 'model' ? modelTestTag(state.health as HealthResult, check) : undefined
           return <div key={name} data-status={check.status}><span>{t(HEALTH_NAME_KEYS[name] ?? 'health')}</span>{testTag === undefined ? null : <em className="dvt-health-test-tag" data-status={testTag.status}>{t(testTag.label)}</em>}<strong>{t(HEALTH_STATUS_KEYS[check.status])}</strong><p>{healthDetail(name, check.detail, t)}</p></div>
         })}</div>}
+      </section>
+
+      <section className="dvt-panel dvt-update-panel">
+        <div className="dvt-panel-title">
+          <div><h3>{t('updates')}</h3><p>{t('updatesHint')}</p></div>
+          <span className={`dvt-badge ${pluginUpdate?.updateAvailable ? 'warning' : pluginUpdate !== undefined && pluginUpdate.supported ? 'ok' : ''}`}>
+            {pluginUpdate?.updateAvailable ? t('updateAvailable') : pluginUpdate !== undefined && pluginUpdate.supported ? t('upToDate') : t('pluginVersion')}
+          </span>
+        </div>
+        <div className="dvt-update-grid">
+          <div><span>{t('updateInstalled')}</span><strong>{snapshot.release.pluginVersion}</strong></div>
+          <div><span>{t('updateLatest')}</span><strong>{latestVersion ?? '—'}</strong></div>
+          <div><span>{t('updateProfile')}</span><strong>{updateCapability.profile ?? '—'}</strong></div>
+        </div>
+        {!updateCapability.supported ? <div className="dvt-alert warning"><strong>{t('updateUnsupported')}</strong><span>{updateReason}</span></div> : null}
+        {pluginUpdate?.supported && pluginUpdate.updateAvailable && latestVersion !== undefined ? <p className="dvt-muted">{t('updateAvailableDetail', { version: latestVersion })}</p> : null}
+        {pluginUpdate?.supported && !pluginUpdate.updateAvailable && latestVersion !== undefined ? <p className="dvt-muted">{t('upToDateDetail', { version: latestVersion })}</p> : null}
+        <div className="dvt-actions">
+          <Button variant="outline" disabled={busy || !updateCapability.supported || state.restart !== undefined} onClick={() => { void controller.checkUpdate() }}>{state.action === 'check-update' ? t('checkingUpdate') : t('checkUpdate')}</Button>
+          {pluginUpdate?.updateAvailable && latestVersion !== undefined ? <Button variant="primary" disabled={busy || state.restart !== undefined} onClick={applyUpdate}>{state.action === 'apply-update' ? t('updatingPlugin') : t('updateNow')}</Button> : null}
+        </div>
       </section>
 
       <details className="dvt-advanced">
@@ -1180,11 +1362,11 @@ const CSS = `
 .dvt-tool-head{width:100%;min-height:38px;display:flex;align-items:center;gap:7px;padding:8px 10px;border:0;background:transparent;color:inherit;text-align:left;cursor:pointer;font:inherit}.dvt-tool-head:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:-2px}.dvt-tool-icon{width:20px;height:20px;display:grid;place-items:center;border-radius:6px;color:var(--dsw-alias-state-business-primary);background:color-mix(in srgb,var(--dsw-alias-state-business-primary) 12%,transparent);flex:none}.dvt-tool-title{font-size:12px;font-weight:650;white-space:nowrap}.dvt-tool-sep{opacity:.35}.dvt-tool-summary{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--dsw-alias-label-secondary)}.dvt-tool-status{margin-left:auto;font-size:11px;color:var(--dsw-alias-label-secondary);max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dvt-tool[data-state=error] .dvt-tool-status{color:var(--dsw-alias-state-error-primary)}.dvt-chevron{margin-left:auto;transition:transform .16s ease;opacity:.55}.dvt-chevron[data-open=true]{transform:rotate(180deg)}.dvt-tool-body{padding:0 10px 10px}.dvt-stack{display:grid;gap:10px}.dvt-muted{margin:0;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:1.5}
 .dvt-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.dvt-metrics>div,.dvt-diff-score{padding:10px;border-radius:9px;background:var(--dsw-alias-bg-layer-2);display:grid;gap:4px}.dvt-metrics span,.dvt-diff-score span{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--dsw-alias-label-secondary)}.dvt-metrics strong,.dvt-diff-score strong{font-size:13px}.dvt-list{list-style:none;margin:0;padding:0;display:grid;gap:4px;max-height:160px;overflow:auto}.dvt-list li{display:flex;justify-content:space-between;gap:12px;padding:6px 8px;border-radius:7px;background:var(--dsw-alias-bg-layer-2);font-size:11px}.dvt-list code{color:var(--dsw-alias-state-business-primary)}.dvt-table-wrap{max-height:220px;overflow:auto;border:1px solid var(--dsw-alias-border-l1);border-radius:9px}.dvt-table{width:100%;border-collapse:collapse;font-size:11px}.dvt-table th,.dvt-table td{padding:7px 8px;text-align:left;border-bottom:1px solid var(--dsw-alias-border-l1)}.dvt-table th{position:sticky;top:0;background:var(--dsw-alias-bg-layer-2);font-size:10px;text-transform:uppercase;letter-spacing:.05em}.dvt-table tr:last-child td{border-bottom:0}
 .dvt-artifact{border:1px solid var(--dsw-alias-border-l1);border-radius:10px;overflow:hidden;background:var(--dsw-alias-bg-layer-1)}.dvt-preview{display:block;width:100%;max-height:360px;object-fit:contain;background:repeating-conic-gradient(var(--dsw-alias-bg-module-platform) 0 25%,var(--dsw-alias-bg-layer-1) 0 50%) 50%/18px 18px;border:0}.dvt-svg{height:280px}.dvt-artifact-meta{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 10px}.dvt-artifact-meta>div:first-child{min-width:0;display:grid;gap:2px}.dvt-artifact-meta strong{font-size:12px;overflow:hidden;text-overflow:ellipsis}.dvt-artifact-meta span,.dvt-artifact-meta small{font-size:10px;color:var(--dsw-alias-label-secondary)}.dvt-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.dvt-download{display:inline-flex;align-items:center;height:28px;padding:0 12px;border-radius:999px;background:var(--dsw-alias-button-primary-fill);color:var(--dsw-alias-label-primary-foreground);text-decoration:none;font-size:12px;font-weight:600}.dvt-download:hover{background:var(--dsw-alias-button-primary-hover)}.dvt-download:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:2px}.dvt-artifact>.dvt-muted{padding:0 10px 10px}.dvt-diff-score>div{height:5px;border-radius:99px;background:var(--dsw-alias-border-l2);overflow:hidden}.dvt-diff-score i{display:block;height:100%;min-width:2px;background:linear-gradient(90deg,var(--dsw-alias-state-warn-primary),var(--dsw-alias-state-error-primary));border-radius:99px}.dvt-tool h4{font-size:11px;margin:0 0 6px}.dvt-palette{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:7px}.dvt-palette>div{display:flex;align-items:center;gap:8px;padding:7px;border:1px solid var(--dsw-alias-border-l1);border-radius:9px}.dvt-palette i{width:28px;height:28px;border-radius:7px;box-shadow:inset 0 0 0 1px var(--dsw-alias-border-l2)}.dvt-palette span{display:grid}.dvt-palette strong{font-size:11px}.dvt-palette small{font-size:10px;color:var(--dsw-alias-label-secondary)}
-.dvt-settings{display:grid;gap:14px;max-width:900px;padding:8px 2px 32px;color:var(--dsw-alias-label-primary)}.dvt-settings-footer{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;padding:8px 2px}.dvt-settings-footer h2{font-size:25px;letter-spacing:-.025em;margin:3px 0 6px}.dvt-settings-footer p{max-width:620px;margin:0;color:var(--dsw-alias-label-secondary);font-size:13px;line-height:1.55}.dvt-kicker{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--dsw-alias-state-business-primary);font-weight:700}.dvt-release{display:grid;gap:4px;min-width:170px;padding:9px 11px;border-radius:10px;background:var(--dsw-alias-bg-layer-2);font-size:10px;color:var(--dsw-alias-label-secondary)}.dvt-release span{display:flex;justify-content:space-between;gap:12px}.dvt-release strong{color:var(--dsw-alias-label-primary)}.dvt-alert{padding:10px 12px;border-radius:10px;font-size:12px;line-height:1.5;display:grid;gap:3px}.dvt-alert.notice{background:color-mix(in srgb,var(--dsw-alias-state-business-primary) 10%,transparent);color:var(--dsw-alias-state-business-primary)}.dvt-alert.warning{background:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 12%,transparent);color:var(--dsw-alias-state-warn-label)}.dvt-alert.error{background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 10%,transparent);color:var(--dsw-alias-state-error-primary)}.dvt-alert.success{background:color-mix(in srgb,var(--dsw-alias-state-success-primary) 10%,transparent);color:var(--dsw-alias-state-success-primary)}.dvt-panel{display:grid;gap:12px;padding:15px;border:1px solid var(--dsw-alias-border-l1);border-radius:14px;background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-shadow-lv1)}.dvt-panel-title{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.dvt-panel-title h3{font-size:14px;margin:0}.dvt-panel-title p{font-size:11px;line-height:1.45;color:var(--dsw-alias-label-secondary);margin:4px 0 0;max-width:620px}.dvt-badge{font-size:10px;padding:3px 7px;border-radius:999px;font-weight:650}.dvt-badge.ok{background:color-mix(in srgb,var(--dsw-alias-state-success-primary) 12%,transparent);color:var(--dsw-alias-state-success-primary)}.dvt-badge.error{background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 10%,transparent);color:var(--dsw-alias-state-error-primary)}.dvt-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.dvt-field{display:grid;gap:6px;align-content:start}.dvt-field>span{font-size:11px;font-weight:600}.dvt-field>small{font-size:10px;color:var(--dsw-alias-label-secondary);line-height:1.4}.dvt-field select,.dvt-field textarea{width:100%;box-sizing:border-box;border:1px solid var(--dsw-alias-border-l1);border-radius:9px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;padding:8px 10px}.dvt-field select{height:36px}.dvt-field textarea{resize:vertical;min-height:76px}.dvt-runtime-facts{display:grid;gap:4px;padding:9px 10px;border-radius:9px;background:var(--dsw-alias-bg-layer-2);overflow:auto}.dvt-runtime-facts code{font-size:10px;white-space:nowrap;color:var(--dsw-alias-label-secondary)}.dvt-save-row{display:flex;gap:8px;padding:2px 0}
+.dvt-settings{display:grid;gap:14px;max-width:900px;padding:8px 2px 32px;color:var(--dsw-alias-label-primary)}.dvt-settings-footer{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;padding:8px 2px}.dvt-settings-footer h2{font-size:25px;letter-spacing:-.025em;margin:3px 0 6px}.dvt-settings-footer p{max-width:620px;margin:0;color:var(--dsw-alias-label-secondary);font-size:13px;line-height:1.55}.dvt-kicker{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--dsw-alias-state-business-primary);font-weight:700}.dvt-release{display:grid;gap:4px;min-width:170px;padding:9px 11px;border-radius:10px;background:var(--dsw-alias-bg-layer-2);font-size:10px;color:var(--dsw-alias-label-secondary)}.dvt-release span{display:flex;justify-content:space-between;gap:12px}.dvt-release strong{color:var(--dsw-alias-label-primary)}.dvt-alert{padding:10px 12px;border-radius:10px;font-size:12px;line-height:1.5;display:grid;gap:3px}.dvt-alert.notice{background:color-mix(in srgb,var(--dsw-alias-state-business-primary) 10%,transparent);color:var(--dsw-alias-state-business-primary)}.dvt-alert.warning{background:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 12%,transparent);color:var(--dsw-alias-state-warn-label)}.dvt-alert.error{background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 10%,transparent);color:var(--dsw-alias-state-error-primary)}.dvt-alert.success{background:color-mix(in srgb,var(--dsw-alias-state-success-primary) 10%,transparent);color:var(--dsw-alias-state-success-primary)}.dvt-panel{display:grid;gap:12px;padding:15px;border:1px solid var(--dsw-alias-border-l1);border-radius:14px;background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-shadow-lv1)}.dvt-panel-title{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.dvt-panel-title h3{font-size:14px;margin:0}.dvt-panel-title p{font-size:11px;line-height:1.45;color:var(--dsw-alias-label-secondary);margin:4px 0 0;max-width:620px}.dvt-badge{font-size:10px;padding:3px 7px;border-radius:999px;font-weight:650}.dvt-badge.ok{background:color-mix(in srgb,var(--dsw-alias-state-success-primary) 12%,transparent);color:var(--dsw-alias-state-success-primary)}.dvt-badge.warning{background:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 12%,transparent);color:var(--dsw-alias-state-warn-label)}.dvt-badge.error{background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 10%,transparent);color:var(--dsw-alias-state-error-primary)}.dvt-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.dvt-field{display:grid;gap:6px;align-content:start}.dvt-field>span{font-size:11px;font-weight:600}.dvt-field>small{font-size:10px;color:var(--dsw-alias-label-secondary);line-height:1.4}.dvt-field select,.dvt-field textarea{width:100%;box-sizing:border-box;border:1px solid var(--dsw-alias-border-l1);border-radius:9px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;padding:8px 10px}.dvt-field select{height:36px}.dvt-field textarea{resize:vertical;min-height:76px}.dvt-runtime-facts{display:grid;gap:4px;padding:9px 10px;border-radius:9px;background:var(--dsw-alias-bg-layer-2);overflow:auto}.dvt-runtime-facts code{font-size:10px;white-space:nowrap;color:var(--dsw-alias-label-secondary)}.dvt-save-row{display:flex;gap:8px;padding:2px 0}.dvt-update-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.dvt-update-grid>div{display:grid;gap:3px;padding:9px 10px;border-radius:9px;background:var(--dsw-alias-bg-layer-2)}.dvt-update-grid span{font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:var(--dsw-alias-label-caption)}.dvt-update-grid strong{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dvt-settings-footer{margin-top:8px;padding:20px 2px 4px;border-top:1px solid var(--dsw-alias-border-l1);opacity:.82}.dvt-settings-footer h2{font-size:18px;letter-spacing:-.015em;margin:3px 0 5px}.dvt-settings-footer p{font-size:11px;line-height:1.5}.dvt-release{min-width:220px}.dvt-release span{white-space:nowrap}.dvt-essential{border-color:color-mix(in srgb,var(--dsw-alias-state-business-primary) 30%,var(--dsw-alias-border-l1));box-shadow:var(--dsw-shadow-lv1),0 0 0 3px color-mix(in srgb,var(--dsw-alias-state-business-primary) 5%,transparent)}.dvt-advanced{border:1px solid var(--dsw-alias-border-l1);border-radius:14px;background:var(--dsw-alias-bg-layer-1);overflow:hidden}.dvt-advanced>summary{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 15px;cursor:pointer;list-style:none}.dvt-advanced>summary::-webkit-details-marker{display:none}.dvt-advanced>summary>span:first-child{display:grid;gap:3px}.dvt-advanced>summary strong{font-size:13px}.dvt-advanced>summary small{font-size:10px;line-height:1.45;color:var(--dsw-alias-label-secondary);font-weight:400}.dvt-details-chevron{font-size:15px;opacity:.55;transition:transform .16s ease}.dvt-advanced[open] .dvt-details-chevron{transform:rotate(180deg)}.dvt-advanced-body{display:grid;gap:12px;padding:0 12px 12px}.dvt-advanced-body>.dvt-panel{box-shadow:none}
 .dvt-health-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px}.dvt-health-grid>div{padding:9px 10px;border-radius:9px;background:var(--dsw-alias-bg-layer-2);border-left:3px solid var(--dsw-alias-border-l4)}.dvt-health-grid>div[data-status=ok]{border-left-color:var(--dsw-alias-state-success-primary)}.dvt-health-grid>div[data-status=warning],.dvt-health-grid>div[data-status=not_tested]{border-left-color:var(--dsw-alias-state-warn-primary)}.dvt-health-grid>div[data-status=error]{border-left-color:var(--dsw-alias-state-error-primary)}.dvt-health-grid span{font-size:10px;text-transform:capitalize}.dvt-health-grid strong{float:right;font-size:9px;text-transform:uppercase;color:var(--dsw-alias-label-secondary)}.dvt-health-test-tag{display:inline-flex;margin-left:6px;padding:1px 6px;border-radius:999px;background:var(--dsw-alias-bg-layer-1);font-size:9px;font-style:normal;font-weight:600;color:var(--dsw-alias-label-secondary)}.dvt-health-test-tag[data-status=ok]{background:color-mix(in srgb,var(--dsw-alias-state-success-primary) 12%,transparent);color:var(--dsw-alias-state-success-primary)}.dvt-health-test-tag[data-status=warning]{background:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 12%,transparent);color:var(--dsw-alias-state-warn-label)}.dvt-health-test-tag[data-status=error]{background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 12%,transparent);color:var(--dsw-alias-state-error-primary)}.dvt-health-grid p{clear:both;margin:5px 0 0;font-size:10px;line-height:1.4;color:var(--dsw-alias-label-secondary)}.dvt-loading{padding:24px;border-radius:12px;background:var(--dsw-alias-bg-layer-2);font-size:12px;color:var(--dsw-alias-label-secondary)}
 .dvt-paste-dock{box-sizing:border-box;width:calc(100% - 32px);max-width:var(--dsh-composer-card-max-width,960px);margin:0 auto;display:flex;flex-wrap:wrap;gap:6px;padding:0 2px 6px}.dvt-paste-chip{max-width:100%;height:32px;box-sizing:border-box;display:flex;align-items:center;gap:7px;padding:0 6px 0 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:9px;background:var(--dsw-specific-tip);font-size:12px}.dvt-paste-chip[data-status=copying]{border-color:var(--dsw-alias-state-business-primary)}.dvt-paste-chip[data-status=error]{border-color:var(--dsw-alias-state-error-primary)}.dvt-paste-name{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dvt-paste-detail{color:var(--dsw-alias-label-caption);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dvt-paste-chip[data-status=error] .dvt-paste-detail{color:var(--dsw-alias-state-error-primary)}.dvt-paste-chip button{width:20px;height:20px;display:grid;place-items:center;border:0;border-radius:50%;padding:0;background:transparent;color:var(--dsw-alias-label-caption);font:inherit;font-size:16px;cursor:pointer}.dvt-paste-chip button:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}.dvt-paste-chip button:disabled{opacity:.4;cursor:default}
-@media(max-width:720px){.dvt-settings-footer{display:grid}.dvt-release{width:auto}.dvt-form-grid{grid-template-columns:1fr}.dvt-metrics{grid-template-columns:1fr}.dvt-artifact-meta{align-items:flex-start;flex-direction:column}.dvt-panel-title{flex-direction:column}}
+@media(max-width:720px){.dvt-settings-footer{display:grid}.dvt-release{width:auto}.dvt-form-grid,.dvt-update-grid{grid-template-columns:1fr}.dvt-metrics{grid-template-columns:1fr}.dvt-artifact-meta{align-items:flex-start;flex-direction:column}.dvt-panel-title{flex-direction:column}}
 `
 
 function installStyles(): () => void {
