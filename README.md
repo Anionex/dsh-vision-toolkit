@@ -187,11 +187,11 @@ Health checks, connection testing, and plugin/upstream version inspection are ad
 
 ## Image-input variants for text-only models
 
-Text-only model routes get sibling model-selector entries named `<model> (Vision Toolkit)` under a matching provider group. A variant declares image input, so pasted images keep the native attachment flow — composer thumbnail, durable session image, and history rendering — and the plugin rewrites every image block into a Vision Toolkit description only on the wire to the model, before the request reaches the upstream route. The vision prompt is focus-hinted with the latest user or assistant intent, using the same role, instruction, image-text policy, and `[vision model description]` channel markers as `agent-vision-toolkit`; the model receives task-relevant evidence instead of a broad generic description. The session log is untouched; replay and the UI keep the real image.
+Text-only model routes get sibling model-selector entries named `<model> (Vision Toolkit)` under a matching provider group. DSH cannot pass a pasted attachment's local path through its native image block, so the default paste flow copies each image into the session workspace and inserts its absolute path into the model-visible message. The DSH model can then call `vision_glance` (or another visual tool) with that path, using the same focus-hinted bridge and `[vision model description]` channel markers as `agent-vision-toolkit`. The session log contains the durable path reference and the UI keeps the paste record.
 
-A variant is registered automatically for every model the host positively declares text-only (for example the DeepSeek chat family). Paste handling is automatic: when the current model is confirmed text-only and its variant exists, the browser integration switches the session to the variant by itself (a short notice names the new model) and the paste then keeps the native flow; no manual model change is needed. The host's verdict uses the exact model route the browser read from the live model catalog, with the selector label as fallback; unconfirmed or image-capable routes always keep the native flow, and a text-only model without a variant (for example when variants are disabled) keeps the paste-to-path takeover, which copies the image into the session workspace and inserts its path as text.
+A variant is still registered automatically for every model the host positively declares text-only (for example the DeepSeek chat family), but automatic switching is opt-in. With the default `autoSwitch: false`, a text-only session uses the paste-to-path flow so the DSH model receives a usable absolute path. If `autoSwitch: true` is explicitly enabled, the browser switches to `<model> (Vision Toolkit)` and the server-side image-input variant rewrites native image blocks into descriptions. The host's verdict uses the exact model route the browser read from the live model catalog, with the selector label as fallback; unconfirmed or image-capable routes keep the native flow.
 
-Description conversion needs the configured vision provider and its credential; when the runtime is not ready or a read fails, the wire block degrades to the upstream-compatible `[vision unavailable: ...]` note instead of failing the turn. The bridge does not treat injected context files as the current user intent, and it uses the latest assistant paragraph when a tool-fetched image is being described. Disable variants with `imageInputVariants.enabled: false`, restrict the wrapped routes with `imageInputVariants.providers`, or keep the paste-to-path behavior for text-only models with `imageInputVariants.autoSwitch: false`.
+Description conversion needs the configured vision provider and its credential when the opt-in image-input variant is used; when the runtime is not ready or a read fails, the wire block degrades to the upstream-compatible `[vision unavailable: ...]` note instead of failing the turn. The bridge does not treat injected context files as the current user intent, and it uses the latest assistant paragraph when a tool-fetched image is being described. Disable variants with `imageInputVariants.enabled: false`, restrict the wrapped routes with `imageInputVariants.providers`, or opt into native attachment switching with `imageInputVariants.autoSwitch: true`.
 
 </details>
 
@@ -286,7 +286,7 @@ The bundle defaults to the managed runtime. A profile patch can override the pro
     imageInputVariants:
       enabled: true
       providers: []
-      autoSwitch: true
+      autoSwitch: false
 ```
 
 ### Configuration fields
@@ -310,7 +310,7 @@ The bundle defaults to the managed runtime. A profile patch can override the pro
 | `allowedDirs` | `[]` | Additional realpath-resolved input roots; the session workspace is always allowed |
 | `imageInputVariants.enabled` | `true` | Register image-input variant entries for text-only model routes in the model selector |
 | `imageInputVariants.providers` | `[]` | Restrict wrapped upstream routes by provider id; empty wraps every eligible route |
-| `imageInputVariants.autoSwitch` | `true` | Automatically switch a text-only session to its image-input variant on paste, so the image keeps the native flow; `false` keeps the paste-to-path takeover for text-only models |
+| `imageInputVariants.autoSwitch` | `false` | Opt into automatically switching a text-only session to its image-input variant on paste; the default `false` keeps the DSH-compatible paste-to-path flow |
 
 ### Credentials
 

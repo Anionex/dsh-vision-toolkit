@@ -65,7 +65,7 @@ export interface VisionToolkitConfig {
          * to the image-input variant of a text-only model before the paste, so
          * pasted images keep the native attachment flow with no manual model
          * change. Off means a text-only model keeps the path takeover (default
-         * true).
+         * false), which is the DSH-compatible paste flow.
          */
         autoSwitch?: boolean;
     };
