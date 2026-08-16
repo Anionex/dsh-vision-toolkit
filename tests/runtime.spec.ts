@@ -1,4 +1,4 @@
-import { copyFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { copyFile, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -38,12 +38,12 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map(dir => rm(dir, { recursive: true, force: true })))
 })
 
-function preparedFixture(): PreparedUpstreamRuntime {
+function preparedFixture(cleanHome = FIXTURE_UPSTREAM): PreparedUpstreamRuntime {
   return {
     source: 'external',
     root: FIXTURE_UPSTREAM,
     python: { program: 'python3', prefix: [], display: 'python3' },
-    cleanHome: FIXTURE_UPSTREAM,
+    cleanHome,
     pythonVersion: '3.11+',
     dependencies: { pillow: 'fixture', numpy: 'fixture', vtracer: 'fixture' },
   }
@@ -52,6 +52,7 @@ function preparedFixture(): PreparedUpstreamRuntime {
 async function setup(
   overrides: VisionToolkitConfig = {},
   credential: string | null = 'test-vision-key',
+  prepared = preparedFixture(),
 ) {
   const ctx = new Context()
   contexts.push(ctx)
@@ -70,7 +71,7 @@ async function setup(
     runtime: { mode: 'external', agentVisionToolkitPath: FIXTURE_UPSTREAM, python: 'python3' },
     ...overrides,
   })
-  const adapter = new UpstreamAdapter(ctx, config, preparedFixture())
+  const adapter = new UpstreamAdapter(ctx, config, prepared)
   const runtime = new VisionToolkitRuntime(ctx, config, adapter)
   return { ctx, config, adapter, runtime }
 }
@@ -606,6 +607,22 @@ describe('VisionToolkitRuntime', () => {
     } finally {
       await new Promise<void>((resolve, reject) => server.close(error => error === undefined ? resolve() : reject(error)))
     }
+  })
+
+  it('checks output readiness without resolving session-relative allowed directories', async () => {
+    const runtimeHome = await tempWorkspace()
+    const { runtime } = await setup(
+      { allowedDirs: ['session-relative-inputs'] },
+      'test-vision-key',
+      preparedFixture(runtimeHome),
+    )
+
+    const result = await runtime.health(false, { signal, workspace: runtimeHome })
+
+    expect(result.checks.artifactDirectory).toEqual({
+      status: 'ok',
+      detail: `Artifact directory is writable: ${join(await realpath(runtimeHome), '.dsh-vision-toolkit', 'artifacts')}`,
+    })
   })
 
   it('reports a real multimodal model-test failure without treating /models as success', async () => {

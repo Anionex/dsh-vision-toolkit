@@ -1757,7 +1757,8 @@ export class VisionToolkitRuntime {
       }
       let artifactDirectory: HealthCheck
       try {
-        const policy = await this.pathPolicy(options.workspace)
+        // allowedDirs are session input roots; they do not affect output readiness.
+        const policy = await createPathPolicy(options.workspace, [])
         artifactDirectory = await this.writableDirectoryCheck(policy.outputDir, 'Artifact directory')
       } catch {
         artifactDirectory = { status: 'error', detail: 'Artifact directory could not be prepared' }
