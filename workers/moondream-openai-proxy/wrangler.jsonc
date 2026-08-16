@@ -37,7 +37,7 @@
     "MAX_IMAGE_BYTES": "4194304",
     "MAX_IMAGE_PIXELS": "20000000",
     "MAX_OUTPUT_TOKENS": "512",
-    "MAX_REQUEST_BYTES": "6291456"
+    "MAX_REQUEST_BYTES": "33554432"
   },
   "observability": {
     "enabled": true,

@@ -78,7 +78,7 @@ function environment(database: FakeD1, burstSuccess = true): Env {
     MAX_IMAGE_BYTES: '4194304',
     MAX_IMAGE_PIXELS: '20000000',
     MAX_OUTPUT_TOKENS: '512',
-    MAX_REQUEST_BYTES: '6291456',
+    MAX_REQUEST_BYTES: '33554432',
     PUBLIC_API_KEY: 'free',
     GROQ_API_KEY_1: 'test-groq-key-1',
     GROQ_API_KEY_2: 'test-groq-key-2',
@@ -127,6 +127,38 @@ describe('Worker request accounting', () => {
       max_tokens: 512,
       stream: false,
     })
+  })
+
+  it('materializes and forwards multiple images in one Groq request', async () => {
+    const database = new FakeD1()
+    const groqFetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as {
+        messages: Array<{ content: unknown[] }>
+      }
+      expect(body.messages[0]?.content).toEqual([
+        { text: 'User: Compare these images.', type: 'text' },
+        { image_url: { url: tinyPng }, type: 'image_url' },
+        { image_url: { url: tinyPng }, type: 'image_url' },
+      ])
+      return Response.json({
+        choices: [{ finish_reason: 'stop', message: { content: 'They match.', role: 'assistant' } }],
+      })
+    })
+    vi.stubGlobal('fetch', groqFetch)
+    const response = await worker.fetch(request(tinyPng, JSON.stringify({
+      messages: [{
+        content: [
+          { text: 'Compare these images.', type: 'text' },
+          { image_url: { url: tinyPng }, type: 'image_url' },
+          { image_url: { url: tinyPng }, type: 'image_url' },
+        ],
+        role: 'user',
+      }],
+      model: CANONICAL_MODEL,
+    })), environment(database))
+
+    expect(response.status).toBe(200)
+    expect(groqFetch).toHaveBeenCalledTimes(1)
   })
 
   it('tries the next Groq key when the selected account is rate limited', async () => {

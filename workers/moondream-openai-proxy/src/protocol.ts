@@ -20,6 +20,7 @@ const SUPPORTED_IMAGE_DATA_URI = /^data:image\/(png|jpe?g|webp|gif);base64,([A-Z
 const SUPPORTED_TASKS = new Set(['query', 'caption', 'point', 'detect'])
 const SUPPORTED_CAPTION_LENGTHS = new Set(['short', 'normal', 'long'])
 const MAX_QUESTION_CHARS = 16_000
+export const MAX_IMAGES_PER_REQUEST = 5
 
 export type VisionTask = 'query' | 'caption' | 'point' | 'detect'
 export type MoondreamTask = VisionTask
@@ -27,7 +28,7 @@ export type CaptionLength = 'short' | 'normal' | 'long'
 
 export interface ParsedCompletionRequest {
   captionLength: CaptionLength
-  image: string
+  images: string[]
   maxTokens: number | undefined
   question: string
   target: string
@@ -51,10 +52,10 @@ export type MoondreamOutput = VisionOutput
 
 export interface VisionInput {
   messages: [{
-    content: [
-      { text: string; type: 'text' },
-      { image_url: { url: string }; type: 'image_url' },
-    ]
+    content: Array<
+      | { text: string; type: 'text' }
+      | { image_url: { url: string }; type: 'image_url' }
+    >
     role: 'user'
   }]
   max_tokens: number
@@ -269,8 +270,13 @@ export function parseChatCompletionRequest(value: unknown, maxImageBytes: number
     if (role === 'user') images.push(...extractImage(message.content, `messages[${index}].content`))
   }
 
-  if (images.length !== 1) {
-    throw new ProtocolError('Exactly one user image_url is required', { param: 'messages' })
+  if (images.length === 0) {
+    throw new ProtocolError('At least one user image_url is required', { param: 'messages' })
+  }
+  if (images.length > MAX_IMAGES_PER_REQUEST) {
+    throw new ProtocolError(`At most ${MAX_IMAGES_PER_REQUEST} user image_url values are supported`, {
+      param: 'messages',
+    })
   }
   const question = textSegments.join('\n\n') || "What's in this image?"
   if (question.length > MAX_QUESTION_CHARS) {
@@ -308,7 +314,7 @@ export function parseChatCompletionRequest(value: unknown, maxImageBytes: number
 
   return {
     captionLength: captionLengthValue as CaptionLength,
-    image: validateImage(images[0] ?? '', maxImageBytes),
+    images: images.map(image => validateImage(image, maxImageBytes)),
     maxTokens: maxCompletionTokens ?? maxTokens,
     question,
     target,
@@ -390,7 +396,7 @@ function validateStructuredItems(items: unknown[], field: 'objects' | 'points'):
   })
 }
 
-export function buildVisionInput(completion: ParsedCompletionRequest, image: string, maxTokens: number): VisionInput {
+export function buildVisionInput(completion: ParsedCompletionRequest, images: string[], maxTokens: number): VisionInput {
   let instruction = completion.question
   if (completion.task === 'caption') {
     instruction = `Describe this image ${completion.captionLength === 'long' ? 'in detail' : completion.captionLength === 'short' ? 'briefly' : 'clearly'}.`
@@ -402,10 +408,10 @@ export function buildVisionInput(completion: ParsedCompletionRequest, image: str
 
   return {
     messages: [{
-      content: [
-        { text: instruction, type: 'text' },
-        { image_url: { url: image }, type: 'image_url' },
-      ],
+        content: [
+          { text: instruction, type: 'text' },
+          ...images.map(image => ({ image_url: { url: image }, type: 'image_url' as const })),
+        ],
       role: 'user',
     }],
     max_tokens: maxTokens,
