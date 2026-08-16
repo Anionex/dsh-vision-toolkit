@@ -31,7 +31,7 @@ If you use DeepSeek or another text-only model in DeepSeek Harness (DSH), you ma
 - **Paste and use it immediately.** Paste an image in DSH Web and the text-only route switches to its `(Vision Toolkit)` variant without manual path copying or model changes.
 - **A seamless image workflow.** Native thumbnails, session history, and workspace paths stay intact; Web can preview artifacts and Headless can continue using the same structured results.
 - **One command to install.** The built-in free Groq Qwen3.6 vision service is ready after installation, with no API key required.
-- **Built-in free quota.** The shared service includes 100 requests per client per day, 3,000 requests globally per day, and a 60-request burst per 60 seconds, with readable errors when a limit is reached.
+- **Built-in free quota.** The shared service includes 300 requests per client per day, 5,000 requests globally per day, and a 60-request burst per 60 seconds, with readable errors when a limit is reached.
 - **Vision guided by intent.** The agent extracts evidence for the task at hand, such as “Where is the error?” or “Where is the button?”, instead of returning a generic caption.
 - **A complete screenshot-to-verification loop.** Reference images, HTML screenshots, difference regions, and pixel comparison work together for UI restoration.
 
@@ -71,7 +71,7 @@ dsh plugin --profile web add @anionex/dsh-vision-toolkit
 - **2026-08-16 · Windows Python:** Added Microsoft Store Python support, fixing first-time isolated-runtime setup failures for affected Windows users.
 - **2026-08-16 · Better free vision:** Switched the built-in no-key service to Groq Qwen3.6, improving image understanding without adding setup steps.
 - **2026-08-16 · Image paste:** Text-only routes now switch to a `(Vision Toolkit)` variant and keep a workspace path, fixing blocked pastes and images that could not be reused later.
-- **2026-08-16 · Higher free quotas:** Raised the shared service ceiling to `3,000/day` and `60/minute` to make better use of the three-account Groq pool while keeping the per-client limit at `100/day`.
+- **2026-08-16 · Higher free quotas:** Expanded the shared Groq pool to five accounts and raised the service to `5,000/day`, while keeping each client at `300/day` and the burst limit at `60/minute`.
 - **2026-08-16 · Real model test:** Added a full image-request test in Settings, fixing the false confidence caused by a successful `/models` request to a model that still cannot process images.
 
 ## Who it is for
@@ -219,15 +219,15 @@ The default setup uses:
 ```text
 Base URL: https://vision.anionex.me/v1
 Model:    qwen/qwen3.6-27b
-API Key:  no user configuration required
+API Key:  https://agent-vision.anionex.me (filled automatically)
 ```
 
 This is a shared zero-configuration entry point, not an unlimited private endpoint. Current limits are:
 
 | Limit | Current value |
 |---|---:|
-| Per client | 100 requests per UTC day |
-| Whole service | 3,000 requests per UTC day |
+| Per client | 300 requests per UTC day |
+| Whole service | 5,000 requests per UTC day |
 | Burst | 60 requests per 60 seconds |
 | Images per request | Up to 5 |
 | Image size | 4 MiB per image |
@@ -235,6 +235,8 @@ This is a shared zero-configuration entry point, not an unlimited private endpoi
 | Output | 512 tokens per request |
 
 The limits protect shared capacity and prevent unusually large images from monopolizing memory or request time. When a limit is reached, the service returns a readable reason and error code. Rate-limit responses also include `Retry-After` instead of collapsing into an unexplained model failure.
+
+Existing clients that still send `api_key="free"` remain compatible.
 
 ### Bring your own vision model
 
