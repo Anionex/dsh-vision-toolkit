@@ -4,6 +4,13 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+## [0.1.16] - 2026-08-16
+
+### Changed
+
+- Allowed registry-installed Profiles to install plugin updates even when the running DSH Web process cannot safely restart itself; the Settings page now asks the user to restart DSH Web manually when needed.
+- Clarified update status and confirmation text so installation and process restart are reported as separate steps.
+
 ## [0.1.15] - 2026-08-16
 
 ### Fixed

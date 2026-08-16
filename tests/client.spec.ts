@@ -387,6 +387,45 @@ describe('Vision Toolkit client plugin', () => {
     })
   })
 
+  it('reports a successful install and asks for a manual restart when self-restart is unavailable', async () => {
+    const update = {
+      supported: true,
+      profile: 'web',
+      dependencySpec: '0.1.0',
+      currentVersion: '0.1.0',
+      latestVersion: '0.2.0',
+      updateAvailable: true,
+      checkedAt: '2026-08-16T12:00:00.000Z',
+    }
+    const installed = {
+      fromVersion: '0.1.0',
+      toVersion: '0.2.0',
+      profile: 'web',
+      restarting: false,
+      manualRestartRequired: true,
+    }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ ok: true, value: settingsSnapshot() }))
+      .mockResolvedValueOnce(jsonResponse({ ok: true, value: update }))
+      .mockResolvedValueOnce(jsonResponse({ ok: true, value: installed }))
+    vi.stubGlobal('fetch', fetchMock)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    const { ctx, registrations } = fakeClientContext()
+    apply(ctx as never)
+    const settings = registrations.find(entry => entry.options.name === 'settings.section')
+    if (settings === undefined) throw new Error('Settings component was not registered')
+    render(createElement(settings.component, {
+      controller: new VisionSettingsController(),
+      t: (key: string) => key,
+    }))
+
+    fireEvent.click(await screen.findByRole('button', { name: 'checkUpdate' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'updateNow' }))
+    await screen.findByText('manualRestartRequired')
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
   it('blocks plugin installation while Settings or the API key field has unsaved changes', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse({ ok: true, value: settingsSnapshot() }))

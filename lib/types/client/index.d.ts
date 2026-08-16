@@ -67,17 +67,18 @@ declare const en: {
     readonly checkUpdate: "Check for updates";
     readonly checkingUpdate: "Checking for updates…";
     readonly updateAvailable: "Update available";
-    readonly updateAvailableDetail: "Version {version} is available. Updating restarts DSH Web and may interrupt work that is currently running.";
+    readonly updateAvailableDetail: "Version {version} is available. It will restart DSH Web automatically when safe; otherwise you will be asked to restart it manually.";
     readonly upToDate: "Up to date";
     readonly upToDateDetail: "Version {version} is the latest release.";
-    readonly updateNow: "Update and restart";
-    readonly updatingPlugin: "Updating and restarting…";
-    readonly updateConfirm: "Install Vision Toolkit {version} and restart DSH Web now? Running work may be interrupted.";
+    readonly updateNow: "Install update";
+    readonly updatingPlugin: "Installing update…";
+    readonly updateConfirm: "Install Vision Toolkit {version} now? DSH Web will restart automatically when supported; otherwise a manual restart will be required.";
     readonly restarting: "Version {version} was installed. Waiting for DSH Web to restart…";
+    readonly manualRestartRequired: "Version {version} was installed. Restart DSH Web through your usual command or process manager to activate it.";
     readonly updateProfile: "Profile";
     readonly updateInstalled: "Installed";
     readonly updateLatest: "Latest";
-    readonly updateUnsupported: "Automatic updates are unavailable for this installation.";
+    readonly updateUnsupported: "In-app updates are unavailable for this installation.";
     readonly updateReasonProfileNotFound: "The running plugin could not be matched to a DSH profile installation.";
     readonly updateReasonNotDependency: "The plugin is not a direct dependency of this DSH profile.";
     readonly updateReasonLocalSource: "This profile uses a local, workspace, URL, or git installation; update that source manually so local work is not overwritten.";
@@ -246,13 +247,21 @@ interface PluginUpdateCheck extends PluginUpdateCapability {
     updateAvailable: boolean;
     checkedAt: string;
 }
-interface PluginUpdateResult {
+type PluginUpdateResult = {
     fromVersion: string;
     toVersion: string;
     profile: string;
     restarting: true;
     retryAfterMs: number;
-}
+    manualRestartRequired?: false;
+} | {
+    fromVersion: string;
+    toVersion: string;
+    profile: string;
+    restarting: false;
+    manualRestartRequired: true;
+    retryAfterMs?: undefined;
+};
 interface SettingsSnapshot {
     schemaVersion: 1;
     writable: boolean;

@@ -53,13 +53,21 @@ export interface PluginUpdateCheck extends PluginUpdateCapability {
   checkedAt: string
 }
 
-export interface PluginUpdateResult {
+interface PluginUpdateResultBase {
   fromVersion: string
   toVersion: string
   profile: string
-  restarting: true
-  retryAfterMs: number
 }
+
+export type PluginUpdateResult = PluginUpdateResultBase & ({
+  restarting: true
+  manualRestartRequired?: false
+  retryAfterMs: number
+} | {
+  restarting: false
+  manualRestartRequired: true
+  retryAfterMs?: undefined
+})
 
 export class PluginUpdateError extends Error {
   constructor(
@@ -760,39 +768,9 @@ export class VisionToolkitPluginUpdateService {
         },
       }
     }
-    if (this.platform === 'win32') {
-      return {
-        capability: {
-          supported: false,
-          checkSupported: true,
-          profile: profile.profile,
-          dependencySpec: profile.dependencySpec,
-          reason: 'unsupported-platform',
-        },
-      }
-    }
-    if (!this.allowDetachedRestart) {
-      return {
-        capability: {
-          supported: false,
-          checkSupported: true,
-          profile: profile.profile,
-          dependencySpec: profile.dependencySpec,
-          reason: 'restart-unmanaged',
-        },
-      }
-    }
-    if (this.healthUrl === undefined) {
-      return {
-        capability: {
-          supported: false,
-          checkSupported: true,
-          profile: profile.profile,
-          dependencySpec: profile.dependencySpec,
-          reason: 'restart-address-unavailable',
-        },
-      }
-    }
+    // Replacing the registry package is safe even when this Web process cannot
+    // restart itself. In that case the new code becomes active after the user
+    // restarts DSH Web through their usual command or process manager.
     return {
       capability: { supported: true, checkSupported: true, profile: profile.profile, dependencySpec: profile.dependencySpec },
       profile,
@@ -984,7 +962,7 @@ export class VisionToolkitPluginUpdateService {
     }
   }
 
-  /** Install the currently published version, then restart this DSH process. */
+  /** Install the currently published version, then restart when this process can do so safely. */
   async installAndRestart(expectedVersion: string): Promise<PluginUpdateResult> {
     if (this.updating) throw new PluginUpdateError('update-in-progress', 'A plugin update is already in progress')
     this.updating = true
@@ -1013,7 +991,7 @@ export class VisionToolkitPluginUpdateService {
       }
       const final = await this.evaluate()
       if (!final.capability.supported || final.profile === undefined || final.pnpmPath === undefined
-        || final.profile.profileDir !== initial.profile.profileDir || this.healthUrl === undefined) {
+        || final.profile.profileDir !== initial.profile.profileDir) {
         throw new PluginUpdateError('update-unavailable', 'The plugin installation changed while preparing the update')
       }
       updateContext = { profile: final.profile, pnpmPath: final.pnpmPath }
@@ -1040,6 +1018,22 @@ export class VisionToolkitPluginUpdateService {
         )
       }
 
+      const healthUrl = this.healthUrl
+      if (this.platform === 'win32' || !this.allowDetachedRestart || healthUrl === undefined) {
+        await cleanupUpdateBackup(updateBackup)
+        updateBackup = undefined
+        await locked.release()
+        locked = undefined
+        this.updating = false
+        return {
+          fromVersion: this.currentVersion,
+          toVersion: installedVersion,
+          profile: final.profile.profile,
+          restarting: false,
+          manualRestartRequired: true,
+        }
+      }
+
       try {
         await this.prepareRestart({
           pid: process.pid,
@@ -1056,7 +1050,7 @@ export class VisionToolkitPluginUpdateService {
           packageName: VISION_TOOLKIT_PACKAGE,
           fromVersion: this.currentVersion,
           toVersion: installedVersion,
-          healthUrl: this.healthUrl,
+          healthUrl,
           baselineRuntimeReady: this.runtimeReady(),
           rollbackTimeoutMs: RESTART_ROLLBACK_TIMEOUT_MS,
           processKillGraceMs: 5_000,

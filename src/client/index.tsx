@@ -94,17 +94,18 @@ const en = {
   checkUpdate: 'Check for updates',
   checkingUpdate: 'Checking for updates…',
   updateAvailable: 'Update available',
-  updateAvailableDetail: 'Version {version} is available. Updating restarts DSH Web and may interrupt work that is currently running.',
+  updateAvailableDetail: 'Version {version} is available. It will restart DSH Web automatically when safe; otherwise you will be asked to restart it manually.',
   upToDate: 'Up to date',
   upToDateDetail: 'Version {version} is the latest release.',
-  updateNow: 'Update and restart',
-  updatingPlugin: 'Updating and restarting…',
-  updateConfirm: 'Install Vision Toolkit {version} and restart DSH Web now? Running work may be interrupted.',
+  updateNow: 'Install update',
+  updatingPlugin: 'Installing update…',
+  updateConfirm: 'Install Vision Toolkit {version} now? DSH Web will restart automatically when supported; otherwise a manual restart will be required.',
   restarting: 'Version {version} was installed. Waiting for DSH Web to restart…',
+  manualRestartRequired: 'Version {version} was installed. Restart DSH Web through your usual command or process manager to activate it.',
   updateProfile: 'Profile',
   updateInstalled: 'Installed',
   updateLatest: 'Latest',
-  updateUnsupported: 'Automatic updates are unavailable for this installation.',
+  updateUnsupported: 'In-app updates are unavailable for this installation.',
   updateReasonProfileNotFound: 'The running plugin could not be matched to a DSH profile installation.',
   updateReasonNotDependency: 'The plugin is not a direct dependency of this DSH profile.',
   updateReasonLocalSource: 'This profile uses a local, workspace, URL, or git installation; update that source manually so local work is not overwritten.',
@@ -271,17 +272,18 @@ const zh: Record<LocaleKey, string> = {
   checkUpdate: '检查更新',
   checkingUpdate: '正在检查更新…',
   updateAvailable: '发现新版本',
-  updateAvailableDetail: '可更新到 {version}。更新会重启 DSH Web，正在运行的任务可能会被中断。',
+  updateAvailableDetail: '可更新到 {version}。能安全自重启时会自动重启，否则安装完成后会提示你手动重启。',
   upToDate: '已是最新版',
   upToDateDetail: '当前 {version} 已是最新正式版本。',
-  updateNow: '自动更新并重启',
-  updatingPlugin: '正在更新并重启…',
-  updateConfirm: '现在安装 Vision Toolkit {version} 并重启 DSH Web 吗？正在运行的任务可能会被中断。',
+  updateNow: '安装更新',
+  updatingPlugin: '正在安装更新…',
+  updateConfirm: '现在安装 Vision Toolkit {version} 吗？支持安全自重启时会自动重启，否则需要你手动重启 DSH Web。',
   restarting: '已安装 {version}，正在等待 DSH Web 重启…',
+  manualRestartRequired: '已安装 {version}。请按你平时的方式手动重启 DSH Web，重启后新版本生效。',
   updateProfile: 'Profile',
   updateInstalled: '当前版本',
   updateLatest: '最新版本',
-  updateUnsupported: '当前安装方式不支持自动更新。',
+  updateUnsupported: '当前安装方式不支持页面内更新。',
   updateReasonProfileNotFound: '无法把正在运行的插件匹配到某个 DSH Profile 安装。',
   updateReasonNotDependency: '该插件不是当前 DSH Profile 的直接依赖。',
   updateReasonLocalSource: '当前使用本地、workspace、URL 或 git 安装；为避免覆盖本地修改，请手动更新对应来源。',
@@ -480,12 +482,20 @@ interface PluginUpdateCheck extends PluginUpdateCapability {
   checkedAt: string
 }
 
-interface PluginUpdateResult {
+type PluginUpdateResult = {
   fromVersion: string
   toVersion: string
   profile: string
   restarting: true
   retryAfterMs: number
+  manualRestartRequired?: false
+} | {
+  fromVersion: string
+  toVersion: string
+  profile: string
+  restarting: false
+  manualRestartRequired: true
+  retryAfterMs?: undefined
 }
 
 interface SettingsSnapshot {
@@ -1005,12 +1015,17 @@ export class VisionSettingsController {
   async applyUpdate(expectedVersion: string): Promise<void> {
     this.set({ ...this.state, action: 'apply-update', error: undefined, message: undefined })
     try {
-      const restart = await apiRequest<PluginUpdateResult>({
+      const result = await apiRequest<PluginUpdateResult>({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'apply-update', expectedVersion }),
       })
-      this.set({ ...this.state, action: undefined, restart, message: 'restarting' })
+      this.set({
+        ...this.state,
+        action: undefined,
+        restart: result,
+        message: result.restarting ? 'restarting' : 'manual-restart-required',
+      })
     } catch (error) {
       this.set({ ...this.state, action: undefined, error: error instanceof Error ? error.message : String(error) })
     }
@@ -1234,7 +1249,7 @@ function LoadedSettings({ controller, t }: SettingsInjected) {
   }, [snapshot])
   useEffect(() => {
     const restart = state.restart
-    if (restart === undefined) return
+    if (restart === undefined || !restart.restarting) return
     let cancelled = false
     void (async () => {
       await wait(restart.retryAfterMs)
@@ -1318,6 +1333,7 @@ function LoadedSettings({ controller, t }: SettingsInjected) {
       {state.error === undefined ? null : <div className="dvt-alert error">{state.error}</div>}
       {state.message === 'saved' ? <div className="dvt-alert success">{t('saved')}</div> : null}
       {state.message === 'restarting' && state.restart !== undefined ? <div className="dvt-alert success">{t('restarting', { version: state.restart.toVersion })}</div> : null}
+      {state.message === 'manual-restart-required' && state.restart !== undefined ? <div className="dvt-alert success">{t('manualRestartRequired', { version: state.restart.toVersion })}</div> : null}
       {snapshot.runtime.lastError === undefined ? null : <div className="dvt-alert error"><strong>{runtimeErrorTitle}</strong><span>{snapshot.runtime.lastError}</span></div>}
 
       <section className="dvt-panel dvt-essential"><div className="dvt-panel-title"><div><h3>{t('provider')}</h3><p>{t('providerHint')}</p></div><span className={`dvt-badge ${snapshot.credential.configured ? 'ok' : 'error'}`}>{snapshot.credential.configured ? t('configured') : t('missing')}</span></div>
