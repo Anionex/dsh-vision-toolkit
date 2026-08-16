@@ -12,27 +12,38 @@
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)](runtime/requirements.lock)
 [![DSH profiles](https://img.shields.io/badge/DSH-Web%20%2B%20Headless-5B4CF0?style=flat-square)](cordis.patch.yml)
 
-**Install:** `dsh plugin --profile web add @anionex/dsh-vision-toolkit`
+## Give your DSH agent eyes
 
-**DSH Vision Toolkit brings [`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit) into DeepSeek Harness as a native Profile Bundle.**
+Drop in a screenshot and let a text-only DeepSeek Harness agent inspect it, read it, locate elements, extract assets, rebuild interfaces, and measure whether the result matches.
 
-Give text-only DSH agents eyes—and keep vision in the harness—with intent-aware image Q&A, OCR, original-pixel grounding, UI restoration, pixel verification, managed Artifacts, and Web Settings. Ten independent tools replace shell glue with structured schemas and Agent-scoped progressive exposure.
+DSH Vision Toolkit packages [`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit) as a native DSH plugin. You get focused image Q&A, OCR, original-pixel coordinates, UI restoration, pixel comparison, downloadable results, and a Web Settings panel without assembling scripts by hand.
+
+```sh
+dsh plugin --profile web add @anionex/dsh-vision-toolkit
+```
+
+The npm package includes the visual toolkit snapshot and uses a managed runtime by default. **Normal installation does not require a source checkout or an `agentVisionToolkitPath`.**
 
 **Upstream toolkit:** [Anionex/agent-vision-toolkit](https://github.com/Anionex/agent-vision-toolkit) · **Project website:** [agent-vision.anionex.me](https://agent-vision.anionex.me)
 
 English | [中文](README.zh.md)
 
-## Why this exists
+## What you can do
 
-`agent-vision-toolkit` treats vision as an Agent-callable capability rather than a property of the base model. Its method carries the reason for looking into the visual request, moves from the whole image to targeted regions, and verifies coordinates, colors, geometry, and differences with focused tools instead of accepting a generic description as evidence.
+| Goal | What the agent can deliver |
+|---|---|
+| Understand a screenshot | Focused answers, visual descriptions, multi-image comparison, and OCR |
+| Find an interface element | Original-image pixel coordinates with an optional labeled preview |
+| Rebuild a page from a reference | Screenshot rendering, region-by-region diagnosis, and measurable iteration |
+| Extract a usable asset | Cropped images, transparent foregrounds, dominant colors, or editable SVG |
+| Read a long screenshot | Auditable chunks, Markdown output, manifests, and resumable OCR runs |
+| Verify a visual result | A difference percentage, ranked mismatch regions, heatmap, and JSON report |
 
-DSH Vision Toolkit preserves that method while replacing CLI installation and Bash argument construction with native schemas, DSH Credentials, lifecycle-managed runtime preparation, structured Session-log results, previewable Artifacts, dedicated Web cards, and Settings. The Agent loads one versioned Skill and receives the ten visual schemas only when the current task needs them.
+You can use remote vision only where it adds value. Cropping, tracing, pixel comparison, color analysis, foreground extraction, and HTML screenshots run locally.
 
-The package delivers the committed P0 and P1 product scope. P2's stable `ctx.visionToolkit` service remains deliberately unpublished until an independent plugin becomes a real consumer; the internal runtime does not pretend that an unvalidated ecosystem API is stable.
+## See it in action
 
-## Proven use cases from agent-vision-toolkit
-
-The first two panels are official upstream reference runs from the same pinned `agent-vision-toolkit` lineage packaged by this bundle. The image Q&A and screenshot-guided debugging panel is a live DeepSeek Harness Web session, showing the same workflows through DSH. See the [asset provenance record](assets/upstream/README.md) for the upstream source images.
+The first two examples come from the same `agent-vision-toolkit` lineage packaged with this plugin. The third shows the workflow inside a live DeepSeek Harness Web session. See the [asset provenance record](assets/upstream/README.md) for source details.
 
 ### Infographic restoration: screenshot to editable HTML/CSS
 
@@ -61,47 +72,47 @@ The first two panels are official upstream reference runs from the same pinned `
 
 *Left: intent-aware image Q&A in DSH Web. Right: a DSH Web screenshot-debugging turn that lists the concrete UI differences and continues toward `vision_pixel_diff`. The upstream workflow source is the same [`agent-vision-toolkit` reference](https://github.com/Anionex/agent-vision-toolkit/blob/c27d1a300962b553c0884993c575cd3e819465ce/README.md#real-world-effects).*
 
-DSH Vision Toolkit adds native tool schemas, versioned lifecycle, Credentials, structured Session results, Artifacts, Web presentation, Settings, and progressive exposure around these upstream capabilities. The next section is the reproducible proof executed and checked into this DSH repository.
+DSH Vision Toolkit brings this workflow into DSH, where the result can become a file, a coordinate, a measured comparison, or the next step in the same session.
 
-## DSH-native proof: reference-to-pixel verification
+## From a rough match to pixel-perfect
 
-The checked-in UI-restoration workflow renders an intentionally inaccurate HTML implementation, measures a `6.04%` pixel difference across six non-zero regions, iterates, and reaches an exact `0%` difference against the reference at `1200 × 720`.
+The included UI-restoration workflow starts with an intentionally inaccurate HTML implementation. Vision Toolkit measures a `6.04%` difference, points to the worst regions, and helps drive the next iteration. The final render reaches an exact `0%` difference at `1200 × 720`.
 
 <p>
   <img src="examples/ui-restoration/assets/initial.png" width="49%" alt="Initial UI restoration candidate before Vision Toolkit iteration, with measurable layout and styling differences from the reference." />
   <img src="examples/ui-restoration/assets/implementation.png" width="49%" alt="Final UI restoration output reproduced by the checked-in workflow with zero pixel difference from the reference." />
 </p>
 
-| Verified surface | Evidence |
+| Start | Result |
 |---|---|
-| Product scope | 10 independent visual tools, matching `vision-tools` Skill, Artifacts, dedicated Web cards, and live Settings |
-| Automated coverage | 17 Vitest files / 136 passing tests, plus a dependency-free portable package check |
-| Real profiles | Clean temporary Web and Headless installation, activation, disable, re-enable, and uninstall |
-| Visual acceptance | Reproducible HTML screenshot → pixel diff example with a final `0%` difference |
+| Reference image | A working HTML implementation you can open and edit |
+| First comparison | `6.04%` difference across the visible problem regions |
+| Final comparison | `0%` difference at `1200 × 720` |
 
-## Highlights
+## Why it feels different
 
-- **See images without bloating every prompt:** only `vision_toolkit_activate` is initially visible; loading `vision-tools` mounts ten independent schemas for that Agent and keeps version/health administration out of model context.
-- **Act on coordinates instead of parsing prose:** grounding and detection return original-image pixel boxes, while every model-visible result remains structured text or JSON.
-- **Deliver files, not temporary output:** crop, trace, OCR, pixel diff, foreground extraction, and HTML rendering produce described Artifacts that the Web client can preview, download, or open locally.
-- **Keep runtime and credentials controlled:** DSH Credentials hold API keys, managed mode prepares an exact isolated Python environment, and a failed Settings candidate cannot replace the serving generation.
-- **Close the visual verification loop:** local HTML rendering and pixel-diff ranking support reference → implementation → screenshot → measured iteration without a model-native image channel.
-- **Use the same bundle in Web and Headless profiles:** Web adds cards, previews, Settings, and health actions; Headless receives the same tool semantics and complete structured results.
+- **Ask for the thing you need.** “Where is the submit button?” and “Why does this screenshot differ from the reference?” lead to focused visual work instead of a generic caption.
+- **Get evidence you can use.** The agent returns coordinates, OCR, measurements, JSON, and files you can open or pass to the next step.
+- **Keep the workflow in DSH.** Credentials, Settings, Artifacts, Web cards, and Headless results live alongside the rest of your session.
+- **Use local tools when you can.** Crop, trace, pixel comparison, color analysis, foreground extraction, and HTML screenshots do not consume a vision API request.
+- **Repeat the loop.** Reference image → implementation → screenshot → pixel diff gives UI work a measurable finish line.
 
-## Quick start
+## Start in three steps
 
-Prerequisites: DeepSeek Harness `0.1.0-rc.6` or a compatible later `0.1.x` release, Python 3.11+, and `pnpm` available to `dsh plugin`. Install the published bundle from npm, add it to the profiles you use, and confirm the bundle row:
+Use DeepSeek Harness `0.1.0-rc.6` or a compatible later `0.1.x` release. The plugin prepares its managed runtime on first use.
 
 ```sh
 dsh plugin --profile web add @anionex/dsh-vision-toolkit
 dsh plugin --profile headless add @anionex/dsh-vision-toolkit
-dsh --profile web --dump-config | grep vision-toolkit
-dsh --profile headless --dump-config | grep vision-toolkit
 ```
 
-Legacy profiles must use `nodeLinker: hoisted` and `autoInstallPeers: false` in their `pnpm-workspace.yaml`. An updated DSH launcher repairs these owned settings before `dsh plugin` runs; when using an older launcher, set them before installation so pnpm does not assemble a second Harness dependency graph inside the profile.
+1. Restart your Web profile and open **Settings → Vision Toolkit**.
+2. New installations use the built-in free Moondream provider, so you can run **Test API connection** and **Test vision model** without an API key. To use another provider, edit the endpoint/model/protocol and provide its DSH Credential.
+3. In a conversation, paste an image or put it in the workspace, invoke `/vision-tools`, and ask for a concrete visual task.
 
-Restart a running Web profile, open **Settings → Vision Toolkit**, and run **Test API connection** followed by **Test vision model**. New installations use the built-in free Moondream provider automatically, so no API key or DSH Credential is required. To use another provider, edit the endpoint/model/protocol and provide its DSH Credential. In a conversation, make an image available as a workspace path, invoke `/vision-tools`, and ask the Agent to call a specific `vision_*` tool. Local crop, trace, pixel, color, foreground, and HTML operations do not require a visual API credential.
+If you use an older DSH launcher, the profile may need `nodeLinker: hoisted` and `autoInstallPeers: false` before installation. Current launchers repair these settings for you.
+
+Local crop, trace, pixel, color, foreground, and HTML operations do not require a visual API credential.
 
 ## Community Group
 
@@ -110,6 +121,11 @@ Join the `agent-vision-toolkit` community group to exchange usage tips, share fe
 <p align="center">
   <img src="assets/community-group-qr.png" alt="QR code for the agent-vision-toolkit community group" width="260">
 </p>
+
+> **No local path is required.** Keep the default `runtime.mode: managed` for the normal npm installation. The optional `runtime.agentVisionToolkitPath` setting is only for developers or controlled deployments that deliberately use an external pinned checkout.
+
+<details>
+<summary><strong>Technical architecture</strong></summary>
 
 ## How it works
 
@@ -132,6 +148,8 @@ flowchart LR
 
 Tool definitions call one runtime; the runtime validates paths, limits, credentials, cancellation, and deadlines before dispatching to the pinned upstream snapshot or configured vision provider endpoint. Web presentation consumes the same structured results and Artifact descriptors, so it does not change Headless behavior. Health, connection testing, and version inspection stay in Settings rather than model tool schemas.
 
+</details>
+
 ## Tools
 
 | Tool | Execution | Structured result | Artifact delivery |
@@ -149,6 +167,9 @@ Tool definitions call one runtime; the runtime validates paths, limits, credenti
 
 The plugin does not reimplement visual algorithms. Its DSH-owned layer validates paths and limits, resolves credentials, calls the pinned upstream scripts with argv vectors, parses their exact output contracts, classifies failures, describes files, and projects results to the model and Web client.
 
+<details>
+<summary><strong>Advanced model behavior</strong></summary>
+
 ## Progressive model exposure
 
 Runtime readiness is profile-wide, but the ten visual execution schemas are Agent-scoped. Before an Agent loads `vision-tools`, the plugin contributes only the small `vision_toolkit_activate` bootstrap; the visual tools are absent from that Agent's request schema. A successful call to the standard `skill` tool with `name="vision-tools"` mounts all ten tools automatically for the next model step and hides the bootstrap. A direct `/vision-tools` invocation injects the Skill instructions; if the visual tools are still absent, those instructions require one `vision_toolkit_activate` call. Activation affects only that Agent, restores when the Session contains durable evidence matching the bundled Skill version, and lasts until the Agent or plugin is disposed.
@@ -162,6 +183,8 @@ Text-only model routes get sibling model-selector entries named `<model> (Vision
 A variant is registered automatically for every model the host positively declares text-only (for example the DeepSeek chat family). Paste handling is automatic: when the current model is confirmed text-only and its variant exists, the browser integration switches the session to the variant by itself (a short notice names the new model) and the paste then keeps the native flow; no manual model change is needed. The host's verdict uses the exact model route the browser read from the live model catalog, with the selector label as fallback; unconfirmed or image-capable routes always keep the native flow, and a text-only model without a variant (for example when variants are disabled) keeps the paste-to-path takeover, which copies the image into the session workspace and inserts its path as text.
 
 Description conversion needs the configured vision provider and its credential; when the runtime is not ready or a read fails, the wire block degrades to the upstream-compatible `[vision unavailable: ...]` note instead of failing the turn. The bridge does not treat injected context files as the current user intent, and it uses the latest assistant paragraph when a tool-fetched image is being described. Disable variants with `imageInputVariants.enabled: false`, restrict the wrapped routes with `imageInputVariants.providers`, or keep the paste-to-path behavior for text-only models with `imageInputVariants.autoSwitch: false`.
+
+</details>
 
 ## Requirements
 
@@ -299,11 +322,13 @@ The public service is shared and intended as a zero-configuration default, not a
 | Decoded pixels | 20,000,000 per image |
 | Output | 512 tokens maximum |
 
-### Managed and external runtimes
+### Managed runtime and optional external runtime
 
 Managed mode verifies `vendor/agent-vision-toolkit/UPSTREAM_MANIFEST.json`, prefers `uv`, falls back to `venv` plus pip, installs exact versions from `runtime/requirements.lock`, coordinates concurrent preparation with a heartbeat lock, and publishes a staged environment only after all probes pass.
 
-External mode is intended for development or controlled deployments:
+Most users should stop at managed mode. It is included in the npm package and prepares the pinned Python environment for you.
+
+The optional external mode is for plugin development or controlled deployments that already maintain the exact upstream checkout:
 
 ```yaml
 - id: vision-toolkit
@@ -319,6 +344,8 @@ The path must be an exported copy matching the packaged manifest or the root of 
 ## Web Settings
 
 The Web profile registers a Vision Toolkit Settings section for the provider URL, Credential reference, model, OpenAI/Anthropic protocol, Anthropic thinking mode, User-Agent, language, timeout, byte/pixel limits, concurrency, runtime mode, Python override, external source path, and allowed directories. It also shows plugin/upstream versions, the active runtime generation, non-secret Credential configured/source/writable facts, runtime paths, health results, and Artifact-route availability.
+
+The **Plugin updates** card checks the profile's configured npm registry for a newer `@anionex/dsh-vision-toolkit` release. **Update and restart** installs that exact confirmed version into the current DSH profile, verifies the installed package, starts an independent restart helper, and gracefully restarts DSH Web; the open page waits for the replacement process and reloads after the new plugin version is serving. The action is same-origin, fixed to this package, serialized, and unavailable for `link:`, `file:`, workspace, git, URL, transitive, ambiguous, read-only, or missing-`pnpm` installations so local development sources are never overwritten. A restart can interrupt work that is currently running, so the UI requires an explicit confirmation.
 
 `Save and apply` validates the complete value, prepares the candidate Python/upstream runtime, commits the Settings revision, and only then atomically switches generations. A rejected candidate leaves the previous generation serving and is reported separately from a genuinely unavailable runtime. `Reload` always restores the authoritative saved value, even when its revision did not change, so a rejected browser draft is discarded. If initial startup cannot prepare a runtime, the Settings route remains available so a valid configuration can make the first generation operational. A stale browser revision receives a conflict instead of overwriting a newer save; reload before retrying. A read-only Settings provider allows inspection and health checks but disables saves.
 
@@ -398,7 +425,14 @@ Update the upstream snapshot only through `pnpm run upstream:sync -- <checkout>`
 
 ## Project status and scope
 
-Version `0.1.10` is the current public npm release. P0 and P1 are product commitments in this package. P2 is a design threshold: no stable `ctx.visionToolkit` service, capability-discovery API, or provider ecosystem is published until at least one independent plugin consumes the internal capability shape. Web upload, drag-and-drop, camera/video/audio/document ingestion, interactive box editing, automatic GUI clicking, service clusters, model routing, model voting, and cross-session vision caches remain outside the current product.
+Version `0.1.10` is the current public npm release. The product focuses on screenshot understanding, visual grounding, OCR, asset extraction, UI restoration, and pixel-level verification in DSH Web and Headless profiles. Web upload, drag-and-drop, camera/video/audio/document ingestion, interactive box editing, automatic GUI clicking, service clusters, model routing, model voting, and cross-session vision caches remain outside the current product.
+
+<details>
+<summary><strong>Maintainer scope note</strong></summary>
+
+The stable `ctx.visionToolkit` service and capability-discovery API remain unpublished until an independent plugin becomes a real consumer. This keeps the public integration surface tied to a tested use case rather than an unvalidated ecosystem contract.
+
+</details>
 
 ## Community and About
 

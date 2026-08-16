@@ -12,27 +12,38 @@
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)](runtime/requirements.lock)
 [![DSH profiles](https://img.shields.io/badge/DSH-Web%20%2B%20Headless-5B4CF0?style=flat-square)](cordis.patch.yml)
 
-**安装：** `dsh plugin --profile web add @anionex/dsh-vision-toolkit`
+## 让 DSH Agent 真正看见
 
-**DSH Vision Toolkit 将 [`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit) 作为原生 Profile Bundle 带入 DeepSeek Harness。**
+把截图交给纯文本 DeepSeek Harness Agent，它就能看懂画面、读取文字、定位元素、提取素材、还原界面，并用像素差异检查结果是否准确。
 
-让纯文本 DSH Agent 真正看见，并知道当前任务应该看哪里：通过带意图的图片问答、OCR、原图像素定位、UI 还原、像素验证、托管产物和 Web Settings 完成视觉闭环。10 个独立工具以结构化 schema 和 Agent 级渐进暴露取代 Shell 拼接。
+DSH Vision Toolkit 将 [`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit) 打包成原生 DSH 插件。安装后即可使用图片问答、OCR、原图像素坐标、UI 还原、像素对比、可下载产物和 Web 设置，无需自己拼接脚本。
+
+```sh
+dsh plugin --profile web add @anionex/dsh-vision-toolkit
+```
+
+npm 包已经包含视觉工具快照，并默认使用托管运行时。**普通安装不需要下载源码，也不需要填写 `agentVisionToolkitPath`。**
 
 **上游工具箱：** [Anionex/agent-vision-toolkit](https://github.com/Anionex/agent-vision-toolkit) · **项目网站：** [agent-vision.anionex.me](https://agent-vision.anionex.me)
 
 [English](README.md) | 中文
 
-## 为什么需要它
+## 你可以用它做什么
 
-`agent-vision-toolkit` 把视觉视为 Agent 可调用的能力，而不是基础模型自带的天赋。它会把“为什么要看这张图”带入视觉请求，从全局逐步收敛到目标区域，并用专用工具验证坐标、颜色、轮廓和差异，不把泛化描述直接当成证据。
+| 目标 | Agent 可以交付什么 |
+|---|---|
+| 看懂截图 | 针对问题作答、描述画面、比较多张图片或执行 OCR |
+| 找到界面元素 | 返回原图像素坐标，并可生成带框预览图 |
+| 按参考图还原页面 | 渲染网页截图、逐区域诊断差异并持续迭代 |
+| 提取可复用素材 | 裁剪图片、透明前景、主色板或可编辑 SVG |
+| 读取长截图 | 可审计分块、Markdown、manifest 和可恢复 OCR 运行目录 |
+| 验证视觉结果 | 差异百分比、主要偏差区域、热力图和 JSON 报告 |
 
-DSH Vision Toolkit 保留这套方法，并用原生 schema、DSH Credentials、受生命周期管理的运行时准备、可从 Session 日志重建的结构化结果、可预览产物、专用 Web 卡片和 Settings 取代 CLI 安装与 Bash 参数拼接。Agent 加载一个带版本的 Skill，只有当前任务需要视觉时才会获得 10 个工具 schema。
+只有需要理解图片内容时才调用远程视觉模型。裁剪、描摹、像素对比、颜色分析、前景提取和 HTML 截图都在本地运行。
 
-本包完整交付已承诺的 P0 与 P1 产品范围。P2 的稳定 `ctx.visionToolkit` 服务会等到独立插件成为真实消费方后再发布；内部运行时不会把未经验证的生态接口伪装为稳定契约。
+## 看看实际效果
 
-## agent-vision-toolkit 已验证的真实用例
-
-前两张图是本 Bundle 所打包 `agent-vision-toolkit` 固定版本同一代码线上的官方实跑结果；图片问答与截图辅助排障这一张则是在 DeepSeek Harness Web 中实际运行的会话，展示 DSH 中的同一套工作流。上游图片来源见[素材溯源记录](assets/upstream/README.md)。
+前两组示例来自本插件所打包的同一条 `agent-vision-toolkit` 代码线，第三组展示 DeepSeek Harness Web 中的真实使用流程。素材来源见[素材溯源记录](assets/upstream/README.md)。
 
 ### 信息图还原：从截图到可编辑 HTML/CSS
 
@@ -61,47 +72,47 @@ DSH Vision Toolkit 保留这套方法，并用原生 schema、DSH Credentials、
 
 *左：DSH Web 中带意图的图片问答；右：DSH Web 中通过截图对比定位 UI 字段差异，并继续向 `vision_pixel_diff` 推进。上游工作流来源仍为 [`agent-vision-toolkit` 官方实跑](https://github.com/Anionex/agent-vision-toolkit/blob/c27d1a300962b553c0884993c575cd3e819465ce/README.md#real-world-effects)。*
 
-DSH Vision Toolkit 在这些上游能力之外增加原生工具 schema、版本化生命周期、Credentials、结构化 Session 结果、产物、Web 展示、Settings 和渐进暴露。下一节展示由本 DSH 仓库实际执行并提交的可复现实证。
+DSH Vision Toolkit 把这套工作流带进 DSH，让结果可以直接成为文件、坐标、可度量的对比报告，或同一会话中的下一步行动。
 
-## DSH 原生实证：从参考图到像素级一致
+## 从大致相似到像素级一致
 
-仓库中的 UI 还原流程会渲染一个故意不准确的 HTML 实现，测得 `6.04%` 像素差异和 6 个非零差异区域；经过迭代后，在 `1200 × 720` 下达到相对参考图精确 `0%` 的差异。
+仓库内的 UI 还原流程从一个故意不准确的 HTML 实现开始。Vision Toolkit 测得 `6.04%` 差异，指出最需要修正的区域，并推动下一轮迭代。最终渲染结果在 `1200 × 720` 下达到精确 `0%` 差异。
 
 <p>
   <img src="examples/ui-restoration/assets/initial.png" width="49%" alt="Vision Toolkit 迭代前的 UI 还原候选，与参考图仍有可测量的布局和样式差异。" />
   <img src="examples/ui-restoration/assets/implementation.png" width="49%" alt="仓库内可复现流程生成的最终 UI 还原结果，与参考图达到零像素差异。" />
 </p>
 
-| 已验证范围 | 证据 |
+| 起点 | 结果 |
 |---|---|
-| 产品范围 | 10 个独立视觉工具、匹配的 `vision-tools` Skill、产物、专用 Web 卡片和实时 Settings |
-| 自动化覆盖 | 17 个 Vitest 文件 / 136 项通过测试，以及不依赖 DSH 开发树的可移植包检查 |
-| 真实 Profile | 干净临时 Web 与 Headless 安装、激活、禁用、重新启用和卸载 |
-| 视觉验收 | 可复现的 HTML 截图 → 像素对比示例，最终差异为 `0%` |
+| 参考图 | 可打开、可编辑的 HTML 实现 |
+| 第一次对比 | 主要问题区域的差异为 `6.04%` |
+| 最终对比 | 在 `1200 × 720` 下达到 `0%` 差异 |
 
-## 亮点
+## 它为什么好用
 
-- **看图但不让每轮提示词膨胀：** 初始只暴露 `vision_toolkit_activate`；加载 `vision-tools` 后，10 个独立 schema 才挂到当前 Agent，版本和健康管理始终不进入模型上下文。
-- **直接使用坐标，而不是解析自然语言：** 定位和元素盘点返回原图像素框，所有模型可见结果保持为结构化文字或 JSON。
-- **交付正式文件，而不是临时输出：** 裁剪、SVG 恢复、OCR、像素对比、前景提取和 HTML 渲染会生成带描述的产物，Web 客户端可预览、下载或在本地打开。
-- **受控管理运行时与凭据：** API Key 由 DSH Credentials 保管；managed 模式准备精确隔离的 Python 环境；失败的 Settings 候选不会替换当前服务 generation。
-- **闭合视觉验证循环：** 本地 HTML 渲染和像素差异排序支持参考图 → 实现 → 截图 → 度量迭代，不依赖模型原生图片通道。
-- **同一 Bundle 同时服务 Web 与 Headless：** Web 增加卡片、预览、Settings 和健康操作；Headless 保持相同工具语义和完整结构化结果。
+- **直接提出你要解决的问题。** “提交按钮在哪里？”和“这张截图为什么和参考图不一样？”都会进入针对性的视觉分析，而不是得到一段泛泛的描述。
+- **拿到可以继续使用的证据。** Agent 会返回坐标、OCR、测量结果、JSON 和文件，方便打开或交给下一步处理。
+- **工作流留在 DSH 里。** Credential、Settings、产物、Web 卡片和 Headless 结果都与会话的其他内容放在一起。
+- **能本地处理就不调用远程模型。** 裁剪、描摹、像素对比、颜色分析、前景提取和 HTML 截图都不消耗视觉 API 请求。
+- **让迭代有终点。** 参考图 → 实现 → 截图 → 像素对比，把 UI 还原变成有数据支撑的闭环。
 
-## 快速开始
+## 三步开始使用
 
-前置条件：DeepSeek Harness `0.1.0-rc.6` 或兼容的后续 `0.1.x` 版本、Python 3.11+，并确保 `dsh plugin` 可以使用 `pnpm`。从 npm 安装已发布的 Bundle，将其加入所需 Profile，并确认 Bundle 行已经挂载：
+使用 DeepSeek Harness `0.1.0-rc.6` 或兼容的后续 `0.1.x` 版本即可。插件会在第一次使用时准备托管运行时。
 
 ```sh
 dsh plugin --profile web add @anionex/dsh-vision-toolkit
 dsh plugin --profile headless add @anionex/dsh-vision-toolkit
-dsh --profile web --dump-config | grep vision-toolkit
-dsh --profile headless --dump-config | grep vision-toolkit
 ```
 
-旧 Profile 的 `pnpm-workspace.yaml` 必须使用 `nodeLinker: hoisted` 和 `autoInstallPeers: false`。更新后的 DSH launcher 会在 `dsh plugin` 运行前修复这两个自有设置；使用旧 launcher 时，应在安装前手动设置，避免 pnpm 在 Profile 内组装第二套 Harness 依赖图。
+1. 重启 Web Profile，打开 **设置 → 视觉工具**。
+2. 如果要使用远程视觉模型，选择 DSH Credential，然后执行**测试 API 连接**和**测试视觉模型**。
+3. 在会话中粘贴图片或把图片放进工作区，调用 `/vision-tools`，提出一个明确的视觉任务。
 
-安装后重启正在运行的 Web Profile，打开 **设置 → 视觉工具**，先执行**测试 API 连接**，再执行**测试视觉模型**。新安装会自动使用内置免费 Moondream 提供方，不需要 API Key 或 DSH Credential。若要使用其他提供方，请修改端点、模型或协议，并配置对应的 DSH Credential。在会话中把图片放进工作区路径，调用 `/vision-tools`，再让 Agent 使用明确的 `vision_*` 工具。本地裁剪、SVG、像素、颜色、前景和 HTML 操作不需要视觉 API Credential。
+如果使用较旧的 DSH launcher，安装前可能需要在 Profile 中设置 `nodeLinker: hoisted` 和 `autoInstallPeers: false`。当前 launcher 会自动修复这些设置。
+
+安装后重启正在运行的 Web Profile，打开 **设置 → 视觉工具**，先执行**测试 API 连接**，再执行**测试视觉模型**。新安装会自动使用内置免费 Moondream 提供方，不需要 API Key 或 DSH Credential。若要使用其他提供方，请修改端点、模型或协议，并配置对应的 DSH Credential。
 
 ## 加入交流群
 
@@ -110,6 +121,12 @@ dsh --profile headless --dump-config | grep vision-toolkit
 <p align="center">
   <img src="assets/community-group-qr.png" alt="agent-vision-toolkit 项目交流群二维码" width="260">
 </p>
+本地裁剪、SVG、像素、颜色、前景和 HTML 操作不需要视觉 API Credential。
+
+> **不需要本地路径。** 普通 npm 安装保持默认的 `runtime.mode: managed` 即可。`runtime.agentVisionToolkitPath` 只面向明确需要外部固定 checkout 的开发者或受控部署。
+
+<details>
+<summary><strong>技术架构</strong></summary>
 
 ## 工作原理
 
@@ -132,6 +149,8 @@ flowchart LR
 
 所有工具定义都调用同一个 Runtime；Runtime 在分发到固定上游快照或已配置的视觉提供方端点前，统一验证路径、限制、Credential、取消和超时。Web 展示读取相同的结构化结果与产物描述，因此不会改变 Headless 语义。健康、连接测试和版本检查只留在 Settings，不进入模型工具 schema。
 
+</details>
+
 ## 工具
 
 | 工具 | 执行方式 | 结构化结果 | 产物交付 |
@@ -149,6 +168,9 @@ flowchart LR
 
 插件不重新实现视觉算法。DSH 侧只负责验证路径与限制、解析 Credential、用 argv 向量调用固定上游脚本、解析精确输出契约、分类失败、描述文件，并把结果投影给模型和 Web 客户端。
 
+<details>
+<summary><strong>高级模型行为</strong></summary>
+
 ## 渐进式模型暴露
 
 运行时就绪状态属于整个 Profile，但 10 个视觉执行工具的 schema 属于具体 Agent。Agent 加载 `vision-tools` 前，插件只贡献很小的 `vision_toolkit_activate` 引导工具；该 Agent 的请求 schema 中没有视觉执行工具。标准 `skill` 工具以 `name="vision-tools"` 成功加载后，会为下一模型步骤自动挂载全部 10 个工具并隐藏引导工具。直接调用 `/vision-tools` 会注入 skill 指令；如果此时视觉工具仍不可见，这些指令要求调用一次 `vision_toolkit_activate`。激活只影响当前 Agent；Session 中存在与打包 skill 版本匹配的持久证据时可以恢复，并持续到 Agent 或插件被释放。
@@ -162,6 +184,8 @@ flowchart LR
 插件会自动为宿主明确声明为纯文本的每个模型注册变体（例如 DeepSeek 对话家族）。粘贴处理是全自动的：当当前模型被确认为纯文本、且它的变体已注册时，浏览器端集成会自动把会话切换到变体（会有一条简短提示说明新模型名），随后粘贴走原生流程，无需手动切换模型。宿主依据浏览器从实时模型目录读到的精确模型路由来裁决，模型选择器标签作为兜底；无法确认或支持图片的路由一律保持原生流程，而"纯文本但没有变体"的模型（例如变体被关闭时）继续走"粘贴转路径"：图片被复制进会话工作区，输入框里插入的是它的路径文本。
 
 描述转换需要已配置的视觉提供方及其 Credential；当运行时未就绪或读取失败时，请求链路上的图片块降级为与上游兼容的 `[vision unavailable: ...]` 提示，而不是让整轮失败。桥接不会把注入的上下文文件当作当前用户意图；如果图片来自工具调用，则使用最新的助手段落作为关注提示。用 `imageInputVariants.enabled: false` 关闭变体，用 `imageInputVariants.providers` 限制被包装的路由，或用 `imageInputVariants.autoSwitch: false` 让纯文本模型继续走"粘贴转路径"。
+
+</details>
 
 ## 运行要求
 
@@ -299,11 +323,13 @@ Settings 只保存引用，不保存值。浏览器不会读取已保存的密�
 | 解码像素 | 每张最多 20,000,000 像素 |
 | 输出 | 最多 512 tokens |
 
-### Managed 与 external 运行时
+### Managed 运行时与可选 external 运行时
 
 Managed 模式会验证 `vendor/agent-vision-toolkit/UPSTREAM_MANIFEST.json`，优先使用 `uv`，回退到 `venv` 加 pip，按 `runtime/requirements.lock` 安装精确版本，通过 heartbeat 锁协调并发准备，并只在全部探针通过后发布 staging 环境。
 
-External 模式用于开发或受控部署：
+大多数用户只需要 managed 模式。它已经包含在 npm 包中，会自动为你准备固定版本的 Python 环境。
+
+可选的 external 模式面向插件开发或受控部署，适用于已经维护好精确上游 checkout 的场景：
 
 ```yaml
 - id: vision-toolkit
@@ -319,6 +345,8 @@ External 模式用于开发或受控部署：
 ## Web Settings
 
 Web Profile 会注册 Vision Toolkit Settings 分区，可配置提供方 URL、Credential 引用、模型、OpenAI/Anthropic 协议、Anthropic thinking 模式、User-Agent、语言、超时、字节/像素限制、并发数、运行时模式、Python 覆盖值、external 源码路径和允许目录。该页面还会显示插件/上游版本、当前运行时 generation、不含密钥的 Credential configured/source/writable 状态、运行时路径、健康检查结果和产物路由可用性。
+
+**插件更新**卡片会通过当前 Profile 配置的 npm registry 检查 `@anionex/dsh-vision-toolkit` 新版本。点击**自动更新并重启**后，插件只安装用户刚刚确认的准确版本，校验安装结果，启动独立重启辅助进程，再优雅重启 DSH Web；当前页面会等待新进程恢复，并在新插件版本开始服务后自动刷新。该操作要求同源请求，只能更新这个固定包，并且会串行执行；`link:`、`file:`、workspace、git、URL、传递依赖、无法唯一识别、只读或缺少 `pnpm` 的安装方式不会开放自动更新，避免覆盖本地开发源码。重启可能中断正在运行的任务，因此界面会要求再次确认。
 
 “保存并应用”会验证完整配置，准备候选 Python/上游运行时，提交 Settings revision，最后才原子切换 generation。候选被拒绝时，之前的 generation 继续服务，页面也会把这种状态与运行时确实不可用区分开来。“重新加载”始终恢复后端已保存的权威值，即使 revision 没有变化也会丢弃被拒绝的浏览器草稿。初始启动无法准备运行时时，Settings 路由仍可用于提交有效配置并激活首个 generation。陈旧浏览器 revision 不会覆盖较新的保存结果，而是返回冲突；刷新后再重试。只读 Settings 提供方允许查看和健康检查，但禁用保存。
 
@@ -411,7 +439,14 @@ pnpm pack --dry-run
 
 ## 项目状态与范围
 
-版本 `0.1.10` 是当前公开 npm 发布。P0 和 P1 是本包的产品承诺。P2 是设计门槛：至少一个独立插件消费内部能力形态前，不发布稳定 `ctx.visionToolkit` 服务、能力发现 API 或提供方生态。Web 上传、拖拽、摄像头/视频/音频/文档输入、交互式标注框编辑、GUI 自动点击、远程服务集群、模型路由、模型投票和跨会话视觉缓存不属于当前产品范围。
+版本 `0.1.10` 是当前公开 npm 版本。产品重点是截图理解、视觉定位、OCR、素材提取、UI 还原和 DSH Web/Headless Profile 中的像素级验证。Web 上传、拖拽、摄像头/视频/音频/文档输入、交互式标注框编辑、GUI 自动点击、远程服务集群、模型路由、模型投票和跨会话视觉缓存不属于当前产品范围。
+
+<details>
+<summary><strong>维护者范围说明</strong></summary>
+
+稳定的 `ctx.visionToolkit` 服务和能力发现 API 会等到独立插件成为真实消费方后再发布。这样可以让公开集成面建立在已验证的使用场景上，而不是未经验证的生态契约上。
+
+</details>
 
 ## 社区与关于
 
