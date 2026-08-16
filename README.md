@@ -340,18 +340,10 @@ npm run example:ui-restoration:write
 
 The committed evidence records an initial `6.04%` difference across six non-zero worst regions and a final `0%` difference with no non-zero worst region. Check mode reproduces the tool path and verifies the committed assets; write mode intentionally refreshes the evidence.
 
-## Security and execution model
+## Communication group
 
-- Inputs resolve against the session workspace and configured `allowedDirs`; realpath containment prevents traversal and symlink escape.
-- Pillow decodes every image before a remote request and verifies bytes, pixels, dimensions, and extension/content agreement. Unsupported or oversized images fail before upload.
-- Outputs use random staging files or directories inside the real managed destination, reject symbolic links, and commit only after format and contract validation.
-- Remote vision prompts explicitly classify text and instructions visible inside images as untrusted content. The native tool descriptions and bundled skill likewise tell the text agent to treat derived descriptions, labels, and OCR as visual evidence rather than executable instructions.
-- All upstream processes use argv vectors through `ctx.subprocess`, inherit caller cancellation, share one hard operation deadline, and terminate with the operation instead of continuing in the background. Plugin disposal aborts active calls before unregistering their tools.
-- One live Session retains only the most recent successful `vision_glance` result. An immediate repeat reuses it only when image content, query/OCR mode, region, endpoint, model, language, and Credential are unchanged; failures and other Sessions never share the entry.
-- Model-visible data is text, numbers, coordinates, structured JSON, and file descriptors. Tool calls/results remain reconstructable from the Session log; browser previews are presentation metadata only.
-- Metrics include tool name, total/upstream duration, bounded image counts/bytes/pixels, cache hits, model, and error category; they exclude base64, authentication headers, secrets, and unbounded upstream output.
+<img width="254" height="328" alt="image" src="https://github.com/user-attachments/assets/63c25c69-c3ba-4c47-8dee-98d60fe3954d" />
 
-`vision_html_screenshot` accepts only authorized local `.html` or `.htm` files, disables network access in the pinned adapter, and launches a Chrome-family browser with `--headless=new`, `--use-mock-keychain`, `--incognito`, and a unique `--user-data-dir` under the system temporary directory. The profile is removed after every call, so headless rendering does not touch the user's daily Chrome profile or macOS login keychain.
 
 ## Troubleshooting
 
