@@ -3,7 +3,7 @@
 # DSH Vision Toolkit
 
 [![Recommended by dshfind](https://img.shields.io/badge/recommended%20by-dshfind-FFD700?style=flat-square)](https://dshfind.com/en/plugins/Anionex/dsh-vision-toolkit)
-[![dshfind score: 94 — highest-rated non-official plugin](https://img.shields.io/badge/dshfind%20score-94%20%7C%20top%20non--official%20plugin-5B4CF0?style=flat-square)](https://dshfind.com/en/plugins/Anionex/dsh-vision-toolkit)
+[![dshfind score: 94 — highest-rated plugin](https://img.shields.io/badge/dshfind%20score-94%20%7C%20highest--rated%20plugin-5B4CF0?style=flat-square)](https://dshfind.com/en/plugins/Anionex/dsh-vision-toolkit)
 [![X (Twitter)](https://img.shields.io/badge/-@anion__ex-000000?style=flat-square&logo=x&logoColor=white)](https://x.com/anion_ex)
 [![Release v0.1.8](https://img.shields.io/badge/release-v0.1.8-5B4CF0?style=flat-square)](https://github.com/Anionex/dsh-vision-toolkit/releases/tag/v0.1.8)
 [![Verified: 168 tests](https://img.shields.io/badge/verified-168%20tests-2EA44F?style=flat-square)](tests)

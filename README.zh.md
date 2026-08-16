@@ -3,7 +3,7 @@
 # DSH Vision Toolkit
 
 [![由 dshfind 推荐](https://img.shields.io/badge/%E7%94%B1%20dshfind-%E6%8E%A8%E8%8D%90-FFD700?style=flat-square)](https://dshfind.com/zh/plugins/Anionex/dsh-vision-toolkit)
-[![dshfind 评分：94——非官方插件最高分](https://img.shields.io/badge/dshfind%20%E8%AF%84%E5%88%86-94%20%7C%20%E9%9D%9E%E5%AE%98%E6%96%B9%E6%8F%92%E4%BB%B6%E6%9C%80%E9%AB%98%E5%88%86-5B4CF0?style=flat-square)](https://dshfind.com/zh/plugins/Anionex/dsh-vision-toolkit)
+[![dshfind 评分：94——最高分插件](https://img.shields.io/badge/dshfind%20%E8%AF%84%E5%88%86-94%20%7C%20%E6%9C%80%E9%AB%98%E5%88%86%E6%8F%92%E4%BB%B6-5B4CF0?style=flat-square)](https://dshfind.com/zh/plugins/Anionex/dsh-vision-toolkit)
 [![X (Twitter)](https://img.shields.io/badge/-@anion__ex-000000?style=flat-square&logo=x&logoColor=white)](https://x.com/anion_ex)
 [![Release v0.1.8](https://img.shields.io/badge/release-v0.1.8-5B4CF0?style=flat-square)](https://github.com/Anionex/dsh-vision-toolkit/releases/tag/v0.1.8)
 [![Verified: 168 tests](https://img.shields.io/badge/verified-168%20tests-2EA44F?style=flat-square)](tests)
