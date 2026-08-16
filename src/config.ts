@@ -38,8 +38,10 @@ export interface VisionToolkitConfig {
     credential?: string
     /** Multimodal model name. */
     model?: string
-    /** Vision request protocol: OpenAI Chat Completions or Anthropic Messages. */
-    protocol?: 'openai' | 'anthropic'
+    /** Vision request protocol: OpenAI Chat Completions, Anthropic Messages, or OpenAI Responses. */
+    protocol?: 'openai' | 'anthropic' | 'responses'
+    /** OpenAI Responses reasoning effort (low/medium/high); only used with protocol `responses`. */
+    reasoningEffort?: string
     /** Anthropic thinking field behavior; `omit` leaves model defaults untouched. */
     anthropicThinking?: 'omit' | 'disabled' | 'adaptive'
     /** Outbound User-Agent for provider requests and connection tests. */
@@ -94,7 +96,8 @@ export const Config: Schema<VisionToolkitConfig> = z.object({
     baseUrl: z.string().default(BUILT_IN_FREE_VISION_BASE_URL),
     credential: z.string().default(BUILT_IN_FREE_VISION_CREDENTIAL),
     model: z.string().default(BUILT_IN_FREE_VISION_MODEL),
-    protocol: z.union(['openai', 'anthropic'] as const).default('openai'),
+    protocol: z.union(['openai', 'anthropic', 'responses'] as const).default('openai'),
+    reasoningEffort: z.string(),
     anthropicThinking: z.union(['omit', 'disabled', 'adaptive'] as const).default('omit'),
     userAgent: z.string().default(DEFAULT_VISION_USER_AGENT),
   }),
@@ -122,7 +125,8 @@ export interface ResolvedVisionToolkitConfig {
     baseUrl: string
     credential: CredentialRef
     model: string
-    protocol: 'openai' | 'anthropic'
+    protocol: 'openai' | 'anthropic' | 'responses'
+    reasoningEffort?: string
     anthropicThinking: 'omit' | 'disabled' | 'adaptive'
     userAgent: string
   }
@@ -179,8 +183,12 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
     throw new VisionToolkitError('config', 'provider.model must not be empty')
   }
   const protocol = provider.protocol ?? 'openai'
-  if (protocol !== 'openai' && protocol !== 'anthropic') {
-    throw new VisionToolkitError('config', 'provider.protocol must be "openai" or "anthropic"')
+  if (protocol !== 'openai' && protocol !== 'anthropic' && protocol !== 'responses') {
+    throw new VisionToolkitError('config', 'provider.protocol must be "openai", "anthropic", or "responses"')
+  }
+  const reasoningEffort = provider.reasoningEffort?.trim()
+  if (reasoningEffort !== undefined && reasoningEffort.length === 0) {
+    throw new VisionToolkitError('config', 'provider.reasoningEffort must not be empty when provided')
   }
   const anthropicThinking = provider.anthropicThinking ?? 'omit'
   if (anthropicThinking !== 'omit' && anthropicThinking !== 'disabled' && anthropicThinking !== 'adaptive') {
@@ -234,7 +242,15 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
     .map(provider => provider.trim())
     .filter(provider => provider.length > 0)
   return {
-    provider: { baseUrl, credential, model, protocol, anthropicThinking, userAgent },
+    provider: {
+      baseUrl,
+      credential,
+      model,
+      protocol,
+      ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
+      anthropicThinking,
+      userAgent,
+    },
     language,
     timeoutMs,
     maxImageBytes,

@@ -776,15 +776,20 @@ export class VisionToolkitRuntime {
   }
 
   private visionEnv(resolved: ResolvedCredential): UpstreamEnvironment {
-    return {
+    const protocol = this.config.provider.protocol
+    const env: UpstreamEnvironment = {
       VISION_API_KEY: resolved.value,
       VISION_BASE_URL: this.config.provider.baseUrl,
       VISION_MODEL: this.config.provider.model,
-      VISION_API_PROTOCOL: this.config.provider.protocol === 'anthropic' ? 'anthropic' : 'chat_completions',
+      VISION_API_PROTOCOL: protocol === 'anthropic' ? 'anthropic' : protocol === 'responses' ? 'responses' : 'chat_completions',
       VISION_ANTHROPIC_THINKING: this.config.provider.anthropicThinking,
       VISION_USER_AGENT: this.config.provider.userAgent,
       LANG: this.config.language,
     }
+    if (protocol === 'responses' && this.config.provider.reasoningEffort !== undefined) {
+      env.VISION_REASONING_EFFORT = this.config.provider.reasoningEffort
+    }
+    return env
   }
 
   private pathPolicy(workspace: string): Promise<PathPolicy> {
@@ -849,6 +854,7 @@ export class VisionToolkitRuntime {
         model: env.VISION_MODEL,
         protocol: env.VISION_API_PROTOCOL,
         anthropicThinking: env.VISION_ANTHROPIC_THINKING,
+        reasoningEffort: env.VISION_REASONING_EFFORT,
         userAgent: env.VISION_USER_AGENT,
         language: env.LANG,
         credentialSha256: createHash('sha256').update(env.VISION_API_KEY).digest('hex'),
