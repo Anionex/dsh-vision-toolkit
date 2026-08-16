@@ -2,6 +2,7 @@
 
 # DSH Vision Toolkit
 
+[![Top at dshfind](https://img.shields.io/badge/top%20at-dshfind-FFD700?style=flat-square)](https://dshfind.com/)
 [![X (Twitter)](https://img.shields.io/badge/-@anion__ex-000000?style=flat-square&logo=x&logoColor=white)](https://x.com/anion_ex)
 [![Release v0.1.7](https://img.shields.io/badge/release-v0.1.7-5B4CF0?style=flat-square)](https://github.com/Anionex/dsh-vision-toolkit/releases/tag/v0.1.7)
 [![Verified: 168 tests](https://img.shields.io/badge/verified-168%20tests-2EA44F?style=flat-square)](tests)
