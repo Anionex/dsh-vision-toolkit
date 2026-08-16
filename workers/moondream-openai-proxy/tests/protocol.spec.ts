@@ -5,6 +5,7 @@ import {
   ProtocolError,
   buildGemmaInput,
   completionContent,
+  completionFinishReason,
   normalizeGemmaOutput,
   parseChatCompletionRequest,
   tokenUsage,
@@ -172,5 +173,10 @@ describe('response mapping', () => {
       prompt_tokens: 10,
       total_tokens: 14,
     })
+  })
+
+  it('preserves the first choice finish reason', () => {
+    expect(completionFinishReason({ choices: [{ finish_reason: 'length' }] })).toBe('length')
+    expect(completionFinishReason({ finish_reason: 'stop' })).toBe('stop')
   })
 })

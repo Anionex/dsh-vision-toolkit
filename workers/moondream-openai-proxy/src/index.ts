@@ -3,6 +3,7 @@ import {
   ProtocolError,
   buildGemmaInput,
   completionContent,
+  completionFinishReason,
   normalizeGemmaOutput,
   parseChatCompletionRequest,
   tokenUsage,
@@ -282,7 +283,7 @@ async function chatCompletion(request: Request, env: Env): Promise<Response> {
 
     return jsonResponse({
       choices: [{
-        finish_reason: typeof output.finish_reason === 'string' ? output.finish_reason : 'stop',
+        finish_reason: completionFinishReason(output),
         index: 0,
         logprobs: null,
         message: {

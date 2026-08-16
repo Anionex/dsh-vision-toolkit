@@ -405,6 +405,15 @@ export function completionContent(output: GemmaOutput, task: VisionTask): string
   })
 }
 
+export function completionFinishReason(output: GemmaOutput): string {
+  const choices = Array.isArray(output.choices) ? output.choices : []
+  const firstChoice = isRecord(choices[0]) ? choices[0] : undefined
+  if (firstChoice !== undefined && typeof firstChoice.finish_reason === 'string') {
+    return firstChoice.finish_reason
+  }
+  return typeof output.finish_reason === 'string' ? output.finish_reason : 'stop'
+}
+
 export function tokenUsage(output: GemmaOutput): {
   completion_tokens: number
   prompt_tokens: number
