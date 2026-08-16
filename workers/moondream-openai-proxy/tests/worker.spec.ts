@@ -73,8 +73,8 @@ function environment(database: FakeD1, aiRun: () => Promise<Record<string, unkno
   return {
     AI: { run: vi.fn(aiRun) },
     BURST_LIMITER: { limit: vi.fn(async () => ({ success: burstSuccess })) },
-    DAILY_LIMIT: '30',
-    GLOBAL_DAILY_LIMIT: '120',
+    DAILY_LIMIT: '100',
+    GLOBAL_DAILY_LIMIT: '400',
     IP_HASH_SECRET: '0123456789abcdef0123456789abcdef',
     MAX_IMAGE_BYTES: '4194304',
     MAX_IMAGE_PIXELS: '20000000',
