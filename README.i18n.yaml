@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write dsh-vision-dark-theme/README.md
-README.md: 30ce9a25d368b7d519fefe1a85df3911ef3a0fa5
-README.zh.md: f9d914251e05c5314b03157b0b3609a8e546ac92
+README.md: 0c81049d6e43d5c09056e7733349b45ea29fc22e
+README.zh.md: 223b1d7f98b26eac72ab1ee0a76a83aed8b81673

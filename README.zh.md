@@ -52,7 +52,15 @@ npm 包已经包含视觉工具快照，并默认使用托管运行时。**普�
 
 ## 看看实际效果
 
-前两组示例来自本插件所打包的同一条 `agent-vision-toolkit` 代码线，第三组展示 DeepSeek Harness Web 中的真实使用流程。素材来源见[素材溯源记录](assets/upstream/README.md)。
+第一个示例是 DSH Web 的真实界面视图；接下来两组示例来自本插件所打包的同一条 `agent-vision-toolkit` 代码线；最后一组展示 DeepSeek Harness Web 中的真实使用流程。素材来源见[素材溯源记录](assets/upstream/README.md)。
+
+### DSH 视图示例
+
+<p align="center">
+  <img src="assets/dsh-view-example.png" width="80%" alt="DSH Web 会话视图：纯文本的 DeepSeek-V4-Flash (Vision Toolkit) 模型回答用户粘贴的品牌横幅图内容。" />
+</p>
+
+*真实的 DSH Web 视图：用户粘贴一张品牌横幅截图，纯文本模型通过 `DeepSeek-V4-Flash (Vision Toolkit)` 图片输入变体回答图片内容。*
 
 ### 信息图还原：从截图到可编辑 HTML/CSS
 

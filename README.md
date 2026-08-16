@@ -52,7 +52,15 @@ You can use remote vision only where it adds value. Cropping, tracing, pixel com
 
 ## See it in action
 
-The first two examples come from the same `agent-vision-toolkit` lineage packaged with this plugin. The third shows the workflow inside a live DeepSeek Harness Web session. See the [asset provenance record](assets/upstream/README.md) for source details.
+The first example is a live DSH Web view. The next two examples come from the same `agent-vision-toolkit` lineage packaged with this plugin, and the last shows the workflow inside a live DeepSeek Harness Web session. See the [asset provenance record](assets/upstream/README.md) for source details.
+
+### DSH view example
+
+<p align="center">
+  <img src="assets/dsh-view-example.png" width="80%" alt="DSH Web session view in which a text-only DeepSeek-V4-Flash (Vision Toolkit) model answers a question about a pasted banner image." />
+</p>
+
+*A live DSH Web view: the user pastes a brand-banner screenshot, and the text-only model answers what the image contains through the `DeepSeek-V4-Flash (Vision Toolkit)` image-input variant.*
 
 ### Infographic restoration: screenshot to editable HTML/CSS
 
