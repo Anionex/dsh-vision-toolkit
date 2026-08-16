@@ -7,7 +7,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Context } from '@deepseek-ai/cordis';
 import { ArtifactAccessController } from './artifact-access.ts';
-import { PastedImageBackend } from './paste-images.ts';
+import { PastedImageBackend, type PasteSelectionQuery, type PasteVerdict } from './paste-images.ts';
 import { type VisionToolkitConfig } from './config.ts';
 import { VisionToolkitRuntimeManager, type PreparedRuntimeGeneration, type RuntimeManagerStatus } from './runtime-manager.ts';
 /** Exact route used by the browser Settings page. */
@@ -66,10 +66,25 @@ export declare class VisionToolkitWebBackend {
     handle(req: IncomingMessage, res: ServerResponse): Promise<void>;
 }
 /**
+ * Same-origin policy handler for the paste route: whether the browser should
+ * take a paste over into workspace paths, or let it flow natively after an
+ * optional automatic switch to the image-input variant. The optional `model`
+ * query carries the model-selector label the client currently shows; the
+ * optional `provider`/`modelId`/`reasoningEffort` queries carry the exact
+ * route the client read from the live model catalog, which the resolver
+ * prefers (a label alone cannot pick a provider). Unresolvable routes answer
+ * native — the safe default.
+ * @param resolve - resolves one live Session's paste verdict.
+ * @returns the HTTP handler.
+ */
+export declare function createPastePolicyHandler(resolve: (sessionId: string, selection?: PasteSelectionQuery, modelLabel?: string) => Promise<PasteVerdict>): (req: IncomingMessage, res: ServerResponse) => void;
+/**
  * Attach optional Web routes whenever a webServer service is present.
  * @param ctx - plugin context owning route effects.
  * @param backend - Settings handler.
  * @param artifacts - signed Artifact handler.
+ * @param pastedImages - pasted-image workspace handler.
+ * @param pastePolicy - paste-policy verdict resolver (sessionId, selection, modelLabel).
  */
-export declare function installVisionToolkitWeb(ctx: Context, backend: VisionToolkitWebBackend, artifacts: ArtifactAccessController, pastedImages: PastedImageBackend): void;
+export declare function installVisionToolkitWeb(ctx: Context, backend: VisionToolkitWebBackend, artifacts: ArtifactAccessController, pastedImages: PastedImageBackend, pastePolicy: (sessionId: string, selection?: PasteSelectionQuery, modelLabel?: string) => Promise<PasteVerdict>): void;
 //# sourceMappingURL=web.d.ts.map

@@ -47,6 +47,27 @@ export interface VisionToolkitConfig {
     };
     /** Extra directories (besides the workspace) inputs may come from. */
     allowedDirs?: string[];
+    /**
+     * Image-input variants: sibling model-selector entries for every model the
+     * host positively declares text-only. A variant declares image input, so
+     * pasted images keep the native attachment flow (composer thumbnail and
+     * durable session image), and the plugin rewrites image blocks into Vision
+     * Toolkit descriptions only on the wire to the model.
+     */
+    imageInputVariants?: {
+        /** Whether variant routes are registered at all (default true). */
+        enabled?: boolean;
+        /** Restrict wrapped upstream routes by provider id; empty wraps every eligible route. */
+        providers?: string[];
+        /**
+         * Whether the browser paste integration automatically switches the Session
+         * to the image-input variant of a text-only model before the paste, so
+         * pasted images keep the native attachment flow with no manual model
+         * change. Off means a text-only model keeps the path takeover (default
+         * true).
+         */
+        autoSwitch?: boolean;
+    };
 }
 /** Configuration schema with the documented P0 defaults. */
 export declare const Config: Schema<VisionToolkitConfig>;
@@ -71,6 +92,11 @@ export interface ResolvedVisionToolkitConfig {
         python?: string;
     };
     allowedDirs: string[];
+    imageInputVariants: {
+        enabled: boolean;
+        providers: string[];
+        autoSwitch: boolean;
+    };
 }
 /**
  * Validate and normalize a config object (partial inputs receive the same

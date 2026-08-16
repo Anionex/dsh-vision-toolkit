@@ -7,9 +7,10 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import {
   installPasteImages,
   PASTE_IMAGES_ROUTE as CLIENT_PASTE_IMAGES_ROUTE,
+  PASTE_POLICY_ROUTE,
   PasteImageController,
 } from '../src/client/paste-images.tsx'
-import { PASTE_IMAGES_ROUTE as SERVER_PASTE_IMAGES_ROUTE } from '../src/paste-images.ts'
+import { PASTE_IMAGES_ROUTE as SERVER_PASTE_IMAGES_ROUTE, PASTE_POLICY_ROUTE as SERVER_PASTE_POLICY_ROUTE } from '../src/paste-images.ts'
 
 interface Occurrence {
   occurrenceId: number
@@ -68,6 +69,11 @@ function inputMachine(initial = '') {
       publish({ ...state, draft, draftRev: state.draftRev + 1, occurrences })
       return true
     }),
+    addImages: vi.fn((files: File[]) => {
+      const next = [...state.imageIds, ...files.map((_, index) => `draft-image-${state.imageIds.length + index}`)]
+      publish({ ...state, imageIds: next })
+      return true
+    }),
     notify: vi.fn(),
   }
 }
@@ -114,6 +120,7 @@ function fakeClient(initial = '', triggerServices: readonly TriggerService[] = [
       if (typeof dispose === 'function') effects.push(dispose)
     }),
   }
+  ctx.get = (key: string) => ctx[key]
   for (const service of triggerServices) {
     ctx[service] = aliasTriggers ? triggerRegistries.slash : triggerRegistries[service]
   }
@@ -163,6 +170,47 @@ function composer(): HTMLTextAreaElement {
   return textarea
 }
 
+function policyResponse(takeOver: boolean, autoSwitch?: { provider: string; model: string; label: string; reasoningEffort?: string }): Response {
+  return new Response(JSON.stringify({
+    ok: true,
+    value: { takeOver, ...(autoSwitch === undefined ? {} : { autoSwitch }) },
+  }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+/**
+ * Wrap an upload fetch mock so host verdict re-asks short-circuit before any
+ * upload assertion (every paste refreshes the verdict).
+ */
+function uploadMock(handle: (url: string, init: RequestInit) => Promise<Response>): ReturnType<typeof vi.fn> {
+  return vi.fn(async (url: string, init?: RequestInit) => {
+    if (String(url).startsWith('/_dsh/vision-toolkit/paste-policy')) return policyResponse(true)
+    return handle(url, init ?? ({} as RequestInit))
+  })
+}
+
+/** Upload-only calls of a fetch mock, excluding verdict re-asks. */
+function uploadsOf(mock: ReturnType<typeof vi.fn>): Array<[string, RequestInit]> {
+  return mock.mock.calls.filter(([url]) => !String(url).includes('paste-policy')) as Array<[string, RequestInit]>
+}
+
+/**
+ * Seed a confirmed host verdict, the way a focus into the composer does.
+ * Runs the policy fetch under its own stub, then restores the global fetch so
+ * the test can stub the upload route next.
+ */
+async function confirmTakeover(bench: ReturnType<typeof fakeClient>): Promise<void> {
+  const policy = vi.fn(async () => policyResponse(true))
+  vi.stubGlobal('fetch', policy)
+  document.dispatchEvent(new Event('focusin'))
+  await vi.waitFor(() => { expect(policy).toHaveBeenCalledTimes(1) })
+  // Let the response microtasks settle into the verdict cache.
+  await new Promise(resolve => setTimeout(resolve, 0))
+  vi.unstubAllGlobals()
+}
+
 afterEach(() => {
   document.body.replaceChildren()
   vi.unstubAllGlobals()
@@ -170,8 +218,9 @@ afterEach(() => {
 })
 
 describe('clipboard image client', () => {
-  it('uses the exact Web route registered by the server', () => {
+  it('uses the exact Web routes registered by the server', () => {
     expect(CLIENT_PASTE_IMAGES_ROUTE).toBe(SERVER_PASTE_IMAGES_ROUTE)
+    expect(PASTE_POLICY_ROUTE).toBe(SERVER_PASTE_POLICY_ROUTE)
   })
 
   it('registers the reference codec through the legacy inputTriggers service', () => {
@@ -261,14 +310,17 @@ describe('clipboard image client', () => {
 
   it('preserves pasted text, inserts every image as a text reference, and blocks the native ImageBlock path', async () => {
     const bench = fakeClient('prefix ')
+    await confirmTakeover(bench)
     const textarea = composer()
     textarea.value = 'prefix '
     textarea.setSelectionRange(7, 7)
     const nativePaste = vi.fn()
     textarea.addEventListener('paste', nativePaste)
-    const request = vi.fn(async (url: string, init: RequestInit) => {
+    let uploads = 0
+    const request = uploadMock(async (_url, init) => {
       expect(init.body).toBeInstanceOf(File)
-      const index = request.mock.calls.length - 1
+      const index = uploads
+      uploads += 1
       return new Response(JSON.stringify({
         ok: true,
         value: { absolutePath: index === 0
@@ -296,8 +348,8 @@ describe('clipboard image client', () => {
     if (codec === undefined) throw new Error('paste source was not registered')
     const refs = bench.input.state.getSnapshot().occurrences.map(row => row.ref)
     const serialized = await Promise.all(refs.map(ref => codec.serialize(ref, new AbortController().signal)))
-    expect(request).toHaveBeenCalledTimes(2)
-    expect(request.mock.calls.every(([url]) => String(url).startsWith('/_dsh/vision-toolkit/paste-images?'))).toBe(true)
+    expect(uploads).toBe(2)
+    expect(uploadsOf(request).every(([url]) => String(url).startsWith('/_dsh/vision-toolkit/paste-images?'))).toBe(true)
     expect(serialized).toEqual([
       '[Pasted image available at absolute path: "/workspace/.dsh-vision-toolkit/tmp/pasted-images/a/image-01.png"]',
       '[Pasted image available at absolute path: "/workspace/.dsh-vision-toolkit/tmp/pasted-images/a/image-02.webp"]',
@@ -321,8 +373,9 @@ describe('clipboard image client', () => {
     bench.dispose()
   })
 
-  it('preserves same-paste text when image admission fails', () => {
+  it('preserves same-paste text when image admission fails', async () => {
     const bench = fakeClient('before ')
+    await confirmTakeover(bench)
     const textarea = composer()
     textarea.value = 'before '
     textarea.setSelectionRange(7, 7)
@@ -338,8 +391,9 @@ describe('clipboard image client', () => {
     bench.dispose()
   })
 
-  it('removes references through insertText so later occurrence offsets stay current', () => {
+  it('removes references through insertText so later occurrence offsets stay current', async () => {
     const bench = fakeClient('')
+    await confirmTakeover(bench)
     const textarea = composer()
     textarea.dispatchEvent(clipboardEvent('', [
       file('one.png', 'image/png', [1]),
@@ -384,8 +438,9 @@ describe('clipboard image client', () => {
     bench.dispose()
   })
 
-  it('retains a pasted image record when the occurrence-aware removal is rejected', () => {
+  it('retains a pasted image record when the occurrence-aware removal is rejected', async () => {
     const bench = fakeClient('')
+    await confirmTakeover(bench)
     const textarea = composer()
     textarea.dispatchEvent(clipboardEvent('', [file('one.png', 'image/png', [1])]))
     const dock = bench.registrations.find(row => row.options.id === 'vision-toolkit-pasted-images')
@@ -407,9 +462,10 @@ describe('clipboard image client', () => {
 
   it('reuses successful workspace paths and retries only records still missing a path', async () => {
     const bench = fakeClient('')
+    await confirmTakeover(bench)
     const textarea = composer()
     let secondAttempts = 0
-    const request = vi.fn(async (url: string) => {
+    const request = uploadMock(async (url) => {
       const name = new URL(String(url), 'http://localhost').searchParams.get('name')
       if (name === 'one.png') {
         return new Response(JSON.stringify({
@@ -442,22 +498,23 @@ describe('clipboard image client', () => {
     if (codec === undefined) throw new Error('paste source was not registered')
 
     await expect(codec.serialize(first.ref, new AbortController().signal)).rejects.toThrow('second copy failed')
-    expect(request).toHaveBeenCalledTimes(2)
+    expect(uploadsOf(request)).toHaveLength(2)
 
     const secondText = await codec.serialize(second.ref, new AbortController().signal)
-    expect(request).toHaveBeenCalledTimes(3)
-    const names = request.mock.calls.map(([url]) => new URL(String(url), 'http://localhost').searchParams.get('name'))
+    expect(uploadsOf(request)).toHaveLength(3)
+    const names = uploadsOf(request).map(([url]) => new URL(String(url), 'http://localhost').searchParams.get('name'))
     expect(names).toEqual(['one.png', 'two.png', 'two.png'])
     expect(secondText).toBe('[Pasted image available at absolute path: "/workspace/.dsh-vision-toolkit/tmp/pasted-images/a/retried-two.png"]')
 
     const firstText = await codec.serialize(first.ref, new AbortController().signal)
-    expect(request).toHaveBeenCalledTimes(3)
+    expect(uploadsOf(request)).toHaveLength(3)
     expect(firstText).toBe('[Pasted image available at absolute path: "/workspace/.dsh-vision-toolkit/tmp/pasted-images/a/stable-one.png"]')
     bench.dispose()
   })
 
   it('keeps failed serialization out of the model send and exposes retry/removal feedback', async () => {
     const bench = fakeClient('')
+    await confirmTakeover(bench)
     const textarea = composer()
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
       ok: false,
@@ -486,6 +543,294 @@ describe('clipboard image client', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove broken.png' }))
     expect(bench.input.state.getSnapshot().occurrences).toEqual([])
     expect(controller.recordsFor([occurrence])).toEqual([])
+    bench.dispose()
+  })
+
+  it('prefetches the paste verdict when the composer gains focus', async () => {
+    const bench = fakeClient('')
+    const policy = vi.fn(async () => policyResponse(true))
+    vi.stubGlobal('fetch', policy)
+    document.dispatchEvent(new Event('focusin'))
+    await vi.waitFor(() => { expect(policy).toHaveBeenCalledTimes(1) })
+    expect(String(policy.mock.calls[0]?.[0])).toContain('paste-policy')
+    expect(String(policy.mock.calls[0]?.[0])).toContain(encodeURIComponent('session-1'))
+    bench.dispose()
+  })
+
+  it('leaves pastes native while the host verdict is unconfirmed', async () => {
+    const bench = fakeClient('')
+    // A pending policy response: the safe default is the native flow, so the
+    // first paste on a text-only model keeps its ordinary admission error.
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => {})))
+    const textarea = composer()
+    const nativePaste = vi.fn()
+    textarea.addEventListener('paste', nativePaste)
+    textarea.dispatchEvent(clipboardEvent('', [file('one.png', 'image/png', [1])]))
+
+    expect(textarea.value).toBe('')
+    expect(nativePaste).toHaveBeenCalledTimes(1)
+    bench.dispose()
+  })
+
+  it('leaves pastes native when the host confirms an image-capable model', async () => {
+    const bench = fakeClient('')
+    vi.stubGlobal('fetch', vi.fn(async () => policyResponse(false)))
+    document.dispatchEvent(new Event('focusin'))
+    await new Promise(resolve => setTimeout(resolve, 0))
+    const textarea = composer()
+    const nativePaste = vi.fn()
+    textarea.addEventListener('paste', nativePaste)
+    textarea.dispatchEvent(clipboardEvent('', [file('one.png', 'image/png', [1])]))
+
+    expect(textarea.value).toBe('')
+    expect(nativePaste).toHaveBeenCalledTimes(1)
+    expect(bench.input.state.getSnapshot().occurrences).toEqual([])
+    bench.dispose()
+  })
+
+  it('keeps pastes native while the policy route is down, then recovers on the next focus', async () => {
+    const bench = fakeClient('')
+    const policySpy = vi.fn(async () => new Response('not found', { status: 404 }))
+    vi.stubGlobal('fetch', policySpy)
+    document.dispatchEvent(new Event('focusin'))
+    await new Promise(resolve => setTimeout(resolve, 0))
+    const textarea = composer()
+    const nativePaste = vi.fn()
+    textarea.addEventListener('paste', nativePaste)
+    textarea.dispatchEvent(clipboardEvent('', [file('one.png', 'image/png', [1])]))
+    // The paste re-asks and gets the same 404: native, no reference inserted.
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(nativePaste).toHaveBeenCalledTimes(1)
+    expect(bench.input.state.getSnapshot().occurrences).toEqual([])
+    expect(policySpy).toHaveBeenCalledTimes(2)
+    // The route comes back: the next focus re-asks instead of standing down
+    // for the page lifetime, and the following paste is taken over.
+    policySpy.mockResolvedValue(policyResponse(true))
+    document.dispatchEvent(new Event('focusin'))
+    await vi.waitFor(() => { expect(policySpy).toHaveBeenCalledTimes(3) })
+    // Let the recovered verdict land before pasting.
+    await new Promise(resolve => setTimeout(resolve, 0))
+    const nativeAfter = vi.fn()
+    textarea.addEventListener('paste', nativeAfter)
+    textarea.dispatchEvent(clipboardEvent('', [file('two.png', 'image/png', [2])]))
+    expect(nativeAfter).not.toHaveBeenCalled()
+    expect(bench.input.state.getSnapshot().occurrences).toHaveLength(1)
+    bench.dispose()
+  })
+
+  it('keeps the paste native when the host vetoes the variant label', async () => {
+    const bench = fakeClient('')
+    const policy = vi.fn(async (url: string) => {
+      const label = new URL(String(url), 'http://localhost').searchParams.get('model') ?? ''
+      return policyResponse(!label.includes('(Vision Toolkit)'))
+    })
+    vi.stubGlobal('fetch', policy)
+    const selector = document.createElement('button')
+    selector.setAttribute('aria-label', 'Select model, current DeepSeek V4 Flash')
+    document.body.appendChild(selector)
+    document.dispatchEvent(new Event('focusin'))
+    await vi.waitFor(() => { expect(policy).toHaveBeenCalledTimes(1) })
+    await new Promise(resolve => setTimeout(resolve, 0))
+    const textarea = composer()
+    const nativePaste = vi.fn()
+    textarea.addEventListener('paste', nativePaste)
+    textarea.dispatchEvent(clipboardEvent('', [file('one.png', 'image/png', [1])]))
+    expect(nativePaste).not.toHaveBeenCalled()
+    // Switching to the image-input variant: the host vetoes the takeover and
+    // the paste goes native — no reference, no prevented default.
+    selector.setAttribute('aria-label', 'Select model, current DeepSeek V4 Flash (Vision Toolkit)')
+    document.dispatchEvent(new Event('focusin'))
+    // The switch is asked at least once under the new label (the takeover's
+    // focus() may prefetch once more; only the ask under the variant label
+    // matters).
+    await vi.waitFor(() => {
+      expect(policy.mock.calls.some(([url]) =>
+        new URL(String(url), 'http://localhost').searchParams.get('model')?.includes('(Vision Toolkit)') === true)).toBe(true)
+    })
+    // Let the veto response land before pasting, so the native path is the
+    // host's verdict, not the unconfirmed default.
+    await new Promise(resolve => setTimeout(resolve, 0))
+    const nativeAgain = vi.fn()
+    textarea.addEventListener('paste', nativeAgain)
+    textarea.dispatchEvent(clipboardEvent('', [file('two.png', 'image/png', [2])]))
+    expect(nativeAgain).toHaveBeenCalledTimes(1)
+    expect(bench.input.state.getSnapshot().occurrences).toHaveLength(1)
+    selector.remove()
+    bench.dispose()
+  })
+
+  it('auto-switches to the variant, replays the paste into the native intake, and skips the path flow', async () => {
+    const bench = fakeClient('')
+    // The live model catalog reports the exact selection, and the model
+    // directory is the switch channel the selector uses.
+    const select = vi.fn(async () => {})
+    bench.ctx.connection = {
+      api: {
+        sessions: {
+          models: vi.fn(async () => ({
+            result: { ok: true, value: { current: { provider: 'deepseek-official', model: 'deepseek-v4-flash' } } },
+          })),
+        },
+      },
+    }
+    bench.ctx.modelDirectories = { directoryFor: vi.fn(() => ({ select })) }
+    const policy = vi.fn(async () => policyResponse(false, {
+      provider: 'vision-toolkit-deepseek-official',
+      model: 'deepseek-v4-flash',
+      label: 'DeepSeek V4 Flash (Vision Toolkit)',
+    }))
+    vi.stubGlobal('fetch', policy)
+    // A clipboard payload the synthetic replay can carry (jsdom constructs
+    // neither DataTransfer nor ClipboardEvent init data).
+    class FakeDataTransfer {
+      private stored: File[] = []
+      items = { add: (file: File) => { this.stored.push(file) } }
+      setData(): void {}
+      get files(): File[] { return this.stored }
+    }
+    class FakeClipboardEvent extends Event {
+      readonly clipboardData: { files: File[]; items: Array<{ kind: string; getAsFile: () => File }> } | null
+      constructor(type: string, init: { clipboardData?: { files: File[] } } = {}) {
+        super(type, init)
+        const files = init.clipboardData?.files ?? []
+        this.clipboardData = {
+          files,
+          items: files.map(file => ({ kind: 'file', getAsFile: () => file })),
+        }
+      }
+    }
+    vi.stubGlobal('DataTransfer', FakeDataTransfer)
+    vi.stubGlobal('ClipboardEvent', FakeClipboardEvent as unknown as typeof ClipboardEvent)
+    document.dispatchEvent(new Event('focusin'))
+    await vi.waitFor(() => { expect(policy).toHaveBeenCalledTimes(1) })
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    const textarea = composer()
+    // Mimic the composer's own intake: files on a paste become draft images.
+    textarea.addEventListener('paste', (event) => {
+      const files = Array.from((event as ClipboardEvent).clipboardData?.files ?? [])
+      if (files.length > 0) bench.input.addImages(files)
+    })
+    const nativePaste = vi.fn()
+    textarea.addEventListener('paste', nativePaste)
+    textarea.dispatchEvent(clipboardEvent('caption', [
+      file('one.png', 'image/png', [1]),
+      file('two.webp', 'image/webp', [2, 3]),
+    ]))
+
+    await vi.waitFor(() => {
+      expect(select).toHaveBeenCalledWith({
+        provider: 'vision-toolkit-deepseek-official',
+        model: 'deepseek-v4-flash',
+      })
+    })
+    await vi.waitFor(() => {
+      expect(bench.input.notify).toHaveBeenCalledWith('info', expect.stringContaining('Switched to'))
+    })
+    await vi.waitFor(() => {
+      expect(bench.input.state.getSnapshot().imageIds).toHaveLength(2)
+    })
+    expect(bench.input.state.getSnapshot().occurrences).toEqual([])
+    expect(nativePaste).toHaveBeenCalledTimes(1)
+    bench.dispose()
+  })
+
+  it('carries the reasoning effort through the policy query and the switch', async () => {
+    const bench = fakeClient('')
+    const select = vi.fn(async () => {})
+    bench.ctx.connection = {
+      api: {
+        sessions: {
+          models: vi.fn(async () => ({
+            result: {
+              ok: true,
+              value: { current: { provider: 'deepseek-official', model: 'deepseek-v4-flash', reasoningEffort: 'high' } },
+            },
+          })),
+        },
+      },
+    }
+    bench.ctx.modelDirectories = { directoryFor: vi.fn(() => ({ select })) }
+    const policy = vi.fn(async (url: string) => {
+      const query = new URL(String(url), 'http://localhost').searchParams
+      expect(query.get('provider')).toBe('deepseek-official')
+      expect(query.get('modelId')).toBe('deepseek-v4-flash')
+      expect(query.get('reasoningEffort')).toBe('high')
+      return policyResponse(false, {
+        provider: 'vision-toolkit-deepseek-official',
+        model: 'deepseek-v4-flash',
+        label: 'DeepSeek V4 Flash (Vision Toolkit)',
+        reasoningEffort: 'high',
+      })
+    })
+    vi.stubGlobal('fetch', policy)
+    document.dispatchEvent(new Event('focusin'))
+    await vi.waitFor(() => { expect(policy).toHaveBeenCalledTimes(1) })
+    await new Promise(resolve => setTimeout(resolve, 0))
+    const textarea = composer()
+    textarea.addEventListener('paste', (event) => {
+      const files = Array.from((event as ClipboardEvent).clipboardData?.files ?? [])
+      if (files.length > 0) bench.input.addImages(files)
+    })
+    textarea.dispatchEvent(clipboardEvent('', [file('one.png', 'image/png', [1])]))
+
+    await vi.waitFor(() => {
+      expect(select).toHaveBeenCalledWith({
+        provider: 'vision-toolkit-deepseek-official',
+        model: 'deepseek-v4-flash',
+        reasoningEffort: 'high',
+      })
+    })
+    bench.dispose()
+  })
+
+  it('degrades to the path takeover when the model switch fails', async () => {
+    const bench = fakeClient('')
+    const select = vi.fn(async () => { throw new Error('switch rejected') })
+    bench.ctx.modelDirectories = { directoryFor: vi.fn(() => ({ select })) }
+    const policy = vi.fn(async () => policyResponse(false, {
+      provider: 'vision-toolkit-deepseek-official',
+      model: 'deepseek-v4-flash',
+      label: 'DeepSeek V4 Flash (Vision Toolkit)',
+    }))
+    vi.stubGlobal('fetch', policy)
+    document.dispatchEvent(new Event('focusin'))
+    await vi.waitFor(() => { expect(policy).toHaveBeenCalledTimes(1) })
+    await new Promise(resolve => setTimeout(resolve, 0))
+    const textarea = composer()
+    textarea.dispatchEvent(clipboardEvent('', [file('one.png', 'image/png', [1])]))
+
+    await vi.waitFor(() => {
+      expect(bench.input.state.getSnapshot().occurrences).toHaveLength(1)
+    })
+    expect(bench.input.state.getSnapshot().imageIds).toEqual([])
+    expect(bench.input.notify).toHaveBeenCalledWith('error', expect.stringContaining('switch rejected'))
+    expect(bench.input.notify).not.toHaveBeenCalledWith('info', expect.anything())
+    bench.dispose()
+  })
+
+  it('degrades to the path takeover when clipboard replay is unavailable', async () => {
+    const bench = fakeClient('')
+    const select = vi.fn(async () => {})
+    bench.ctx.modelDirectories = { directoryFor: vi.fn(() => ({ select })) }
+    const policy = vi.fn(async () => policyResponse(false, {
+      provider: 'vision-toolkit-deepseek-official',
+      model: 'deepseek-v4-flash',
+      label: 'DeepSeek V4 Flash (Vision Toolkit)',
+    }))
+    vi.stubGlobal('fetch', policy)
+    vi.stubGlobal('DataTransfer', class { constructor() { throw new Error('no clipboard construction') } })
+    document.dispatchEvent(new Event('focusin'))
+    await vi.waitFor(() => { expect(policy).toHaveBeenCalledTimes(1) })
+    await new Promise(resolve => setTimeout(resolve, 0))
+    const textarea = composer()
+    textarea.dispatchEvent(clipboardEvent('', [file('one.png', 'image/png', [1])]))
+
+    await vi.waitFor(() => {
+      expect(bench.input.state.getSnapshot().occurrences).toHaveLength(1)
+    })
+    expect(select).toHaveBeenCalledTimes(1)
+    expect(bench.input.notify).toHaveBeenCalledWith('info', expect.anything())
     bench.dispose()
   })
 })

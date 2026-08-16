@@ -18,6 +18,18 @@ describe('resolveConfig', () => {
     expect(config.runtime.mode).toBe('managed')
     expect(config.runtime.python).toBeUndefined()
     expect(config.allowedDirs).toEqual([])
+    expect(config.imageInputVariants).toEqual({ enabled: true, providers: [], autoSwitch: true })
+  })
+
+  it('normalizes image-input variant settings', () => {
+    const config = resolveConfig({
+      imageInputVariants: {
+        enabled: false,
+        providers: [' deepseek-official ', '  ', 'glm'],
+      },
+    })
+    expect(config.imageInputVariants).toEqual({ enabled: false, providers: ['deepseek-official', 'glm'], autoSwitch: true })
+    expect(resolveConfig({ imageInputVariants: {} }).imageInputVariants).toEqual({ enabled: true, providers: [], autoSwitch: true })
   })
 
   it('normalizes the provider URL and credential', () => {
