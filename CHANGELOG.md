@@ -17,6 +17,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 ### Fixed
 
 - Prevented browser-side or same-origin credential writes from storing a user key under the read-only built-in free provider reference.
+- Aligned automatic image-input descriptions with the pinned upstream focus-hint contract: the bridge now derives intent from the current user request or latest assistant paragraph, ignores injected context prefixes, and keys cached evidence by that focus prompt.
+- Made shared attachment reads bounded and cancellation-safe so queued descriptions can stop without aborting another consumer that is still using the same image read.
 
 ## [0.1.9] - 2026-08-16
 
