@@ -4,6 +4,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+## [0.1.18] - 2026-08-16
+
 ### Changed
 
 - Rebased the model-facing `vision-tools` Skill on the upstream `SKILL.md` and
@@ -12,10 +14,17 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 - Added an exact upstream Skill commit/hash manifest, a reviewable adapter
   patch, and repeatable sync/verification commands so future upstream updates
   fail closed when the adaptation no longer applies cleanly.
+- Expanded the built-in free vision service capacity and provider pool to
+  reduce peak-time exhaustion without changing the existing client safeguard.
+- Replaced the built-in public compatibility key with the project URL while
+  continuing to accept the legacy `api_key="free"` value for existing installs.
+- Reduced the default vision operation timeout from 60 seconds to 15 seconds.
 
 ### Fixed
 
 - Removed the stale single-image restriction from the public Groq vision proxy; one request can now forward up to five images in their original order.
+- Returned sanitized Groq validation details and descriptive request-size errors instead of retrying non-retryable failures across every provider account.
+- Returned explicit quota `429` responses immediately, including retry guidance, instead of retrying them until the client reported a timeout.
 
 ### Removed
 
@@ -216,7 +225,11 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 - Runtime teardown cancels in-flight operations before removing Agent-scoped tools, the activation bootstrap, and the Skill.
 - The Web client is published through the current nested `dsh.client` manifest and loader-compatible built artifact required by DSH snapshot0810.
 
-[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.14...HEAD
+[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.18...HEAD
+[0.1.18]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.17...v0.1.18
+[0.1.17]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.16...v0.1.17
+[0.1.16]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.15...v0.1.16
+[0.1.15]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.14...v0.1.15
 [0.1.14]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.13...v0.1.14
 [0.1.13]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.12...v0.1.13
 [0.1.12]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.11...v0.1.12
