@@ -4,6 +4,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+## [0.1.13] - 2026-08-16
+
 ### Added
 
 - Added `fullPage=true` to `vision_html_screenshot`; the Chrome DevTools Protocol path preserves the requested layout viewport, captures the complete document, and reports `pageHeight` in CSS pixels while leaving fixed-viewport captures unchanged.
@@ -169,7 +171,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 - Runtime teardown cancels in-flight operations before removing Agent-scoped tools, the activation bootstrap, and the Skill.
 - The Web client is published through the current nested `dsh.client` manifest and loader-compatible built artifact required by DSH snapshot0810.
 
-[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.12...HEAD
+[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.13...HEAD
+[0.1.13]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.12...v0.1.13
 [0.1.12]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.11...v0.1.12
 [0.1.11]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.10...v0.1.11
 [0.1.10]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.9...v0.1.10
