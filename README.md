@@ -4,7 +4,7 @@
 
 [![Top at dshfind](https://img.shields.io/badge/top%20at-dshfind-FFD700?style=flat-square)](https://dshfind.com/)
 [![X (Twitter)](https://img.shields.io/badge/-@anion__ex-000000?style=flat-square&logo=x&logoColor=white)](https://x.com/anion_ex)
-[![Release v0.1.7](https://img.shields.io/badge/release-v0.1.7-5B4CF0?style=flat-square)](https://github.com/Anionex/dsh-vision-toolkit/releases/tag/v0.1.7)
+[![Release v0.1.8](https://img.shields.io/badge/release-v0.1.8-5B4CF0?style=flat-square)](https://github.com/Anionex/dsh-vision-toolkit/releases/tag/v0.1.8)
 [![Verified: 168 tests](https://img.shields.io/badge/verified-168%20tests-2EA44F?style=flat-square)](tests)
 [![License: MIT](https://img.shields.io/badge/license-MIT-0B7285?style=flat-square)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-%5E22.19%20%7C%20%3E%3D24-339933?style=flat-square&logo=nodedotjs&logoColor=white)](package.json)
@@ -200,7 +200,7 @@ dsh plugin --profile web remove @dsh-external/dsh-vision-toolkit
 dsh plugin --profile web add @anionex/dsh-vision-toolkit
 ```
 
-After restarting, Settings → Vision should report plugin version **0.1.7**.
+After restarting, Settings → Vision should report plugin version **0.1.8**.
 
 For a registry installation, update the dependency through the profile package manager:
 
@@ -381,7 +381,7 @@ Update the upstream snapshot only through `pnpm run upstream:sync -- <checkout>`
 
 ## Project status and scope
 
-Version `0.1.4` is the current public npm release. P0 and P1 are product commitments in this package. P2 is a design threshold: no stable `ctx.visionToolkit` service, capability-discovery API, or provider ecosystem is published until at least one independent plugin consumes the internal capability shape. Web upload, drag-and-drop, camera/video/audio/document ingestion, interactive box editing, automatic GUI clicking, service clusters, model routing, model voting, and cross-session vision caches remain outside the current product.
+Version `0.1.8` is the current public npm release. P0 and P1 are product commitments in this package. P2 is a design threshold: no stable `ctx.visionToolkit` service, capability-discovery API, or provider ecosystem is published until at least one independent plugin consumes the internal capability shape. Web upload, drag-and-drop, camera/video/audio/document ingestion, interactive box editing, automatic GUI clicking, service clusters, model routing, model voting, and cross-session vision caches remain outside the current product.
 
 ## Community and About
 
