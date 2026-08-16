@@ -144,8 +144,20 @@ describe('response mapping', () => {
     expect(completionContent({ response: '```json\n{\"points\":[{\"x\":12,\"y\":25}]}\n```' }, 'point')).toBe(
       '{\"points\":[{\"x\":12,\"y\":25}]}',
     )
-    expect(completionContent({ response: '{\"objects\":[{\"label\":\"button\",\"x1\":1,\"y1\":2,\"x2\":3,\"y2\":4}]}' }, 'detect')).toBe(
-      '{\"objects\":[{\"label\":\"button\",\"x1\":1,\"y1\":2,\"x2\":3,\"y2\":4}]}',
+    expect(completionContent({ response: '{\"objects\":[{\"label\":\"button\",\"box_2d\":[10,20,30,40]}]}' }, 'detect')).toBe(
+      '{\"objects\":[{\"label\":\"button\",\"box_2d\":[10,20,30,40]}]}',
+    )
+  })
+
+  it('rejects malformed structured locations instead of returning a false success', () => {
+    expect(() => completionContent({ response: '{\"objects\":[{\"label\":\"button\"}]}' }, 'detect')).toThrow(
+      'structured tasks must return JSON',
+    )
+    expect(() => completionContent({ response: '{\"objects\":[{\"box_2d\":[0,0,1001,10]}]}' }, 'detect')).toThrow(
+      'structured tasks must return JSON',
+    )
+    expect(() => completionContent({ response: '{\"points\":[{\"x\":-1,\"y\":10}]}' }, 'point')).toThrow(
+      'structured tasks must return JSON',
     )
   })
 

@@ -353,8 +353,8 @@ function parseStructuredText(text: string, field: 'objects' | 'points'): unknown
   for (const candidate of candidates) {
     try {
       const parsed: unknown = JSON.parse(candidate)
-      if (Array.isArray(parsed)) return parsed
-      if (isRecord(parsed) && Array.isArray(parsed[field])) return parsed[field]
+      const items = Array.isArray(parsed) ? parsed : isRecord(parsed) && Array.isArray(parsed[field]) ? parsed[field] : undefined
+      if (items !== undefined && validateStructuredItems(items, field)) return items
     } catch {
       // Gemma sometimes wraps JSON in a short sentence or a markdown fence.
     }
@@ -362,14 +362,35 @@ function parseStructuredText(text: string, field: 'objects' | 'points'): unknown
   return undefined
 }
 
+function isGridCoordinate(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1000
+}
+
+function validateStructuredItems(items: unknown[], field: 'objects' | 'points'): boolean {
+  if (field === 'points') {
+    return items.every(item => isRecord(item) && isGridCoordinate(item.x) && isGridCoordinate(item.y))
+  }
+  return items.every((item) => {
+    if (!isRecord(item) || !Array.isArray(item.box_2d) || item.box_2d.length !== 4) return false
+    if (item.label !== undefined && (typeof item.label !== 'string' || item.label.trim().length === 0)) return false
+    const [y0, x0, y1, x1] = item.box_2d
+    return isGridCoordinate(y0)
+      && isGridCoordinate(x0)
+      && isGridCoordinate(y1)
+      && isGridCoordinate(x1)
+      && y1 > y0
+      && x1 > x0
+  })
+}
+
 export function buildGemmaInput(completion: ParsedCompletionRequest, image: string, maxTokens: number): GemmaInput {
   let instruction = completion.question
   if (completion.task === 'caption') {
     instruction = `Describe this image ${completion.captionLength === 'long' ? 'in detail' : completion.captionLength === 'short' ? 'briefly' : 'clearly'}.`
   } else if (completion.task === 'point') {
-    instruction = `Locate the target "${completion.target}". Return ONLY valid JSON in the form {"points":[{"x":123,"y":456}]} using integer pixel coordinates in the original image. If it is not present, return {"points":[]}.`
+    instruction = `Locate the center of every visible target matching "${completion.target}". Return ONLY valid JSON in the form {"points":[{"x":500,"y":500}]} using a 0-1000 coordinate grid. If it is not present, return {"points":[]}.`
   } else if (completion.task === 'detect') {
-    instruction = `Find every visible "${completion.target}". Return ONLY valid JSON in the form {"objects":[{"label":"${completion.target}","x1":0,"y1":0,"x2":0,"y2":0}]} using integer pixel coordinates in the original image. If none are present, return {"objects":[]}.`
+    instruction = `Find every visible "${completion.target}". Return ONLY valid JSON in the form {"objects":[{"label":"${completion.target}","box_2d":[100,200,300,400]}]}. Each box_2d must be [y0,x0,y1,x1] on a 0-1000 coordinate grid with y1>y0 and x1>x0. If none are present, return {"objects":[]}.`
   }
 
   return {

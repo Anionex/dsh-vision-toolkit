@@ -12,7 +12,7 @@
   <a href="https://dshfind.com/zh/plugins/Anionex/dsh-vision-toolkit"><img src="https://img.shields.io/badge/%E7%94%B1%20dshfind-%E6%8E%A8%E8%8D%90-FFD700?style=flat-square" alt="由 dshfind 推荐" /></a>
   <a href="https://dshfind.com/zh/plugins/Anionex/dsh-vision-toolkit"><img src="https://img.shields.io/badge/dshfind%20%E8%AF%84%E5%88%86-94%20%7C%20%E6%9C%80%E9%AB%98%E5%88%86%E6%8F%92%E4%BB%B6-5B4CF0?style=flat-square" alt="dshfind 评分：94——最高分插件" /></a>
   <a href="https://x.com/anion_ex"><img src="https://img.shields.io/badge/-@anion__ex-000000?style=flat-square&amp;logo=x&amp;logoColor=white" alt="X：@anion_ex" /></a>
-  <a href="https://github.com/Anionex/dsh-vision-toolkit/releases/tag/v0.1.11"><img src="https://img.shields.io/badge/release-v0.1.11-5B4CF0?style=flat-square" alt="Release v0.1.11" /></a>
+  <a href="https://github.com/Anionex/dsh-vision-toolkit/releases/tag/v0.1.12"><img src="https://img.shields.io/badge/release-v0.1.12-5B4CF0?style=flat-square" alt="Release v0.1.12" /></a>
   <a href="tests"><img src="https://img.shields.io/badge/verified-233%20tests-2EA44F?style=flat-square" alt="已验证：233 项测试" /></a>
 </p>
 
@@ -250,7 +250,7 @@ dsh plugin --profile web remove @dsh-external/dsh-vision-toolkit
 dsh plugin --profile web add @anionex/dsh-vision-toolkit
 ```
 
-重启后，Settings → 视觉工具 应显示插件版本 **0.1.11**。内置免费提供方会自动选中；自定义提供方仍使用配置的 DSH Credential。
+重启后，Settings → 视觉工具 应显示插件版本 **0.1.12**。内置免费提供方会自动选中；自定义提供方仍使用配置的 DSH Credential。
 
 通过注册表安装时，使用 Profile 的包管理命令更新依赖：
 
@@ -456,7 +456,7 @@ pnpm pack --dry-run
 
 ## 项目状态与范围
 
-版本 `0.1.11` 是当前公开 npm 版本。产品重点是截图理解、视觉定位、OCR、素材提取、UI 还原和 DSH Web/Headless Profile 中的像素级验证。Web 上传、拖拽、摄像头/视频/音频/文档输入、交互式标注框编辑、GUI 自动点击、远程服务集群、模型路由、模型投票和跨会话视觉缓存不属于当前产品范围。
+版本 `0.1.12` 是当前公开 npm 版本。产品重点是截图理解、视觉定位、OCR、素材提取、UI 还原和 DSH Web/Headless Profile 中的像素级验证。Web 上传、拖拽、摄像头/视频/音频/文档输入、交互式标注框编辑、GUI 自动点击、远程服务集群、模型路由、模型投票和跨会话视觉缓存不属于当前产品范围。
 
 <details>
 <summary><strong>维护者范围说明</strong></summary>

@@ -29,6 +29,14 @@ export const VISION_TOOLKIT_SETTINGS_NAMESPACE = settingsNamespace('vision-toolk
 /** Browser-compatible default shared with the vendored Python client. */
 export const DEFAULT_VISION_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
 
+const BUILT_IN_FREE_VISION_MODEL_ALIASES = new Set([
+  BUILT_IN_FREE_VISION_MODEL,
+  '@cf/moondream/moondream3.1-9B-A2B',
+  'moondream',
+  'moondream-3.1',
+  'moondream3.1-9B-A2B',
+])
+
 /** Full user-facing configuration; every field defaults at the schema boundary. */
 export interface VisionToolkitConfig {
   provider?: {
@@ -258,6 +266,6 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
 export function isBuiltInFreeVisionProvider(provider: ResolvedVisionToolkitConfig['provider']): boolean {
   return String(provider.credential) === BUILT_IN_FREE_VISION_CREDENTIAL
     && provider.baseUrl === BUILT_IN_FREE_VISION_BASE_URL
-    && provider.model === BUILT_IN_FREE_VISION_MODEL
+    && BUILT_IN_FREE_VISION_MODEL_ALIASES.has(provider.model)
     && provider.protocol === 'openai'
 }
