@@ -32,9 +32,9 @@ export interface VisionToolkitConfig {
     language?: 'zh' | 'en';
     /** Single remote/upstream call budget in milliseconds. */
     timeoutMs?: number;
-    /** Maximum accepted input image size in bytes. */
+    /** Maximum input image size in bytes; larger images are auto-compressed (lossless first). */
     maxImageBytes?: number;
-    /** Maximum decoded pixel count per input image. */
+    /** Maximum decoded pixel count per input image; larger images are auto-downscaled to fit. */
     maxImagePixels?: number;
     /** In-flight tool execution cap per session. */
     concurrency?: number;

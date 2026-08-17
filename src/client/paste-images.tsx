@@ -10,6 +10,7 @@ const SOURCE = 'vision-toolkit-pasted-image'
 export const PASTE_IMAGES_ROUTE = '/_dsh/vision-toolkit/paste-images'
 export const PASTE_POLICY_ROUTE = '/_dsh/vision-toolkit/paste-policy'
 const MAX_IMAGES = 20
+/** Hard per-image paste ceiling; must match MAX_PASTE_IMAGE_BYTES on the server. */
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024
 const MAX_BATCH_BYTES = 80 * 1024 * 1024
 /** A confirmed paste verdict older than this is unknown again, even while a refresh is in flight. */

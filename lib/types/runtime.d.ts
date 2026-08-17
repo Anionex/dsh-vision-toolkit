@@ -41,6 +41,8 @@ export interface ImageInfo {
     width: number;
     height: number;
     format: string;
+    /** Original user-facing image path before any automatic compression. */
+    originalPath: string;
 }
 /** Structured input for one glance call. */
 export interface GlanceRequest {
@@ -356,6 +358,11 @@ export declare class VisionToolkitRuntime {
     resolveVisionEnv(): Promise<UpstreamEnvironment>;
     private visionEnv;
     private pathPolicy;
+    private compressedImageRoot;
+    private readCacheCandidate;
+    private cacheEntryOutDigest;
+    private pruneCompressedCache;
+    private autoCompressImage;
     private validateImage;
     private accountImage;
     private glanceCacheKey;

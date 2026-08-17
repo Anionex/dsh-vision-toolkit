@@ -52,6 +52,14 @@ export interface PasteVerdict {
 
 const MAX_NAME_BYTES = 180
 
+/**
+ * Hard per-image upload ceiling for pastes. Files between the configured
+ * `maxImageBytes` (default 4 MiB) and this ceiling are stored as-is and
+ * auto-compressed by the runtime on first use; matching the browser-side
+ * safety cap keeps the two bundles in agreement.
+ */
+export const MAX_PASTE_IMAGE_BYTES = 20 * 1024 * 1024
+
 interface PasteImageResponse {
   ok: true
   value: { absolutePath: string; filename: string; bytes: number }
@@ -234,7 +242,7 @@ async function writeImage(
 
 /** Runtime limit face kept separate for focused backend tests. */
 export interface PasteImageRuntime {
-  maxImageBytes(): number
+  maxUploadBytes(): number
 }
 
 /** Same-origin, live-Session-bound image upload endpoint. */
@@ -266,7 +274,7 @@ export class PastedImageBackend {
         throw new TypeError('Content-Length does not match the declared size')
       }
       const directory = await sessionPasteRoot(this.ctx, sessionId)
-      const writtenPath = await writeImage(req, directory.writeRoot, filename, size, this.runtime.maxImageBytes())
+      const writtenPath = await writeImage(req, directory.writeRoot, filename, size, this.runtime.maxUploadBytes())
       const absolutePath = join(directory.visibleRoot, basename(writtenPath))
       responseJson(res, 201, { ok: true, value: { absolutePath, filename, bytes: size } })
     } catch (error) {

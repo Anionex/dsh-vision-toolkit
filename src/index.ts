@@ -28,7 +28,7 @@ import { VISION_TOOLS_SKILL } from './skill.ts'
 import { createVisionTools } from './tools.ts'
 import { PLUGIN_VERSION } from './version.ts'
 import { installVisionToolkitWeb, VisionToolkitWebBackend } from './web.ts'
-import { PastedImageBackend } from './paste-images.ts'
+import { MAX_PASTE_IMAGE_BYTES, PastedImageBackend } from './paste-images.ts'
 
 export const name = '@anionex/dsh-vision-toolkit'
 
@@ -98,7 +98,7 @@ export async function apply(ctx: Context, config: VisionToolkitConfig = {}): Pro
 
   const backend = new VisionToolkitWebBackend(ctx, manager, artifacts, ensureOperational)
   const pastedImages = new PastedImageBackend(ctx, {
-    maxImageBytes: () => manager.status().activeConfig?.maxImageBytes ?? resolveConfig(settings.get()).maxImageBytes,
+    maxUploadBytes: () => MAX_PASTE_IMAGE_BYTES,
   })
   // Image-input variants register asynchronously once eligible routes exist;
   // the runtime getter stays lazy so variants appear even when the runtime
