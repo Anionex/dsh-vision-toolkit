@@ -55,6 +55,12 @@ const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
 const VISION_MODEL_TEST_IMAGE = fileURLToPath(new URL('../assets/vision-model-test.png', import.meta.url))
 const VISION_MODEL_TEST_PROMPT = 'This is an explicit service readiness test. Reply with one short sentence confirming that you received the image.'
 
+/** Bump when the Pillow compression ladder changes so stale cache entries are ignored. */
+const COMPRESSED_IMAGE_CACHE_VERSION = 'v1'
+const COMPRESSED_IMAGE_CACHE_MAX_ENTRIES = 200
+const COMPRESSED_IMAGE_CACHE_MAX_BYTES = 512 * 1024 * 1024
+const COMPRESSED_IMAGE_CACHE_STALE_PARTIAL_MS = 60 * 60 * 1000
+
 function svgDocumentPathCount(svg: string): number | undefined {
   const parser = new SaxesParser({ xmlns: true })
   let depth = 0
@@ -194,6 +200,8 @@ export interface ImageInfo {
   width: number
   height: number
   format: string
+  /** Original user-facing image path before any automatic compression. */
+  originalPath: string
 }
 
 /** Structured input for one glance call. */
@@ -872,6 +880,109 @@ export class VisionToolkitRuntime {
     return canonical
   }
 
+  private async readCacheCandidate(
+    root: string,
+    name: string,
+    expectedOutDigest: string,
+    maxBytes: number,
+    maxPixels: number,
+    operation: OperationContext,
+  ): Promise<{ path: string; bytes: number; width: number; height: number; format: string } | undefined> {
+    const candidate = join(root, name)
+    let info
+    try {
+      info = await lstat(candidate)
+    } catch {
+      return undefined
+    }
+    if (!info.isFile() || info.size < 1 || info.size > maxBytes) return undefined
+    let real: string
+    try {
+      real = await realpath(candidate)
+    } catch {
+      return undefined
+    }
+    if (!isWithin(root, real)) return undefined
+    let bytes: Buffer
+    try {
+      bytes = await readFile(real, { signal: operation.signal })
+    } catch {
+      return undefined
+    }
+    if (bytes.length !== info.size || createHash('sha256').update(bytes).digest('hex') !== expectedOutDigest) return undefined
+    let probed: { width: number; height: number; format: string } | undefined
+    try {
+      probed = await this.adapter.probeImageSize(real, { signal: operation.signal })
+    } catch {
+      probed = undefined
+    }
+    const extension = extname(real).toLowerCase()
+    if (
+      probed === undefined
+      || FORMAT_BY_EXTENSION.get(extension) !== probed.format
+      || probed.width * probed.height > maxPixels
+    ) {
+      return undefined
+    }
+    return { path: real, bytes: bytes.length, width: probed.width, height: probed.height, format: probed.format }
+  }
+
+  private cacheEntryOutDigest(entry: string, prefix: string): string | undefined {
+    const tail = entry.slice(prefix.length + 1)
+    return /^[0-9a-f]{64}-/u.test(tail) ? tail.slice(0, 64) : undefined
+  }
+
+  private async pruneCompressedCache(root: string): Promise<void> {
+    let entries: string[]
+    try {
+      entries = await readdir(root)
+    } catch {
+      return
+    }
+    const stalePartials: string[] = []
+    const candidates: Array<{ name: string; size: number; mtime: number; removable: boolean }> = []
+    for (const name of entries) {
+      if (name.startsWith('.')) {
+        if (name.endsWith('.partial')) {
+          const info = await lstat(join(root, name)).catch(() => undefined)
+          if (info !== undefined && Date.now() - info.mtimeMs > COMPRESSED_IMAGE_CACHE_STALE_PARTIAL_MS) {
+            stalePartials.push(name)
+          }
+        }
+        continue
+      }
+      let info
+      try {
+        info = await lstat(join(root, name))
+      } catch {
+        continue
+      }
+      candidates.push({
+        name,
+        size: info.isFile() ? info.size : 0,
+        mtime: info.mtimeMs,
+        removable: !info.isFile() || !name.startsWith(`${COMPRESSED_IMAGE_CACHE_VERSION}-`),
+      })
+    }
+    candidates.sort((a, b) => a.mtime - b.mtime)
+    let totalBytes = 0
+    let kept = 0
+    const remove: string[] = []
+    for (const candidate of candidates) {
+      if (
+        candidate.removable
+        || totalBytes + candidate.size > COMPRESSED_IMAGE_CACHE_MAX_BYTES
+        || kept >= COMPRESSED_IMAGE_CACHE_MAX_ENTRIES
+      ) {
+        remove.push(candidate.name)
+      } else {
+        totalBytes += candidate.size
+        kept += 1
+      }
+    }
+    await Promise.all([...stalePartials, ...remove].map(name => rm(join(root, name), { force: true }).catch(() => {})))
+  }
+
   private async autoCompressImage(
     image: { path: string; bytes: number },
     policy: PathPolicy,
@@ -888,27 +999,27 @@ export class VisionToolkitRuntime {
     }
     const digest = createHash('sha256').update(bytes).digest('hex')
     const root = await this.compressedImageRoot(policy)
-    const prefix = `${digest}-b${this.config.maxImageBytes}-p${this.config.maxImagePixels}`
+    await this.pruneCompressedCache(root)
+    const prefix = `${COMPRESSED_IMAGE_CACHE_VERSION}-${digest}-b${this.config.maxImageBytes}-p${this.config.maxImagePixels}`
     for (const entry of await readdir(root)) {
       if (!entry.startsWith(`${prefix}-`) || entry.startsWith('.')) continue
-      const candidate = join(root, entry)
-      const info = await lstat(candidate).catch(() => undefined)
-      if (info === undefined || !info.isFile() || info.size > this.config.maxImageBytes) continue
-      let probed: { width: number; height: number; format: string } | undefined
-      try {
-        probed = await this.adapter.probeImageSize(candidate, { signal: operation.signal })
-      } catch {
-        probed = undefined
+      const outDigest = this.cacheEntryOutDigest(entry, prefix)
+      if (outDigest === undefined) {
+        await rm(join(root, entry), { force: true }).catch(() => {})
+        continue
       }
-      const extension = extname(candidate).toLowerCase()
-      if (
-        probed !== undefined
-        && FORMAT_BY_EXTENSION.get(extension) === probed.format
-        && probed.width * probed.height <= this.config.maxImagePixels
-      ) {
-        return { path: candidate, bytes: info.size, width: probed.width, height: probed.height, format: probed.format }
+      const cached = await this.readCacheCandidate(
+        root,
+        entry,
+        outDigest,
+        this.config.maxImageBytes,
+        this.config.maxImagePixels,
+        operation,
+      )
+      if (cached !== undefined) {
+        return { ...cached, originalPath: image.path }
       }
-      await rm(candidate, { force: true }).catch(() => {})
+      await rm(join(root, entry), { force: true }).catch(() => {})
     }
     const staged = join(root, `.${prefix}-${randomUUID()}.partial`)
     let compressed: CompressedImageInfo
@@ -925,24 +1036,37 @@ export class VisionToolkitRuntime {
       throw error
     }
     const extension = compressed.format === 'jpeg' ? 'jpg' : compressed.format
-    const finalPath = join(root, `${prefix}-${compressed.width}x${compressed.height}.${extension}`)
-    const exists = await lstat(finalPath).then(() => true).catch(() => false)
-    if (exists) {
+    const stagedBytes = await readFile(staged, { signal: operation.signal })
+    const outDigest = createHash('sha256').update(stagedBytes).digest('hex')
+    const finalName = `${prefix}-${outDigest}-${compressed.width}x${compressed.height}.${extension}`
+    const finalPath = join(root, finalName)
+    const existing = await this.readCacheCandidate(
+      root,
+      finalName,
+      outDigest,
+      this.config.maxImageBytes,
+      this.config.maxImagePixels,
+      operation,
+    )
+    if (existing !== undefined) {
       await rm(staged, { force: true }).catch(() => {})
-    } else {
-      try {
-        await rename(staged, finalPath)
-      } catch (error) {
-        await rm(staged, { force: true }).catch(() => {})
-        throw new VisionToolkitError('path', `cannot commit compressed image cache entry: ${finalPath}`, { cause: error })
-      }
+      return { ...existing, originalPath: image.path }
     }
+    await rm(finalPath, { force: true }).catch(() => {})
+    try {
+      await rename(staged, finalPath)
+    } catch (error) {
+      await rm(staged, { force: true }).catch(() => {})
+      throw new VisionToolkitError('path', `cannot commit compressed image cache entry: ${finalPath}`, { cause: error })
+    }
+    await this.pruneCompressedCache(root)
     return {
       path: finalPath,
       bytes: compressed.bytes,
       width: compressed.width,
       height: compressed.height,
       format: compressed.format,
+      originalPath: image.path,
     }
   }
 
@@ -959,7 +1083,7 @@ export class VisionToolkitRuntime {
       throw new VisionToolkitError('input', `image content is ${decoded.format}, but the filename uses ${extension}`)
     }
     if (image.bytes <= this.config.maxImageBytes && pixels <= this.config.maxImagePixels) {
-      return { ...image, width: decoded.width, height: decoded.height, format: decoded.format }
+      return { ...image, width: decoded.width, height: decoded.height, format: decoded.format, originalPath: image.path }
     }
     return this.autoCompressImage(image, policy, operation)
   }
@@ -1056,11 +1180,12 @@ export class VisionToolkitRuntime {
     policy: PathPolicy,
     operation: OperationContext,
   ): Promise<ArtifactDescriptor> {
-    const extension = extname(image.path).toLowerCase()
-    const stem = basename(image.path, extension)
+    const extension = extname(image.originalPath).toLowerCase()
+    const stem = basename(image.originalPath, extension)
     const suffix = tool === 'vision_ground' ? 'ground' : 'detect'
     const finalPath = resolveOutputFile(output, policy, `${stem}.${suffix}.preview.png`, ['.png'])
     assertDistinctOutput(image.path, finalPath)
+    assertDistinctOutput(image.originalPath, finalPath)
     const staged = createStagedOutput(policy, '.png')
     try {
       const started = Date.now()
@@ -1230,8 +1355,8 @@ export class VisionToolkitRuntime {
       const policy = await this.pathPolicy(options.workspace)
       const image = await this.validateImage(request.image, policy, operation)
       this.accountImage(image, operation)
-      const sourceExtension = extname(image.path).toLowerCase()
-      const stem = basename(image.path, sourceExtension)
+      const sourceExtension = extname(image.originalPath).toLowerCase()
+      const stem = basename(image.originalPath, sourceExtension)
       const finalPath = resolveOutputFile(
         request.output,
         policy,
@@ -1239,6 +1364,7 @@ export class VisionToolkitRuntime {
         ['.png', '.jpg', '.jpeg'],
       )
       assertDistinctOutput(image.path, finalPath)
+      assertDistinctOutput(image.originalPath, finalPath)
       const outputExtension = extname(finalPath).toLowerCase()
       const staged = createStagedOutput(policy, outputExtension)
       try {
@@ -1297,10 +1423,11 @@ export class VisionToolkitRuntime {
       const policy = await this.pathPolicy(options.workspace)
       const image = await this.validateImage(request.image, policy, operation)
       this.accountImage(image, operation)
-      const extension = extname(image.path).toLowerCase()
-      const stem = basename(image.path, extension)
+      const extension = extname(image.originalPath).toLowerCase()
+      const stem = basename(image.originalPath, extension)
       const finalPath = resolveOutputFile(request.output, policy, `${stem}.svg`, ['.svg'])
       assertDistinctOutput(image.path, finalPath)
+      assertDistinctOutput(image.originalPath, finalPath)
       const staged = createStagedOutput(policy, '.svg')
       try {
         const result = await this.runUpstream('trace', [
@@ -1364,14 +1491,19 @@ export class VisionToolkitRuntime {
       const rebuilt = await this.validateImage(request.rebuilt, policy, operation)
       this.accountImage(original, operation)
       this.accountImage(rebuilt, operation)
-      const originalStem = basename(original.path, extname(original.path))
-      const rebuiltStem = basename(rebuilt.path, extname(rebuilt.path))
+      const originalStem = basename(original.originalPath, extname(original.originalPath))
+      const rebuiltStem = basename(rebuilt.originalPath, extname(rebuilt.originalPath))
       const finalDirectory = resolveOutputDirectory(
         request.runName,
         policy,
         `${originalStem}-vs-${rebuiltStem}.pixel-diff`,
       )
-      if (isWithin(finalDirectory, original.path) || isWithin(finalDirectory, rebuilt.path)) {
+      if (
+        isWithin(finalDirectory, original.path)
+        || isWithin(finalDirectory, rebuilt.path)
+        || isWithin(finalDirectory, original.originalPath)
+        || isWithin(finalDirectory, rebuilt.originalPath)
+      ) {
         throw new VisionToolkitError('input', 'pixel_diff artifact directory would replace an input image')
       }
       const stagedDirectory = await createStagedDirectory(policy)
@@ -1498,9 +1630,9 @@ export class VisionToolkitRuntime {
       const policy = await this.pathPolicy(options.workspace)
       const image = await this.validateImage(request.image, policy, operation)
       this.accountImage(image, operation)
-      const stem = basename(image.path, extname(image.path))
+      const stem = basename(image.originalPath, extname(image.originalPath))
       const finalDirectory = resolveOutputDirectory(request.runName, policy, `${stem}.long-ocr`)
-      if (isWithin(finalDirectory, image.path)) {
+      if (isWithin(finalDirectory, image.path) || isWithin(finalDirectory, image.originalPath)) {
         throw new VisionToolkitError('input', 'long_screenshot_ocr artifact directory would replace the input image')
       }
       const stagedDirectory = await createStagedDirectory(policy)
@@ -1647,10 +1779,11 @@ export class VisionToolkitRuntime {
       if (excludeColor !== undefined && !HEX_COLOR_PATTERN.test(excludeColor)) {
         throw new VisionToolkitError('input', 'extract_foreground.excludeColor must be #RRGGBB')
       }
-      const extension = extname(image.path).toLowerCase()
-      const stem = basename(image.path, extension)
+      const extension = extname(image.originalPath).toLowerCase()
+      const stem = basename(image.originalPath, extension)
       const finalPath = resolveOutputFile(request.output, policy, `${stem}.foreground.png`, ['.png'])
       assertDistinctOutput(image.path, finalPath)
+      assertDistinctOutput(image.originalPath, finalPath)
       const staged = createStagedOutput(policy, '.png')
       try {
         const result = await this.runUpstream('extract_foreground', [

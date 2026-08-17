@@ -153,6 +153,8 @@ export interface CompressedImageInfo {
     lossy: boolean;
     resized: boolean;
     candidate: string;
+    /** True when the source image had multiple animation frames. */
+    sourceAnimated: boolean;
 }
 /** Parse one numbered upstream location line (`N. position label x1: ..., ...`). */
 export declare function parseLocationLine(line: string): LocatedElement | undefined;

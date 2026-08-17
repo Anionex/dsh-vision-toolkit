@@ -1,4 +1,4 @@
-import { copyFile, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
+import { copyFile, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -248,6 +248,7 @@ describe('VisionToolkitRuntime', () => {
       target: 'send button',
       image: {
         path: expect.stringMatching(/sample\.png$/),
+        originalPath: expect.stringMatching(/sample\.png$/),
         bytes: expect.any(Number),
         width: 256,
         height: 256,
@@ -368,6 +369,7 @@ describe('VisionToolkitRuntime', () => {
     const byteImage = byteResult.images[0]
     expect(byteImage?.bytes ?? 0).toBeLessThanOrEqual(1024)
     expect(byteImage?.path).toMatch(/compressed-images/u)
+    expect(byteImage?.originalPath).toBe(await realpath(join(workspace, 'sample.png')))
     await expect(readFile(join(workspace, 'sample.png'))).resolves.toEqual(await readFile(SAMPLE_IMAGE))
 
     const pixelLimited = await setup({ maxImagePixels: 65_535 })
@@ -375,6 +377,7 @@ describe('VisionToolkitRuntime', () => {
     const pixelImage = pixelResult.images[0]
     expect((pixelImage?.width ?? 0) * (pixelImage?.height ?? 0)).toBeLessThanOrEqual(65_535)
     expect(pixelImage?.path).toMatch(/compressed-images/u)
+    expect(pixelImage?.originalPath).toBe(await realpath(join(workspace, 'sample.png')))
   })
 
   it('reuses the durable compressed-image cache for identical inputs', async () => {
@@ -389,6 +392,42 @@ describe('VisionToolkitRuntime', () => {
     expect(compress).toHaveBeenCalledTimes(1)
     const entries = await readdir(join(workspace, '.dsh-vision-toolkit', 'tmp', 'compressed-images'))
     expect(entries.some(entry => !entry.startsWith('.'))).toBe(true)
+  })
+
+  it('ignores and replaces tampered compressed-cache entries', async () => {
+    const { runtime } = await setup({ maxImageBytes: 1024 })
+    const workspace = await tempWorkspace()
+    const options = { signal, workspace }
+    await runtime.glance({ images: ['sample.png'] }, options)
+    const cacheDir = join(workspace, '.dsh-vision-toolkit', 'tmp', 'compressed-images')
+    const entries = (await readdir(cacheDir)).filter(name => !name.startsWith('.'))
+    expect(entries).toHaveLength(1)
+    const entry = entries[0]!
+    await rm(join(cacheDir, entry))
+    const decoy = join(workspace, 'decoy.png')
+    await copyFile(SAMPLE_IMAGE, decoy)
+    await symlink(decoy, join(cacheDir, entry))
+
+    const result = await runtime.glance({ images: ['sample.png'] }, options)
+    expect(result.images[0]?.path).toMatch(/compressed-images/u)
+    const info = await lstat(join(cacheDir, entry))
+    expect(info.isSymbolicLink()).toBe(false)
+    expect(info.isFile()).toBe(true)
+    expect(info.size).toBeLessThanOrEqual(1024)
+  })
+
+  it('prunes cache entries from older compression schemas', async () => {
+    const { runtime } = await setup({ maxImageBytes: 1024 })
+    const workspace = await tempWorkspace()
+    const options = { signal, workspace }
+    await runtime.glance({ images: ['sample.png'] }, options)
+    const cacheDir = join(workspace, '.dsh-vision-toolkit', 'tmp', 'compressed-images')
+    await writeFile(join(cacheDir, 'legacy-entry'), 'stale')
+
+    await runtime.glance({ images: ['sample.png'] }, options)
+    const entries = (await readdir(cacheDir)).filter(name => !name.startsWith('.'))
+    expect(entries).not.toContain('legacy-entry')
+    expect(entries.length).toBeGreaterThan(0)
   })
 
   it('forwards the compressed copy to upstream and leaves the original file untouched', async () => {
@@ -423,6 +462,19 @@ describe('VisionToolkitRuntime', () => {
       .rejects.toMatchObject({ code: 'input' })
     await expect(runtime.glance({ images: ['disguised.jpg'] }, { signal, workspace }))
       .rejects.toMatchObject({ code: 'input' })
+  })
+
+  it('refuses to overwrite the original image with a crop output after compression', async () => {
+    const { runtime } = await setup({ maxImageBytes: 1024 })
+    const workspace = await tempWorkspace()
+    const artifactDir = join(workspace, '.dsh-vision-toolkit', 'artifacts')
+    await mkdir(artifactDir, { recursive: true })
+    await copyFile(SAMPLE_IMAGE, join(artifactDir, 'sample.png'))
+    await expect(runtime.crop(
+      { image: '.dsh-vision-toolkit/artifacts/sample.png', region: '0,0,10,10', output: 'sample.png' },
+      { signal, workspace },
+    )).rejects.toMatchObject({ code: 'input' })
+    await expect(readFile(join(artifactDir, 'sample.png'))).resolves.toEqual(await readFile(SAMPLE_IMAGE))
   })
 
   it('distinguishes caller cancellation from a hard operation timeout', async () => {

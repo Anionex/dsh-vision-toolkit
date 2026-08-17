@@ -111,9 +111,58 @@ describe('UpstreamAdapter.compressImage', () => {
 
     const result = await adapter.compressImage(source, dest, 4 * 1024 * 1024, 20_000_000, { signal })
     expect(result.bytes).toBeLessThanOrEqual(4 * 1024 * 1024)
-    expect(['jpeg', 'webp']).toContain(result.format)
+    expect(['png', 'webp', 'jpeg']).toContain(result.format)
+    if (result.format === 'jpeg') expect(result.lossy).toBe(true)
+    if (result.format === 'png') expect(result.lossy).toBe(false)
     await expect(readFile(dest)).resolves.toBeDefined()
   }, 120_000)
+
+  it('tries a true lossless re-encode before any lossy JPEG for JPEG sources', async () => {
+    const { adapter } = await setup()
+    const root = await tempDir()
+    const source = join(root, 'flat.jpg')
+    const dest = join(root, 'flat-jpeg-out')
+    await makeImage(source, `from PIL import Image; im=Image.new("RGB",(400,400),(120,80,200)); im.save(${JSON.stringify(source)},quality=95)`)
+
+    const result = await adapter.compressImage(source, dest, 64 * 1024, 20_000_000, { signal })
+    expect(result.lossy).toBe(false)
+    expect(['png', 'webp']).toContain(result.format)
+    await expect(readFile(dest)).resolves.toBeDefined()
+  }, 60_000)
+
+  it('keeps EXIF metadata when a lossless re-encode fits the budget', async () => {
+    const { adapter } = await setup()
+    const root = await tempDir()
+    const source = join(root, 'exif.jpg')
+    const dest = join(root, 'exif-out')
+    await makeImage(source, [
+      'from PIL import Image',
+      'im=Image.new("RGB",(320,240),(10,20,30))',
+      'exif=Image.Exif()',
+      'exif[0x010f]="DSH Vision Toolkit"',
+      `im.save(${JSON.stringify(source)},quality=95,exif=exif)`,
+    ].join('\n'))
+
+    const result = await adapter.compressImage(source, dest, 64 * 1024, 20_000_000, { signal })
+    expect(result.lossy).toBe(false)
+    const preserved = await execFileAsync('python3', ['-c', `from PIL import Image; im=Image.open(${JSON.stringify(dest)}); print(bool(im.getexif()))`])
+    expect(preserved.stdout.trim()).toBe('True')
+  }, 60_000)
+
+  it('reports animated sources so callers know only the first frame is kept', async () => {
+    const { adapter } = await setup()
+    const root = await tempDir()
+    const source = join(root, 'anim.gif')
+    const dest = join(root, 'anim-out')
+    await makeImage(source, [
+      'from PIL import Image',
+      'frames=[Image.new("RGB",(64,64),(i*255,0,0)) for i in range(2)]',
+      `frames[0].save(${JSON.stringify(source)},save_all=True,append_images=[frames[1]],duration=100,loop=0)`,
+    ].join('\n'))
+
+    const result = await adapter.compressImage(source, dest, 1024 * 1024, 20_000_000, { signal })
+    expect(result.sourceAnimated).toBe(true)
+  }, 60_000)
 
   it('downscales when the pixel budget requires it', async () => {
     const { adapter } = await setup()
