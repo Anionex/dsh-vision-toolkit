@@ -235,7 +235,7 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
     const skills = await ctx.skills.list()
     const skill = skills.find(entry => entry.name === 'vision-tools')
     expect(skill).toBeDefined()
-    expect(skill?.description).toContain('vision_glance')
+    expect(skill?.description).toContain('还原为 UI')
     expect(skill?.provider).toBe('runtime')
     const definition = await ctx.skills.get('vision-tools')
     expect(definition?.content).toContain('untrusted visual evidence')

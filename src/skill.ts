@@ -24,8 +24,8 @@ export const VISION_TOOLS_SKILL_CONTENT = readFileSync(
 /** Runtime skill registration mounted only after every native tool is ready. */
 export const VISION_TOOLS_SKILL: SkillRegistration = {
   name: VISION_TOOLS_SKILL_NAME,
-  description: 'Native DSH visual engineering tools adapted from agent-vision-toolkit: vision_glance, vision_ground, vision_detect, vision_trace, vision_crop, vision_pixel_diff, vision_long_screenshot_ocr, vision_extract_foreground, vision_dominant_colors, vision_html_screenshot, and upstream playbooks.',
-  whenToUse: 'Use whenever a task depends on image text/content, pixel coordinates, screenshot-to-UI reconstruction, visual regression, reusable image/SVG assets, diagram reconstruction, GUI operation from screenshots, or tall screenshot OCR.',
+  description: '把截图或设计图还原为 UI（网页、应用界面或组件），生成 HTML/CSS 或项目现有前端代码；也支持图片问答、长截图/聊天记录 OCR、元素定位与盘点、裁剪、前景提取、像素对比、取色、SVG 描摹和 HTML 转截图。当任务涉及图片理解、UI 还原/重建（rebuild or restore a UI from a screenshot）、视觉回归、像素坐标、基于截图的 GUI 操作、可复用图片/SVG 素材、图表还原或长截图 OCR 时使用。',
+  whenToUse: '任务依赖图片文字/内容、像素坐标、截图转 UI 重建、视觉回归、可复用图片/SVG 素材、图表还原、基于截图的 GUI 操作或长截图 OCR 时使用。',
   source: 'runtime',
   resourceBase: {
     kind: 'directory',
