@@ -8,6 +8,10 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 - **Install and use with zero Python setup.** When no system Python 3.11+ is available, the plugin downloads a pinned, sha256-verified standalone Python 3.13 build (about 35 MB) on first use and prepares its isolated runtime with it, so new users no longer need to install Python first. A system Python or an explicit `runtime.python` override still takes precedence, and a committed manifest plus `scripts/python-bootstrap.mjs` keeps the pinned build auditable and updatable.
 
+### Changed
+
+- Raised the default vision operation timeout from 15 seconds to 30 seconds for both semaphore queueing and tool execution.
+
 ## [0.1.28] - 2026-08-17
 
 ### Fixed
