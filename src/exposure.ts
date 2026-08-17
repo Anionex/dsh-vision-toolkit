@@ -19,7 +19,7 @@ export const VISION_TOOLKIT_ACTIVATE = 'vision_toolkit_activate'
 
 interface AgentExposure {
   active: boolean
-  hideActivation?: () => void
+  liftRestriction?: () => void
   toolDisposers: Array<() => void>
   toolNames: string[]
 }
@@ -150,6 +150,9 @@ export class VisionToolExposure {
     const listeners = [
       this.ctx.on('agent/created', ({ agent }) => { this.attach(agent) }),
       this.ctx.on('agent/disposed', ({ agent }) => { this.detach(agent) }),
+      this.ctx.on('session/event', (session, event) => {
+        if (event.type === 'step/end') this.applyHideActivationForSession(session)
+      }),
       this.ctx.on('tools/result', (exec, result) => {
         if (result.isError === false
           && exec.name === 'skill'
@@ -192,21 +195,38 @@ export class VisionToolExposure {
 
     const definitions = this.createTools()
     const toolDisposers: Array<() => void> = []
-    let hideActivation: (() => void) | undefined
     try {
       for (const definition of definitions) toolDisposers.push(agent.ctx.tools.register(definition))
-      hideActivation = agent.ctx.tools.restrict({ deny: [VISION_TOOLKIT_ACTIVATE] })
+      // A Skill call and the bootstrap can be issued in the same model step.
+      // Restricting immediately would turn the still-in-flight bootstrap call
+      // into an UNKNOWN_TOOL error, so live sessions hide at step/end.
+      if (!this.isLiveSession(agent.session)) this.applyHideActivation(agent)
     } catch (error) {
-      hideActivation?.()
       for (const dispose of toolDisposers.reverse()) dispose()
       throw error
     }
 
     state.active = true
-    state.hideActivation = hideActivation
     state.toolDisposers = toolDisposers
     state.toolNames = definitions.map(definition => definition.name)
     return { activated: true, tools: [...state.toolNames] }
+  }
+
+  /** Whether the session is attached to the live SessionStore (production). */
+  private isLiveSession(session: Session): boolean {
+    return this.ctx.sessions.get(session.id) === session
+  }
+
+  private applyHideActivationForSession(session: Session): void {
+    for (const agent of this.ctx.agents.list()) {
+      if (agent.session === session) this.applyHideActivation(agent)
+    }
+  }
+
+  private applyHideActivation(agent: Agent): void {
+    const state = this.states.get(agent)
+    if (state === undefined || state.liftRestriction !== undefined) return
+    state.liftRestriction = agent.ctx.tools.restrict({ deny: [VISION_TOOLKIT_ACTIVATE] })
   }
 
   private detach(agent: Agent): void {
@@ -222,7 +242,7 @@ export class VisionToolExposure {
   }
 
   private disposeState(state: AgentExposure): void {
-    state.hideActivation?.()
+    state.liftRestriction?.()
     for (const dispose of state.toolDisposers.reverse()) dispose()
   }
 }

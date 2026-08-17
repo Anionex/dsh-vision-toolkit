@@ -35,6 +35,10 @@ export declare class VisionToolExposure {
     install(): () => void;
     private attach;
     private activate;
+    /** Whether the session is attached to the live SessionStore (production). */
+    private isLiveSession;
+    private applyHideActivationForSession;
+    private applyHideActivation;
     private detach;
     private disposeStates;
     private disposeState;

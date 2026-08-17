@@ -388,6 +388,36 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
     expect(names).not.toContain(VISION_TOOLKIT_ACTIVATE)
   })
 
+  it('keeps the bootstrap callable after a Skill result until step/end', async () => {
+    const { ctx } = await setupContext(BUNDLED_UPSTREAM)
+    const session = ctx.sessions.create(SessionId('skill-then-activate'))
+    const agent = await registerAgent(ctx, 'skill-then-activate', session)
+    const signal = new AbortController().signal
+    const skillResult = await ctx.tools.execute({
+      signal,
+      callId: CallId('skill-call'),
+      name: 'skill',
+      arguments: { name: 'vision-tools' },
+      agent,
+    })
+    expect(skillResult.isError, JSON.stringify(skillResult)).toBe(false)
+    const activationResult = await ctx.tools.execute({
+      signal,
+      callId: CallId('activate-call'),
+      name: VISION_TOOLKIT_ACTIVATE,
+      arguments: {},
+      agent,
+    })
+    expect(activationResult.isError, JSON.stringify(activationResult)).toBe(false)
+    expect(JSON.stringify(activationResult.content)).toContain('vision_glance')
+
+    session.append('step/start', { turn: 1, step: 1 })
+    session.append('step/end', { turn: 1, step: 1 })
+    const names = ctx.tools.schemas(agent).map(tool => tool.name)
+    for (const name of TOOL_NAMES) expect(names).toContain(name)
+    expect(names).not.toContain(VISION_TOOLKIT_ACTIVATE)
+  })
+
   it('cancels an in-flight upstream tool when the plugin is disposed', async () => {
     const ctx = new Context()
     contexts.push(ctx)
