@@ -4,3 +4,5 @@ node_modules/
 .DS_Store
 .dsh-vision-toolkit/
 .venv/
+__pycache__/
+*.pyc

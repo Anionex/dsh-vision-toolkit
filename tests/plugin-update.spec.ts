@@ -239,7 +239,7 @@ describe('VisionToolkitPluginUpdateService', () => {
     ])
   })
 
-  it('updates only this package, verifies the installed version, and schedules a restart', async () => {
+  it.skipIf(process.platform === 'win32')('updates only this package, verifies the installed version, and schedules a restart', async () => {
     const fixture = await profileFixture()
     const subprocess = new FakeSubprocess(async (spec) => {
       if (spec.argv.includes('view')) return { stdout: '"0.2.0"\n' }
@@ -491,7 +491,7 @@ describe('VisionToolkitPluginUpdateService', () => {
     expect(prepareRestart).not.toHaveBeenCalled()
   })
 
-  it('keeps the current Web process running when the restart helper does not acknowledge handoff', async () => {
+  it.skipIf(process.platform === 'win32')('keeps the current Web process running when the restart helper does not acknowledge handoff', async () => {
     const fixture = await profileFixture('^0.1.0')
     let addCalls = 0
     const subprocess = new FakeSubprocess(async (spec) => {
@@ -526,7 +526,7 @@ describe('VisionToolkitPluginUpdateService', () => {
 })
 
 describe('plugin restart helper', () => {
-  it('rolls back and restores service when the replacement exits before becoming ready', async () => {
+  it.skipIf(process.platform === 'win32')('rolls back and restores service when the replacement exits before becoming ready', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dvt-restart-helper-'))
     roots.push(root)
     const statePath = join(root, 'version.txt')
@@ -630,7 +630,7 @@ writeFileSync(process.env.DVT_INSTALLED_PACKAGE, JSON.stringify({ name: '@anione
     await expect(readFile(join(backupDir, 'metadata.json'))).rejects.toMatchObject({ code: 'ENOENT' })
   }, 15_000)
 
-  it('keeps the helper-owned profile lock and times out a hung rollback pnpm process', async () => {
+  it.skipIf(process.platform === 'win32')('keeps the helper-owned profile lock and times out a hung rollback pnpm process', async () => {
     const fixture = await profileFixture()
     const root = dirname(dirname(fixture.profileDir))
     const statePath = join(root, 'version.txt')

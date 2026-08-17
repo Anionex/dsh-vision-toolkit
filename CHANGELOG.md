@@ -10,6 +10,11 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 - Renamed the bundled Skill from `vision-tools` to `vision-skills`, so the model-facing name describes the capability instead of the underlying tools. Sessions created before the rename still restore activation from legacy `vision-tools` history; new sessions invoke `/vision-skills`.
 
+### Fixed
+
+- Fixed the compressed-image cache silently missing on Windows when cache file paths exceeded the 260-character `MAX_PATH` limit; cache keys now use shorter 64-bit digests and are versioned as `v2`, so old oversized entries are pruned automatically.
+- Made the portable package verification and the test suite run on Windows, including `npm.cmd` invocation, path-separator handling, Python bootstrap fixture layout, and restart-helper test skips where automatic restart is intentionally unavailable.
+
 ## [0.1.30] - 2026-08-17
 
 ### Changed

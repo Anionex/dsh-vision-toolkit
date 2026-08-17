@@ -71,6 +71,7 @@ async function runDsh(
   args: readonly string[],
   env: Readonly<Record<string, string>>,
   cwd = repoRoot,
+  shell = false,
 ): Promise<{ stdout: string; stderr: string; code: number }> {
   const childEnv = Object.fromEntries(
     Object.entries({ ...process.env, ...env })
@@ -84,6 +85,7 @@ async function runDsh(
     env: childEnv,
     extendEnv: false,
     cwd,
+    shell,
   })
   if (result.timedOut) {
     throw new Error(`dsh did not exit within 120s. stdout:\n${result.stdout}\nstderr:\n${result.stderr}`)
@@ -616,7 +618,7 @@ describe.skipIf(!profileE2eAvailable)('dsh-vision-toolkit profile install (keyle
           DEEPSEEK_API_KEY: 'mock-vision-e2e-key',
           DEEPSEEK_BASE_URL: reenabledServer.baseURL,
           VISION_API_KEY: 'fixture-vision-key',
-        }, workspace)
+        }, workspace, true)
         expect(reenabled.code, reenabled.stderr).toBe(0)
         expect(reenabled.stdout).toBe('re-enabled ok')
         expectProgressiveExposure(reenabledServer.requests)

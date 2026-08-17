@@ -261,10 +261,10 @@ check(upstreamAdapter.includes('--use-mock-keychain'), 'HTML screenshot adapter 
 check(upstreamAdapter.includes('--user-data-dir='), 'HTML screenshot adapter is missing an isolated --user-data-dir')
 
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
-const pack = spawnSync(npm, ['pack', '--dry-run', '--ignore-scripts', '--json'], {
-  cwd: root,
-  encoding: 'utf8',
-})
+const packArgs = ['pack', '--dry-run', '--ignore-scripts', '--json']
+const pack = process.platform === 'win32'
+  ? spawnSync('cmd.exe', ['/d', '/s', '/c', npm, ...packArgs], { cwd: root, encoding: 'utf8' })
+  : spawnSync(npm, packArgs, { cwd: root, encoding: 'utf8' })
 if (pack.status !== 0) {
   failures.push(`npm pack --dry-run failed: ${(pack.stderr || pack.stdout).trim()}`)
 } else {
