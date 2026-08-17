@@ -327,8 +327,7 @@ On Windows, use `py -3 --version` for the version check and `.venv\Scripts\pytho
 py -3 --version                         # must report 3.11 or newer
 uv venv .venv --python 3.13
 # External mode only; use the plugin checkout's absolute lockfile path:
-uv pip install --python .venv\Scripts\python.exe \
-  -r C:\absolute\path\to\dsh-vision-toolkit\runtime\requirements.lock
+uv pip install --python .venv\Scripts\python.exe -r C:\absolute\path\to\dsh-vision-toolkit\runtime\requirements.lock
 ```
 
 Point `runtime.python` at the same interpreter, save the Profile patch, and restart the Web Profile. Then open **Settings → Vision Toolkit**: the Runtime panel should show the resolved interpreter and Python version, and **Run health check** plus **Test vision model** should complete without the Python-version error. A final smoke test is to place a PNG/JPEG in the session workspace and call `vision_glance`.

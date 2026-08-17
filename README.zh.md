@@ -330,8 +330,7 @@ Windows 请使用 `py -3 --version` 检查版本，并在对应命令中使用 `
 py -3 --version                         # 必须是 3.11 或更高
 uv venv .venv --python 3.13
 # 仅 external 模式需要；请使用插件 checkout 中 lockfile 的绝对路径：
-uv pip install --python .venv\Scripts\python.exe \
-  -r C:\absolute\path\to\dsh-vision-toolkit\runtime\requirements.lock
+uv pip install --python .venv\Scripts\python.exe -r C:\absolute\path\to\dsh-vision-toolkit\runtime\requirements.lock
 ```
 
 把 `runtime.python` 指向同一个解释器，保存 Profile patch 后重启 Web Profile。然后打开 **设置 → 视觉工具**：运行时面板应显示实际使用的解释器和 Python 版本；点击 **运行健康检查** 和 **测试视觉模型**，确认不再出现 Python 版本错误。最后可将一张 PNG/JPEG 放入会话工作区并调用 `vision_glance` 做冒烟测试。
