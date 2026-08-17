@@ -1,11 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import worker from '../src/index'
-import { __test__ as groqTest } from '../src/groq'
+import {
+  GROQ_CHAT_COMPLETIONS_URL,
+  __test__ as providerTest,
+} from '../src/groq'
 import { CANONICAL_MODEL } from '../src/protocol'
 
 const tinyPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
 const publicApiKey = 'https://agent-vision.anionex.me'
+const fallbackEndpoint = 'https://fallback.example/v1/chat/completions'
+const fallbackModel = 'fallback-vision-model'
 
 interface FakeKeyState {
   activeRequests: number
@@ -29,9 +34,9 @@ class FakeStatement {
     if (this.sql.includes('RETURNING key_slot')) {
       const now = Number(this.values[0])
       const leaseExpiresAt = Number(this.values[1])
-      const keyCount = Number(this.values[2])
+      const slots = new Set(this.values.slice(2).map(Number))
       const selected = [...this.database.keyStates.values()]
-        .filter(state => state.keySlot < keyCount && state.cooldownUntil <= now)
+        .filter(state => slots.has(state.keySlot) && state.cooldownUntil <= now)
         .sort((left, right) => left.activeRequests - right.activeRequests
           || left.lastSelectedAt - right.lastSelectedAt
           || left.keySlot - right.keySlot)[0]
@@ -42,10 +47,10 @@ class FakeStatement {
       return { key_slot: selected.keySlot } as T
     }
     if (this.sql.includes('MIN(cooldown_until)')) {
-      const keyCount = Number(this.values[0])
-      const now = Number(this.values[1])
+      const now = Number(this.values.at(-1))
+      const slots = new Set(this.values.slice(0, -1).map(Number))
       const next = [...this.database.keyStates.values()]
-        .filter(state => state.keySlot < keyCount && state.cooldownUntil > now)
+        .filter(state => slots.has(state.keySlot) && state.cooldownUntil > now)
         .reduce<number | null>((minimum, state) => minimum === null
           ? state.cooldownUntil
           : Math.min(minimum, state.cooldownUntil), null)
@@ -92,7 +97,7 @@ class FakeStatement {
 class FakeD1 {
   readonly counts = new Map<string, number>()
   failSchedulerRelease = false
-  readonly keyStates = new Map<number, FakeKeyState>(Array.from({ length: 5 }, (_, keySlot) => [
+  readonly keyStates = new Map<number, FakeKeyState>(Array.from({ length: 6 }, (_, keySlot) => [
     keySlot,
     { activeRequests: 0, cooldownUntil: 0, keySlot, lastSelectedAt: 0, leaseExpiresAt: 0 },
   ]))
@@ -146,6 +151,9 @@ function environment(database: FakeD1, burstSuccess = true): Env {
     GROQ_API_KEY_3: 'test-groq-key-3',
     GROQ_API_KEY_4: 'test-groq-key-4',
     GROQ_API_KEY_5: 'test-groq-key-5',
+    FALLBACK_VISION_API_KEY: 'test-fallback-key',
+    FALLBACK_VISION_MODEL: fallbackModel,
+    FALLBACK_VISION_URL: fallbackEndpoint,
     USAGE_DB: database,
   } as Env
 }
@@ -153,10 +161,59 @@ function environment(database: FakeD1, burstSuccess = true): Env {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('Worker request accounting', () => {
-  it('trims configured Groq secrets before using them as bearer tokens', () => {
+  it('trims configured provider secrets before using them as bearer tokens', () => {
     const env = environment(new FakeD1()) as Env & Record<string, string>
     env.GROQ_API_KEY_1 = '  test-groq-key-1\n'
-    expect(groqTest.configuredKeys(env)).toContain('test-groq-key-1')
+    expect(providerTest.configuredUpstreams(env)).toContainEqual(expect.objectContaining({
+      key: 'test-groq-key-1',
+      slot: 0,
+    }))
+  })
+
+  it('keeps the additional endpoint on a stable scheduler slot', () => {
+    const upstream = providerTest.configuredUpstreams(environment(new FakeD1()))
+      .find(candidate => candidate.name === 'fallback')
+    expect(upstream).toMatchObject({
+      endpoint: fallbackEndpoint,
+      key: 'test-fallback-key',
+      model: fallbackModel,
+      slot: 5,
+    })
+  })
+
+  it('selects the stable additional slot when primary secrets are absent', async () => {
+    const database = new FakeD1()
+    const env = environment(database) as Env & Record<string, string | undefined>
+    for (let index = 1; index <= 5; index += 1) delete env[`GROQ_API_KEY_${index}`]
+    const providerFetch = vi.fn(async (input: RequestInfo | URL) => {
+      expect(String(input)).toBe(fallbackEndpoint)
+      return Response.json({
+        choices: [{ finish_reason: 'stop', message: { content: 'Additional endpoint.', role: 'assistant' } }],
+      })
+    })
+    vi.stubGlobal('fetch', providerFetch)
+
+    const response = await worker.fetch(request(), env as Env)
+
+    expect(response.status).toBe(200)
+    expect(providerFetch).toHaveBeenCalledTimes(1)
+    expect(database.keyStates.get(5)).toMatchObject({ activeRequests: 0 })
+  })
+
+  it('returns the sparse additional slot cooldown without contacting an upstream', async () => {
+    const database = new FakeD1()
+    database.keyStates.get(5)!.cooldownUntil = Date.now() + 5_000
+    const env = environment(database) as Env & Record<string, string | undefined>
+    for (let index = 1; index <= 5; index += 1) delete env[`GROQ_API_KEY_${index}`]
+    const providerFetch = vi.fn()
+    vi.stubGlobal('fetch', providerFetch)
+
+    const response = await worker.fetch(request(), env as Env)
+
+    expect(response.status).toBe(429)
+    expect(response.headers.get('retry-after')).toMatch(/^[1-5]$/)
+    expect(await response.json()).toMatchObject({ error: { code: 'rate_limit_exceeded' } })
+    expect(providerFetch).not.toHaveBeenCalled()
   })
 
   it('advertises the branded public key on the discovery route', async () => {
@@ -319,11 +376,36 @@ describe('Worker request accounting', () => {
 
     const authorizations = groqFetch.mock.calls.map(call => new Headers(call[1]?.headers).get('authorization'))
     expect(new Set(authorizations).size).toBe(2)
-    expect([...database.keyStates.values()].map(state => state.activeRequests)).toEqual([1, 1, 0, 0, 0])
+    expect([...database.keyStates.values()].map(state => state.activeRequests)).toEqual([1, 1, 0, 0, 0, 0])
 
     releaseFetches?.()
     await expect(Promise.all([first, second])).resolves.toHaveLength(2)
-    expect([...database.keyStates.values()].map(state => state.activeRequests)).toEqual([0, 0, 0, 0, 0])
+    expect([...database.keyStates.values()].map(state => state.activeRequests)).toEqual([0, 0, 0, 0, 0, 0])
+  })
+
+  it('falls back to the additional endpoint when every primary account is rejected', async () => {
+    const database = new FakeD1()
+    const providerFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === GROQ_CHAT_COMPLETIONS_URL) return new Response('Forbidden', { status: 403 })
+      expect(String(input)).toBe(fallbackEndpoint)
+      expect(new Headers(init?.headers).get('authorization')).toBe('Bearer test-fallback-key')
+      expect(JSON.parse(String(init?.body))).toMatchObject({ model: fallbackModel, reasoning_effort: 'none' })
+      return Response.json({
+        choices: [{ finish_reason: 'stop', message: { content: 'Fallback recovered.', role: 'assistant' } }],
+      })
+    })
+    vi.stubGlobal('fetch', providerFetch)
+
+    const response = await worker.fetch(request(), environment(database))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      choices: [{ message: { content: 'Fallback recovered.' } }],
+    })
+    expect(providerFetch).toHaveBeenCalledTimes(6)
+    expect(providerFetch.mock.calls.slice(0, 5).every(call => String(call[0]) === GROQ_CHAT_COMPLETIONS_URL)).toBe(true)
+    expect(String(providerFetch.mock.calls[5]?.[0])).toBe(fallbackEndpoint)
+    expect([...database.keyStates.values()].map(state => state.activeRequests)).toEqual([0, 0, 0, 0, 0, 0])
   })
 
   it('keeps a successful inference response when lease cleanup fails', async () => {
@@ -339,7 +421,7 @@ describe('Worker request accounting', () => {
     expect(await response.json()).toMatchObject({
       choices: [{ message: { content: 'Still returned.' } }],
     })
-    expect(error).toHaveBeenCalledWith(expect.stringContaining('groq_lease_release_failed'))
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('vision_upstream_lease_release_failed'))
   })
 
   it('keeps the legacy free API key working during the public key migration', async () => {
@@ -364,7 +446,7 @@ describe('Worker request accounting', () => {
     })
   })
 
-  it('returns a sanitized upstream error when all Groq accounts are rate limited', async () => {
+  it('returns a non-retryable rate-limit code when every upstream is cooling down', async () => {
     const database = new FakeD1()
     const groqFetch = vi.fn(async () => new Response('rate limited', { status: 429 }))
     vi.stubGlobal('fetch', groqFetch)
@@ -372,9 +454,9 @@ describe('Worker request accounting', () => {
     expect(response.status).toBe(429)
     const payload = await response.json()
     expect(payload).toMatchObject({
-      error: { code: 'upstream_rate_limit_exceeded' },
+      error: { code: 'rate_limit_exceeded' },
     })
-    expect(groqFetch).toHaveBeenCalledTimes(5)
+    expect(groqFetch).toHaveBeenCalledTimes(6)
     expect(JSON.stringify(payload)).not.toContain('test-groq-key')
   })
 

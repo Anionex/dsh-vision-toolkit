@@ -7,17 +7,20 @@ const AUTH_COOLDOWN_MS = 15 * 60 * 1000
 const RATE_LIMIT_COOLDOWN_MS = 60_000
 const TRANSIENT_COOLDOWN_MS = 5_000
 
-interface GroqSecrets {
+interface ProviderSecrets {
   GROQ_API_KEY_1?: string
   GROQ_API_KEY_2?: string
   GROQ_API_KEY_3?: string
   GROQ_API_KEY_4?: string
   GROQ_API_KEY_5?: string
+  FALLBACK_VISION_API_KEY?: string
+  FALLBACK_VISION_MODEL?: string
+  FALLBACK_VISION_URL?: string
 }
 
-type GroqEnv = Env & GroqSecrets
+type ProviderEnv = Env & ProviderSecrets
 
-export class GroqProviderError extends Error {
+export class VisionProviderError extends Error {
   constructor(
     message: string,
     readonly status: number,
@@ -25,20 +28,42 @@ export class GroqProviderError extends Error {
     readonly retryAfter?: string,
   ) {
     super(message)
-    this.name = 'GroqProviderError'
+    this.name = 'VisionProviderError'
   }
 }
 
-function configuredKeys(env: GroqEnv): string[] {
-  return [
-    env.GROQ_API_KEY_1,
-    env.GROQ_API_KEY_2,
-    env.GROQ_API_KEY_3,
-    env.GROQ_API_KEY_4,
-    env.GROQ_API_KEY_5,
+interface VisionUpstream {
+  endpoint: string
+  key: string
+  model: string
+  name: 'groq' | 'fallback'
+  slot: number
+}
+
+function configuredUpstreams(env: ProviderEnv): VisionUpstream[] {
+  const candidates: Array<Omit<VisionUpstream, 'key'> & { key?: string }> = [
+    { endpoint: GROQ_CHAT_COMPLETIONS_URL, key: env.GROQ_API_KEY_1, model: CANONICAL_MODEL, name: 'groq', slot: 0 },
+    { endpoint: GROQ_CHAT_COMPLETIONS_URL, key: env.GROQ_API_KEY_2, model: CANONICAL_MODEL, name: 'groq', slot: 1 },
+    { endpoint: GROQ_CHAT_COMPLETIONS_URL, key: env.GROQ_API_KEY_3, model: CANONICAL_MODEL, name: 'groq', slot: 2 },
+    { endpoint: GROQ_CHAT_COMPLETIONS_URL, key: env.GROQ_API_KEY_4, model: CANONICAL_MODEL, name: 'groq', slot: 3 },
+    { endpoint: GROQ_CHAT_COMPLETIONS_URL, key: env.GROQ_API_KEY_5, model: CANONICAL_MODEL, name: 'groq', slot: 4 },
   ]
-    .map(value => value?.trim())
-    .filter((value): value is string => typeof value === 'string' && value.length > 0)
+  const fallbackKey = env.FALLBACK_VISION_API_KEY?.trim()
+  const fallbackEndpoint = env.FALLBACK_VISION_URL?.trim()
+  const fallbackModel = env.FALLBACK_VISION_MODEL?.trim()
+  if (fallbackKey && fallbackEndpoint && fallbackModel) {
+    candidates.push({
+      endpoint: fallbackEndpoint,
+      key: fallbackKey,
+      model: fallbackModel,
+      name: 'fallback',
+      slot: 5,
+    })
+  }
+  return candidates.flatMap((candidate) => {
+    const key = candidate.key?.trim()
+    return key ? [{ ...candidate, key }] : []
+  })
 }
 
 interface KeyLease {
@@ -46,16 +71,18 @@ interface KeyLease {
 }
 
 /** Cross-isolate key allocator backed by the Worker's existing D1 database. */
-export class GroqKeyScheduler {
+export class VisionUpstreamScheduler {
   constructor(private readonly database: D1Database) {}
 
-  async acquire(keyCount: number): Promise<KeyLease | undefined> {
+  async acquire(slots: number[]): Promise<KeyLease | undefined> {
+    if (slots.length === 0) return undefined
     const now = Date.now()
     await this.database.prepare(`
       UPDATE groq_key_state
       SET active_requests = 0, lease_expires_at = 0, updated_at = ?1
       WHERE active_requests > 0 AND lease_expires_at <= ?1
     `).bind(now).run()
+    const slotParameters = slots.map((_, index) => `?${index + 3}`).join(', ')
     const lease = await this.database.prepare(`
       UPDATE groq_key_state
       SET
@@ -66,12 +93,12 @@ export class GroqKeyScheduler {
       WHERE key_slot = (
         SELECT key_slot
         FROM groq_key_state
-        WHERE key_slot < ?3 AND cooldown_until <= ?1
+        WHERE key_slot IN (${slotParameters}) AND cooldown_until <= ?1
         ORDER BY active_requests ASC, last_selected_at ASC, key_slot ASC
         LIMIT 1
       )
       RETURNING key_slot
-    `).bind(now, now + KEY_LEASE_MS, keyCount).first<{ key_slot: number }>()
+    `).bind(now, now + KEY_LEASE_MS, ...slots).first<{ key_slot: number }>()
     return lease === null ? undefined : { slot: lease.key_slot }
   }
 
@@ -88,13 +115,15 @@ export class GroqKeyScheduler {
     `).bind(now, now + cooldownMs, slot).run()
   }
 
-  async retryAfterSeconds(keyCount: number): Promise<string | undefined> {
+  async retryAfterSeconds(slots: number[]): Promise<string | undefined> {
+    if (slots.length === 0) return undefined
     const now = Date.now()
+    const slotParameters = slots.map((_, index) => `?${index + 1}`).join(', ')
     const next = await this.database.prepare(`
       SELECT MIN(cooldown_until) AS cooldown_until
       FROM groq_key_state
-      WHERE key_slot < ?1 AND cooldown_until > ?2
-    `).bind(keyCount, now).first<{ cooldown_until: number | null }>()
+      WHERE key_slot IN (${slotParameters}) AND cooldown_until > ?${slots.length + 1}
+    `).bind(...slots, now).first<{ cooldown_until: number | null }>()
     if (typeof next?.cooldown_until !== 'number') return undefined
     return String(Math.max(1, Math.ceil((next.cooldown_until - now) / 1000)))
   }
@@ -124,7 +153,7 @@ function cooldownForStatus(status: number, retryAfter: string | null): number {
 }
 
 async function releaseLease(
-  scheduler: GroqKeyScheduler,
+  scheduler: VisionUpstreamScheduler,
   slot: number,
   requestId: string,
   cooldownMs = 0,
@@ -134,8 +163,8 @@ async function releaseLease(
   } catch (error) {
     console.error(JSON.stringify({
       error: error instanceof Error ? error.message : String(error),
-      event: 'groq_lease_release_failed',
-      keySlot: slot + 1,
+      event: 'vision_upstream_lease_release_failed',
+      upstreamSlot: slot + 1,
       requestId,
     }))
   }
@@ -172,69 +201,76 @@ async function readUpstreamErrorMessage(response: Response, keys: string[]): Pro
   }
 }
 
-function invalidRequestError(status: number, message?: string): GroqProviderError {
+function invalidRequestError(status: number, message?: string): VisionProviderError {
   const detail = message ? `: ${message}` : ''
   if (status === 413) {
-    return new GroqProviderError(
+    return new VisionProviderError(
       `Vision provider rejected the request because it is too large${detail}`,
       413,
       'upstream_request_too_large',
     )
   }
   if (status === 404) {
-    return new GroqProviderError('Vision model is temporarily unavailable', 502, 'upstream_model_unavailable')
+    return new VisionProviderError('Vision model is temporarily unavailable', 502, 'upstream_model_unavailable')
   }
-  return new GroqProviderError(
+  return new VisionProviderError(
     `Vision provider rejected the request${detail}`,
     status === 422 ? 422 : 400,
     'upstream_invalid_request',
   )
 }
 
-export async function runGroqCompletion(
+export async function runVisionCompletion(
   input: VisionInput,
-  env: GroqEnv,
+  env: ProviderEnv,
   requestId: string,
 ): Promise<VisionOutput> {
-  const keys = configuredKeys(env)
-  if (keys.length === 0) {
-    throw new ProtocolError('Groq vision provider is not configured', {
+  const upstreams = configuredUpstreams(env)
+  if (upstreams.length === 0) {
+    throw new ProtocolError('Vision providers are not configured', {
       code: 'service_configuration_error',
       status: 503,
     })
   }
 
-  const scheduler = new GroqKeyScheduler(env.USAGE_DB)
+  const scheduler = new VisionUpstreamScheduler(env.USAGE_DB)
+  const upstreamBySlot = new Map(upstreams.map(upstream => [upstream.slot, upstream]))
+  const slots = upstreams.map(upstream => upstream.slot)
+  const secrets = upstreams.map(upstream => upstream.key)
   const statuses: number[] = []
   let lastRetryAfter: string | undefined
   let poolUnavailable = false
 
-  for (let attempt = 0; attempt < keys.length; attempt += 1) {
-    const lease = await scheduler.acquire(keys.length)
+  for (let attempt = 0; attempt < upstreams.length; attempt += 1) {
+    const lease = await scheduler.acquire(slots)
     if (lease === undefined) {
       poolUnavailable = true
-      lastRetryAfter = await scheduler.retryAfterSeconds(keys.length) ?? lastRetryAfter
+      lastRetryAfter = await scheduler.retryAfterSeconds(slots) ?? lastRetryAfter
       break
     }
-    const key = keys[lease.slot]!
+    const upstream = upstreamBySlot.get(lease.slot)
+    if (upstream === undefined) {
+      await releaseLease(scheduler, lease.slot, requestId, TRANSIENT_COOLDOWN_MS)
+      continue
+    }
     let response: Response
     try {
-      response = await fetch(GROQ_CHAT_COMPLETIONS_URL, {
+      response = await fetch(upstream.endpoint, {
         body: JSON.stringify({
-          model: CANONICAL_MODEL,
+          model: upstream.model,
           reasoning_effort: 'none',
           ...input,
         }),
         headers: {
-          authorization: `Bearer ${key}`,
+          authorization: `Bearer ${upstream.key}`,
           'content-type': 'application/json',
         },
         method: 'POST',
       })
     } catch {
       await releaseLease(scheduler, lease.slot, requestId, TRANSIENT_COOLDOWN_MS)
-      if (attempt + 1 < keys.length) continue
-      throw new GroqProviderError('Vision provider is temporarily unavailable', 502, 'upstream_error')
+      if (attempt + 1 < upstreams.length) continue
+      throw new VisionProviderError('Vision provider is temporarily unavailable', 502, 'upstream_error')
     }
 
     if (response.ok) {
@@ -243,15 +279,15 @@ export async function runGroqCompletion(
       try {
         payload = await response.json()
       } catch {
-        throw new GroqProviderError('Vision provider returned invalid JSON', 502, 'upstream_invalid_response')
+        throw new VisionProviderError('Vision provider returned invalid JSON', 502, 'upstream_invalid_response')
       }
       if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
-        throw new GroqProviderError('Vision provider returned an invalid response', 502, 'upstream_invalid_response')
+        throw new VisionProviderError('Vision provider returned an invalid response', 502, 'upstream_invalid_response')
       }
       return normalizeVisionOutput(payload as Record<string, unknown>)
     }
 
-    const upstreamMessage = await readUpstreamErrorMessage(response, keys)
+    const upstreamMessage = await readUpstreamErrorMessage(response, secrets)
     statuses.push(response.status)
     const retryAfter = response.headers.get('retry-after')
     const cooldownMs = cooldownForStatus(response.status, retryAfter)
@@ -261,28 +297,29 @@ export async function runGroqCompletion(
     console.warn(JSON.stringify({
       attempt: attempt + 1,
       cooldownMs,
-      event: 'groq_attempt_failed',
-      keySlot: lease.slot + 1,
+      event: 'vision_upstream_attempt_failed',
+      provider: upstream.name,
       requestId,
       status: response.status,
+      upstreamSlot: lease.slot + 1,
       ...(upstreamMessage === undefined ? {} : { upstreamMessage }),
     }))
     if (!isRetryableStatus(response.status)) throw invalidRequestError(response.status, upstreamMessage)
-    if (attempt + 1 >= keys.length) break
+    if (attempt + 1 >= upstreams.length) break
   }
 
   if (allRequestsWereRateLimited(statuses) || poolUnavailable) {
-    throw new GroqProviderError(
+    throw new VisionProviderError(
       'Vision provider rate limit reached; retry later',
       429,
-      'upstream_rate_limit_exceeded',
+      'rate_limit_exceeded',
       lastRetryAfter,
     )
   }
   if (statuses.length > 0 && statuses.every(status => status === 401 || status === 403)) {
-    throw new GroqProviderError('Vision provider credentials are unavailable', 502, 'upstream_authentication_error')
+    throw new VisionProviderError('Vision provider credentials are unavailable', 502, 'upstream_authentication_error')
   }
-  throw new GroqProviderError('Vision provider is temporarily unavailable', 502, 'upstream_error')
+  throw new VisionProviderError('Vision provider is temporarily unavailable', 502, 'upstream_error')
 }
 
-export const __test__ = { configuredKeys, cooldownForStatus, retryAfterMilliseconds, sanitizeUpstreamMessage }
+export const __test__ = { configuredUpstreams, cooldownForStatus, retryAfterMilliseconds, sanitizeUpstreamMessage }
