@@ -3,3 +3,4 @@ node_modules/
 *.tgz
 .DS_Store
 .dsh-vision-toolkit/
+.venv/
