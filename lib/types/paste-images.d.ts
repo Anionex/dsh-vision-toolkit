@@ -38,6 +38,13 @@ export interface PasteVerdict {
     /** When present, the browser switches to this route first, then lets the paste flow natively. */
     autoSwitch?: PasteSwitchRoute;
 }
+/**
+ * Hard per-image upload ceiling for pastes. Files between the configured
+ * `maxImageBytes` (default 4 MiB) and this ceiling are stored as-is and
+ * auto-compressed by the runtime on first use; matching the browser-side
+ * safety cap keeps the two bundles in agreement.
+ */
+export declare const MAX_PASTE_IMAGE_BYTES: number;
 /** Convert an untrusted browser label into one portable leaf filename. */
 export declare function safePastedImageName(raw: string, mediaType: string): string;
 /** Reject a resolved path that is not rooted below the expected directory. */
@@ -54,7 +61,7 @@ export interface PasteRoot {
 export declare function sessionPasteRoot(ctx: Context, sessionId: string): Promise<PasteRoot>;
 /** Runtime limit face kept separate for focused backend tests. */
 export interface PasteImageRuntime {
-    maxImageBytes(): number;
+    maxUploadBytes(): number;
 }
 /** Same-origin, live-Session-bound image upload endpoint. */
 export declare class PastedImageBackend {

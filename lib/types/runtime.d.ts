@@ -356,6 +356,8 @@ export declare class VisionToolkitRuntime {
     resolveVisionEnv(): Promise<UpstreamEnvironment>;
     private visionEnv;
     private pathPolicy;
+    private compressedImageRoot;
+    private autoCompressImage;
     private validateImage;
     private accountImage;
     private glanceCacheKey;

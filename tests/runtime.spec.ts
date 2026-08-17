@@ -1,4 +1,4 @@
-import { copyFile, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { copyFile, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -361,14 +361,56 @@ describe('VisionToolkitRuntime', () => {
       .rejects.toMatchObject({ code: 'ENOENT' })
   })
 
-  it('enforces byte and decoded-pixel limits as capacity errors', async () => {
+  it('auto-compresses oversized images and resizes pixel-over-limit images', async () => {
     const workspace = await tempWorkspace()
     const byteLimited = await setup({ maxImageBytes: 1024 })
-    await expect(byteLimited.runtime.glance({ images: ['sample.png'] }, { signal, workspace }))
-      .rejects.toMatchObject({ code: 'capacity' })
+    const byteResult = await byteLimited.runtime.glance({ images: ['sample.png'] }, { signal, workspace })
+    const byteImage = byteResult.images[0]
+    expect(byteImage?.bytes ?? 0).toBeLessThanOrEqual(1024)
+    expect(byteImage?.path).toMatch(/compressed-images/u)
+    await expect(readFile(join(workspace, 'sample.png'))).resolves.toEqual(await readFile(SAMPLE_IMAGE))
+
     const pixelLimited = await setup({ maxImagePixels: 65_535 })
-    await expect(pixelLimited.runtime.glance({ images: ['sample.png'] }, { signal, workspace }))
-      .rejects.toMatchObject({ code: 'capacity' })
+    const pixelResult = await pixelLimited.runtime.glance({ images: ['sample.png'] }, { signal, workspace })
+    const pixelImage = pixelResult.images[0]
+    expect((pixelImage?.width ?? 0) * (pixelImage?.height ?? 0)).toBeLessThanOrEqual(65_535)
+    expect(pixelImage?.path).toMatch(/compressed-images/u)
+  })
+
+  it('reuses the durable compressed-image cache for identical inputs', async () => {
+    const { adapter, runtime } = await setup({ maxImageBytes: 1024 })
+    const workspace = await tempWorkspace()
+    const compress = vi.spyOn(adapter, 'compressImage')
+    const options = { signal, workspace }
+
+    const first = await runtime.glance({ images: ['sample.png'] }, options)
+    const second = await runtime.glance({ images: ['sample.png'] }, options)
+    expect(second).toEqual(first)
+    expect(compress).toHaveBeenCalledTimes(1)
+    const entries = await readdir(join(workspace, '.dsh-vision-toolkit', 'tmp', 'compressed-images'))
+    expect(entries.some(entry => !entry.startsWith('.'))).toBe(true)
+  })
+
+  it('forwards the compressed copy to upstream and leaves the original file untouched', async () => {
+    const { adapter, runtime } = await setup({ maxImageBytes: 1024 })
+    const workspace = await tempWorkspace()
+    const run = vi.spyOn(adapter, 'run')
+
+    await runtime.glance({ images: ['sample.png'] }, { signal, workspace })
+    const upstreamPath = run.mock.calls[0]?.[1]?.[0]
+    expect(upstreamPath).toMatch(/compressed-images/u)
+    await expect(readFile(join(workspace, 'sample.png'))).resolves.toEqual(await readFile(SAMPLE_IMAGE))
+  })
+
+  it('keeps a capacity error when auto-compression cannot reach the configured limit', async () => {
+    const { adapter, runtime } = await setup({ maxImageBytes: 1024 })
+    const workspace = await tempWorkspace()
+    vi.spyOn(adapter, 'compressImage').mockRejectedValue(
+      new VisionToolkitError('capacity', 'cannot compress image under 1024 bytes: test failure'),
+    )
+
+    await expect(runtime.glance({ images: ['sample.png'] }, { signal, workspace }))
+      .rejects.toMatchObject({ code: 'capacity', message: 'cannot compress image under 1024 bytes: test failure' })
   })
 
   it('rejects missing images, malformed regions, and extension/content mismatches', async () => {

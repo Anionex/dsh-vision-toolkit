@@ -143,6 +143,17 @@ export interface HtmlScreenshotOutput {
     height: number;
     pageHeight?: number;
 }
+/** Result of one automatic Pillow compression pass for an oversized image. */
+export interface CompressedImageInfo {
+    bytes: number;
+    width: number;
+    height: number;
+    format: 'png' | 'jpeg' | 'gif' | 'webp';
+    mode: string;
+    lossy: boolean;
+    resized: boolean;
+    candidate: string;
+}
 /** Parse one numbered upstream location line (`N. position label x1: ..., ...`). */
 export declare function parseLocationLine(line: string): LocatedElement | undefined;
 /** Parse ground/detect stdout; non-empty unknown lines are an output contract failure. */
@@ -186,6 +197,14 @@ export declare class UpstreamAdapter {
         format: string;
         mode: string;
     }>;
+    /**
+     * Auto-compress one oversized image under the configured byte and pixel
+     * budgets. The Pillow helper prefers lossless re-encodes, then quality
+     * reduction, and only downscales when neither can reach the budget.
+     */
+    compressImage(sourcePath: string, destPath: string, maxBytes: number, maxPixels: number, options: {
+        signal: AbortSignal;
+    }): Promise<CompressedImageInfo>;
     private runPythonCode;
     /** Draw validated pixel boxes and labels into a PNG preview with Pillow. */
     renderAnnotatedPreview(imagePath: string, outputPath: string, elements: readonly LocatedElement[], options: {

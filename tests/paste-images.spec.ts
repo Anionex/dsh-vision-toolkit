@@ -5,6 +5,7 @@ import { basename, join, relative, sep } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   ensurePathInside,
+  MAX_PASTE_IMAGE_BYTES,
   PASTE_IMAGES_ROUTE,
   PastedImageBackend,
   safePastedImageName,
@@ -29,12 +30,12 @@ function inside(root: string, target: string): boolean {
   return rel === '' || (!rel.startsWith(`..${sep}`) && rel !== '..')
 }
 
-async function setup(cwd: string, maxImageBytes = 1024) {
+async function setup(cwd: string, maxUploadBytes = MAX_PASTE_IMAGE_BYTES) {
   const ctx = {
     sessions: { get: (sessionId: string) => sessionId === 'session-1' ? { header: { cwd } } : undefined },
     logger: { warn: vi.fn() },
   }
-  const backend = new PastedImageBackend(ctx as never, { maxImageBytes: () => maxImageBytes })
+  const backend = new PastedImageBackend(ctx as never, { maxUploadBytes: () => maxUploadBytes })
   const server = createServer((req, res) => { void backend.handle(req, res) })
   servers.push(server)
   await new Promise<void>((resolve, reject) => {
@@ -113,5 +114,17 @@ describe('pasted image Web backend', () => {
       method: 'POST', headers: { 'Content-Type': 'image/png', Origin: base }, body: Uint8Array.of(1),
     })
     expect(missing.status).toBe(400)
+  })
+
+  it('accepts images above the configured runtime byte limit for later auto-compression', async () => {
+    const cwd = await workspace()
+    const { upload } = await setup(cwd)
+    const body = new Uint8Array(4 * 1024 * 1024 + 1).fill(7)
+    const response = await upload('large.png', 'image/png', body)
+
+    expect(response.status).toBe(201)
+    const value = (await response.json() as { value: { absolutePath: string; bytes: number } }).value
+    expect(value.bytes).toBe(body.length)
+    expect(inside(cwd, value.absolutePath)).toBe(true)
   })
 })
