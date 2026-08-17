@@ -34,6 +34,9 @@ try {
     'GROQ_API_KEY_3',
     'GROQ_API_KEY_4',
     'GROQ_API_KEY_5',
+    'FALLBACK_VISION_API_KEY',
+    'FALLBACK_VISION_MODEL',
+    'FALLBACK_VISION_URL',
   ]
   const missingSecrets = requiredSecrets.filter(name => !new RegExp(`"name"\\s*:\\s*"${name}"`).test(secrets))
   if (missingSecrets.length > 0) {
