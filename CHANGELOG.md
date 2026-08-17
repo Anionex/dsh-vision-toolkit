@@ -4,6 +4,12 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+## [0.1.28] - 2026-08-17
+
+### Fixed
+
+- Treat HTTP 403 from `GET /models` as a warning instead of claiming the API key was rejected, because providers such as Groq can restrict the model-list endpoint while real multimodal requests still work. Settings now notes that this warning can be ignored when the real vision-model test reports success.
+
 ## [0.1.27] - 2026-08-17
 
 ### Added
@@ -308,7 +314,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 - Runtime teardown cancels in-flight operations before removing Agent-scoped tools, the activation bootstrap, and the Skill.
 - The Web client is published through the current nested `dsh.client` manifest and loader-compatible built artifact required by DSH snapshot0810.
 
-[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.27...HEAD
+[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.28...HEAD
+[0.1.28]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.27...v0.1.28
 [0.1.27]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.26...v0.1.27
 [0.1.26]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.25...v0.1.26
 [0.1.25]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.24...v0.1.25
