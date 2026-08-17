@@ -1,6 +1,7 @@
 import { CANONICAL_MODEL, ProtocolError, normalizeVisionOutput, type VisionInput, type VisionOutput } from './protocol'
 
 export const GROQ_CHAT_COMPLETIONS_URL = 'https://api.groq.com/openai/v1/chat/completions'
+const GROQ_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
 
 const KEY_LEASE_MS = 120_000
 const AUTH_COOLDOWN_MS = 15 * 60 * 1000
@@ -207,8 +208,10 @@ export async function runGroqCompletion(
           ...input,
         }),
         headers: {
+          accept: 'application/json',
           authorization: `Bearer ${key}`,
           'content-type': 'application/json',
+          'user-agent': GROQ_USER_AGENT,
         },
         method: 'POST',
       })
@@ -246,6 +249,7 @@ export async function runGroqCompletion(
       keySlot: lease.slot + 1,
       requestId,
       status: response.status,
+      ...(upstreamMessage === undefined ? {} : { upstreamMessage }),
     }))
     if (!isRetryableStatus(response.status)) throw invalidRequestError(response.status, upstreamMessage)
     if (attempt + 1 >= keys.length) break
