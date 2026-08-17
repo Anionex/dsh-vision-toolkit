@@ -4,7 +4,7 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
-## [0.1.19] - 2026-08-16
+## [0.1.19] - 2026-08-17
 
 ### Changed
 
