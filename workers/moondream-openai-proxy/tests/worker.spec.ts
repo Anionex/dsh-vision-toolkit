@@ -5,7 +5,7 @@ import {
   GROQ_CHAT_COMPLETIONS_URL,
   __test__ as providerTest,
 } from '../src/groq'
-import { CANONICAL_MODEL } from '../src/protocol'
+import { CANONICAL_MODEL, QWEN_MODEL } from '../src/protocol'
 
 const tinyPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
 const publicApiKey = 'https://agent-vision.anionex.me'
@@ -134,6 +134,19 @@ function request(image = tinyPng, body?: BodyInit, apiKey = publicApiKey): Reque
   } as RequestInit)
 }
 
+function qwenRequest(body?: BodyInit): Request {
+  const parsed = typeof body === 'string' ? JSON.parse(body) as Record<string, unknown> : {
+    messages: [{
+      content: [
+        { text: 'Describe this image.', type: 'text' },
+        { image_url: { url: tinyPng }, type: 'image_url' },
+      ],
+      role: 'user',
+    }],
+  }
+  return request(tinyPng, JSON.stringify({ ...parsed, model: QWEN_MODEL }))
+}
+
 function environment(database: FakeD1, burstSuccess = true): Env {
   return {
     BURST_LIMITER: { limit: vi.fn(async () => ({ success: burstSuccess })) },
@@ -164,19 +177,20 @@ describe('Worker request accounting', () => {
   it('trims configured provider secrets before using them as bearer tokens', () => {
     const env = environment(new FakeD1()) as Env & Record<string, string>
     env.GROQ_API_KEY_1 = '  test-groq-key-1\n'
-    expect(providerTest.configuredUpstreams(env)).toContainEqual(expect.objectContaining({
+    expect(providerTest.configuredUpstreams(env, 'xyxy')).toContainEqual(expect.objectContaining({
       key: 'test-groq-key-1',
       slot: 0,
     }))
   })
 
-  it('keeps the additional endpoint on a stable scheduler slot', () => {
+  it('keeps Gemini on a stable scheduler slot', () => {
     const upstream = providerTest.configuredUpstreams(environment(new FakeD1()))
-      .find(candidate => candidate.name === 'fallback')
+      .find(candidate => candidate.name === 'gemini')
     expect(upstream).toMatchObject({
       endpoint: fallbackEndpoint,
       key: 'test-fallback-key',
       model: fallbackModel,
+      name: 'gemini',
       slot: 5,
     })
   })
@@ -230,12 +244,12 @@ describe('Worker request accounting', () => {
     })
   })
 
-  it('calls Groq with an OpenAI vision message and returns its text', async () => {
+  it('calls Groq with an OpenAI vision message for Qwen-compatible requests', async () => {
     const database = new FakeD1()
     const groqFetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       expect(init?.headers).toMatchObject({ authorization: expect.stringMatching(/^Bearer test-groq-key-[1-5]$/) })
       const body = JSON.parse(String(init?.body)) as Record<string, unknown>
-      expect(body.model).toBe(CANONICAL_MODEL)
+      expect(body.model).toBe(QWEN_MODEL)
       expect(body.reasoning_effort).toBe('none')
       expect(body).not.toHaveProperty('chat_template_kwargs')
       return Response.json({
@@ -247,7 +261,7 @@ describe('Worker request accounting', () => {
       })
     })
     vi.stubGlobal('fetch', groqFetch)
-    const response = await worker.fetch(request(), environment(database))
+    const response = await worker.fetch(qwenRequest(), environment(database))
     expect(response.status).toBe(200)
     expect((await response.json()) as Record<string, unknown>).toMatchObject({
       choices: [{ message: { content: 'A one-pixel test image.' } }],
@@ -333,7 +347,7 @@ describe('Worker request accounting', () => {
         ],
         role: 'user',
       }],
-      model: CANONICAL_MODEL,
+      model: QWEN_MODEL,
     })), environment(database))
 
     expect(response.status).toBe(200)
@@ -348,7 +362,7 @@ describe('Worker request accounting', () => {
         choices: [{ finish_reason: 'stop', message: { content: 'Recovered.', role: 'assistant' } }],
       }))
     vi.stubGlobal('fetch', groqFetch)
-    const response = await worker.fetch(request(), environment(database))
+    const response = await worker.fetch(qwenRequest(), environment(database))
     expect(response.status).toBe(200)
     expect(groqFetch).toHaveBeenCalledTimes(2)
     const firstAuth = String(groqFetch.mock.calls[0]?.[1]?.headers && new Headers(groqFetch.mock.calls[0]?.[1]?.headers).get('authorization'))
@@ -370,8 +384,8 @@ describe('Worker request accounting', () => {
     })
     vi.stubGlobal('fetch', groqFetch)
 
-    const first = worker.fetch(request(), environment(database))
-    const second = worker.fetch(request(), environment(database))
+    const first = worker.fetch(qwenRequest(), environment(database))
+    const second = worker.fetch(qwenRequest(), environment(database))
     await vi.waitFor(() => expect(groqFetch).toHaveBeenCalledTimes(2))
 
     const authorizations = groqFetch.mock.calls.map(call => new Headers(call[1]?.headers).get('authorization'))
@@ -383,15 +397,14 @@ describe('Worker request accounting', () => {
     expect([...database.keyStates.values()].map(state => state.activeRequests)).toEqual([0, 0, 0, 0, 0, 0])
   })
 
-  it('falls back to the additional endpoint when every primary account is rejected', async () => {
+  it('routes default Gemini requests to the Gemini endpoint', async () => {
     const database = new FakeD1()
     const providerFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      if (String(input) === GROQ_CHAT_COMPLETIONS_URL) return new Response('Forbidden', { status: 403 })
       expect(String(input)).toBe(fallbackEndpoint)
       expect(new Headers(init?.headers).get('authorization')).toBe('Bearer test-fallback-key')
       expect(JSON.parse(String(init?.body))).toMatchObject({ model: fallbackModel, reasoning_effort: 'none' })
       return Response.json({
-        choices: [{ finish_reason: 'stop', message: { content: 'Fallback recovered.', role: 'assistant' } }],
+        choices: [{ finish_reason: 'stop', message: { content: 'Gemini answered.', role: 'assistant' } }],
       })
     })
     vi.stubGlobal('fetch', providerFetch)
@@ -400,11 +413,31 @@ describe('Worker request accounting', () => {
 
     expect(response.status).toBe(200)
     expect(await response.json()).toMatchObject({
-      choices: [{ message: { content: 'Fallback recovered.' } }],
+      choices: [{ message: { content: 'Gemini answered.' } }],
     })
-    expect(providerFetch).toHaveBeenCalledTimes(6)
-    expect(providerFetch.mock.calls.slice(0, 5).every(call => String(call[0]) === GROQ_CHAT_COMPLETIONS_URL)).toBe(true)
-    expect(String(providerFetch.mock.calls[5]?.[0])).toBe(fallbackEndpoint)
+    expect(providerFetch).toHaveBeenCalledTimes(1)
+    expect(String(providerFetch.mock.calls[0]?.[0])).toBe(fallbackEndpoint)
+    expect([...database.keyStates.values()].map(state => state.activeRequests)).toEqual([0, 0, 0, 0, 0, 0])
+  })
+
+  it('keeps Qwen requests on Groq without touching Gemini', async () => {
+    const database = new FakeD1()
+    const providerFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(input)).toBe(GROQ_CHAT_COMPLETIONS_URL)
+      expect(JSON.parse(String(init?.body))).toMatchObject({ model: QWEN_MODEL, reasoning_effort: 'none' })
+      return Response.json({
+        choices: [{ finish_reason: 'stop', message: { content: 'Qwen answered.', role: 'assistant' } }],
+      })
+    })
+    vi.stubGlobal('fetch', providerFetch)
+
+    const response = await worker.fetch(qwenRequest(), environment(database))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      choices: [{ message: { content: 'Qwen answered.' } }],
+    })
+    expect(providerFetch).toHaveBeenCalledTimes(1)
     expect([...database.keyStates.values()].map(state => state.activeRequests)).toEqual([0, 0, 0, 0, 0, 0])
   })
 
@@ -416,7 +449,7 @@ describe('Worker request accounting', () => {
       choices: [{ finish_reason: 'stop', message: { content: 'Still returned.', role: 'assistant' } }],
     })))
 
-    const response = await worker.fetch(request(), environment(database))
+    const response = await worker.fetch(qwenRequest(), environment(database))
     expect(response.status).toBe(200)
     expect(await response.json()).toMatchObject({
       choices: [{ message: { content: 'Still returned.' } }],
@@ -450,13 +483,13 @@ describe('Worker request accounting', () => {
     const database = new FakeD1()
     const groqFetch = vi.fn(async () => new Response('rate limited', { status: 429 }))
     vi.stubGlobal('fetch', groqFetch)
-    const response = await worker.fetch(request(), environment(database))
+    const response = await worker.fetch(qwenRequest(), environment(database))
     expect(response.status).toBe(429)
     const payload = await response.json()
     expect(payload).toMatchObject({
       error: { code: 'rate_limit_exceeded' },
     })
-    expect(groqFetch).toHaveBeenCalledTimes(6)
+    expect(groqFetch).toHaveBeenCalledTimes(5)
     expect(JSON.stringify(payload)).not.toContain('test-groq-key')
   })
 
@@ -470,7 +503,7 @@ describe('Worker request accounting', () => {
     }, { status: 400 }))
     vi.stubGlobal('fetch', groqFetch)
 
-    const response = await worker.fetch(request(), environment(database))
+    const response = await worker.fetch(qwenRequest(), environment(database))
     expect(response.status).toBe(400)
     expect(await response.json()).toMatchObject({
       error: {
@@ -490,7 +523,7 @@ describe('Worker request accounting', () => {
       },
     }, { status: 400 })))
 
-    const response = await worker.fetch(request(), environment(database))
+    const response = await worker.fetch(qwenRequest(), environment(database))
     expect(response.status).toBe(400)
     const payload = await response.json()
     expect(payload).toMatchObject({ error: { code: 'upstream_invalid_request' } })

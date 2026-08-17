@@ -1,4 +1,4 @@
-import { CANONICAL_MODEL, ProtocolError, normalizeVisionOutput, type VisionInput, type VisionOutput } from './protocol'
+import { ProtocolError, QWEN_MODEL, normalizeVisionOutput, type BoxOrder, type VisionInput, type VisionOutput } from './protocol'
 
 export const GROQ_CHAT_COMPLETIONS_URL = 'https://api.groq.com/openai/v1/chat/completions'
 
@@ -33,37 +33,42 @@ export class VisionProviderError extends Error {
 }
 
 interface VisionUpstream {
+  boxOrder: BoxOrder
   endpoint: string
   key: string
   model: string
-  name: 'groq' | 'fallback'
+  name: 'groq' | 'gemini'
   slot: number
 }
 
-function configuredUpstreams(env: ProviderEnv): VisionUpstream[] {
-  const candidates: Array<Omit<VisionUpstream, 'key'> & { key?: string }> = [
-    { endpoint: GROQ_CHAT_COMPLETIONS_URL, key: env.GROQ_API_KEY_1, model: CANONICAL_MODEL, name: 'groq', slot: 0 },
-    { endpoint: GROQ_CHAT_COMPLETIONS_URL, key: env.GROQ_API_KEY_2, model: CANONICAL_MODEL, name: 'groq', slot: 1 },
-    { endpoint: GROQ_CHAT_COMPLETIONS_URL, key: env.GROQ_API_KEY_3, model: CANONICAL_MODEL, name: 'groq', slot: 2 },
-    { endpoint: GROQ_CHAT_COMPLETIONS_URL, key: env.GROQ_API_KEY_4, model: CANONICAL_MODEL, name: 'groq', slot: 3 },
-    { endpoint: GROQ_CHAT_COMPLETIONS_URL, key: env.GROQ_API_KEY_5, model: CANONICAL_MODEL, name: 'groq', slot: 4 },
-  ]
+function configuredUpstreams(env: ProviderEnv, boxOrder: BoxOrder = 'yxyx'): VisionUpstream[] {
+  if (boxOrder === 'xyxy') {
+    const candidates: Array<Omit<VisionUpstream, 'key'> & { key?: string }> = [
+      { boxOrder, endpoint: GROQ_CHAT_COMPLETIONS_URL, key: env.GROQ_API_KEY_1, model: QWEN_MODEL, name: 'groq', slot: 0 },
+      { boxOrder, endpoint: GROQ_CHAT_COMPLETIONS_URL, key: env.GROQ_API_KEY_2, model: QWEN_MODEL, name: 'groq', slot: 1 },
+      { boxOrder, endpoint: GROQ_CHAT_COMPLETIONS_URL, key: env.GROQ_API_KEY_3, model: QWEN_MODEL, name: 'groq', slot: 2 },
+      { boxOrder, endpoint: GROQ_CHAT_COMPLETIONS_URL, key: env.GROQ_API_KEY_4, model: QWEN_MODEL, name: 'groq', slot: 3 },
+      { boxOrder, endpoint: GROQ_CHAT_COMPLETIONS_URL, key: env.GROQ_API_KEY_5, model: QWEN_MODEL, name: 'groq', slot: 4 },
+    ]
+    return candidates.flatMap((candidate) => {
+      const key = candidate.key?.trim()
+      return key ? [{ ...candidate, key }] : []
+    })
+  }
   const fallbackKey = env.FALLBACK_VISION_API_KEY?.trim()
   const fallbackEndpoint = env.FALLBACK_VISION_URL?.trim()
   const fallbackModel = env.FALLBACK_VISION_MODEL?.trim()
   if (fallbackKey && fallbackEndpoint && fallbackModel) {
-    candidates.push({
+    return [{
+      boxOrder: 'yxyx' as const,
       endpoint: fallbackEndpoint,
       key: fallbackKey,
       model: fallbackModel,
-      name: 'fallback',
+      name: 'gemini' as const,
       slot: 5,
-    })
+    }]
   }
-  return candidates.flatMap((candidate) => {
-    const key = candidate.key?.trim()
-    return key ? [{ ...candidate, key }] : []
-  })
+  return []
 }
 
 interface KeyLease {
@@ -224,8 +229,9 @@ export async function runVisionCompletion(
   input: VisionInput,
   env: ProviderEnv,
   requestId: string,
+  boxOrder: BoxOrder,
 ): Promise<VisionOutput> {
-  const upstreams = configuredUpstreams(env)
+  const upstreams = configuredUpstreams(env, boxOrder)
   if (upstreams.length === 0) {
     throw new ProtocolError('Vision providers are not configured', {
       code: 'service_configuration_error',

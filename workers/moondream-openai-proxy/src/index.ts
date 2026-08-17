@@ -1,6 +1,7 @@
 import {
   CANONICAL_MODEL,
   ProtocolError,
+  boxOrderForModel,
   buildVisionInput,
   completionContent,
   completionFinishReason,
@@ -260,11 +261,12 @@ async function chatCompletion(request: Request, env: Env): Promise<Response> {
     )))
     const outputLimit = Number(env.MAX_OUTPUT_TOKENS)
     const maxTokens = Math.min(completion.maxTokens ?? outputLimit, outputLimit)
-    const modelInput = buildVisionInput(completion, images, maxTokens)
+    const boxOrder = boxOrderForModel(completion.model)
+    const modelInput = buildVisionInput(completion, images, maxTokens, boxOrder)
 
     inferenceStarted = true
-    const output: VisionOutput = await runVisionCompletion(modelInput, env, requestId)
-    const content = completionContent(output, completion.task)
+    const output: VisionOutput = await runVisionCompletion(modelInput, env, requestId, boxOrder)
+    const content = completionContent(output, completion.task, boxOrder)
     const usage = tokenUsage(output)
     const headers = new Headers({
       'x-ratelimit-limit-requests': String(quota.limit),

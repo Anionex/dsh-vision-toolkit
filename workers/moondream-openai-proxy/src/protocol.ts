@@ -1,9 +1,14 @@
-export const CANONICAL_MODEL = 'qwen/qwen3.6-27b'
+export const DEFAULT_MODEL = 'gemini-3.7-flash'
+export const QWEN_MODEL = 'qwen/qwen3.6-27b'
+export const CANONICAL_MODEL = DEFAULT_MODEL
+
+export type BoxOrder = 'xyxy' | 'yxyx'
 
 const MODEL_ALIASES = new Set([
   CANONICAL_MODEL,
+  'gemini-3.7-flash',
+  QWEN_MODEL,
   'qwen3.6-27b',
-  'qwen/qwen3.6-27b',
   // Keep previous built-in names accepted so existing installations switch
   // to the new backend without requiring a settings migration.
   '@cf/google/gemma-4-26b-a4b-it',
@@ -30,6 +35,7 @@ export interface ParsedCompletionRequest {
   captionLength: CaptionLength
   images: string[]
   maxTokens: number | undefined
+  model: string
   question: string
   target: string
   task: VisionTask
@@ -65,6 +71,10 @@ export interface VisionInput {
 }
 
 export type GemmaInput = VisionInput
+
+export function boxOrderForModel(model: string): BoxOrder {
+  return model.toLowerCase().includes('qwen') ? 'xyxy' : 'yxyx'
+}
 
 export class ProtocolError extends Error {
   readonly code: string
@@ -316,6 +326,7 @@ export function parseChatCompletionRequest(value: unknown, maxImageBytes: number
     captionLength: captionLengthValue as CaptionLength,
     images: images.map(image => validateImage(image, maxImageBytes)),
     maxTokens: maxCompletionTokens ?? maxTokens,
+    model: input.model,
     question,
     target,
     task: taskValue as VisionTask,
@@ -352,7 +363,7 @@ function assistantText(output: GemmaOutput): string | undefined {
   return typeof outputText === 'string' && outputText.trim() ? outputText.trim() : undefined
 }
 
-function parseStructuredText(text: string, field: 'objects' | 'points'): unknown[] | undefined {
+function parseStructuredText(text: string, field: 'objects' | 'points', boxOrder: BoxOrder = 'yxyx'): unknown[] | undefined {
   const candidates = [text.trim()]
   const fenced = /```(?:json)?\s*([\s\S]*?)\s*```/i.exec(text)
   if (fenced?.[1]) candidates.push(fenced[1].trim())
@@ -367,7 +378,7 @@ function parseStructuredText(text: string, field: 'objects' | 'points'): unknown
     try {
       const parsed: unknown = JSON.parse(candidate)
       const items = Array.isArray(parsed) ? parsed : isRecord(parsed) && Array.isArray(parsed[field]) ? parsed[field] : undefined
-      if (items !== undefined && validateStructuredItems(items, field)) return items
+      if (items !== undefined && validateStructuredItems(items, field, boxOrder)) return items
     } catch {
       // Gemma sometimes wraps JSON in a short sentence or a markdown fence.
     }
@@ -379,14 +390,18 @@ function isGridCoordinate(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1000
 }
 
-function validateStructuredItems(items: unknown[], field: 'objects' | 'points'): boolean {
+function validateStructuredItems(items: unknown[], field: 'objects' | 'points', boxOrder: BoxOrder = 'yxyx'): boolean {
   if (field === 'points') {
     return items.every(item => isRecord(item) && isGridCoordinate(item.x) && isGridCoordinate(item.y))
   }
   return items.every((item) => {
     if (!isRecord(item) || !Array.isArray(item.box_2d) || item.box_2d.length !== 4) return false
     if (item.label !== undefined && (typeof item.label !== 'string' || item.label.trim().length === 0)) return false
-    const [y0, x0, y1, x1] = item.box_2d
+    const [first, second, third, fourth] = item.box_2d
+    const x0 = boxOrder === 'xyxy' ? first : second
+    const y0 = boxOrder === 'xyxy' ? second : first
+    const x1 = boxOrder === 'xyxy' ? third : fourth
+    const y1 = boxOrder === 'xyxy' ? fourth : third
     return isGridCoordinate(y0)
       && isGridCoordinate(x0)
       && isGridCoordinate(y1)
@@ -396,14 +411,21 @@ function validateStructuredItems(items: unknown[], field: 'objects' | 'points'):
   })
 }
 
-export function buildVisionInput(completion: ParsedCompletionRequest, images: string[], maxTokens: number): VisionInput {
+export function buildVisionInput(
+  completion: ParsedCompletionRequest,
+  images: string[],
+  maxTokens: number,
+  boxOrder: BoxOrder = 'yxyx',
+): VisionInput {
   let instruction = completion.question
   if (completion.task === 'caption') {
     instruction = `Describe this image ${completion.captionLength === 'long' ? 'in detail' : completion.captionLength === 'short' ? 'briefly' : 'clearly'}.`
   } else if (completion.task === 'point') {
     instruction = `Locate the center of every visible target matching "${completion.target}". Return ONLY valid JSON in the form {"points":[{"x":500,"y":500}]} using a 0-1000 coordinate grid. If it is not present, return {"points":[]}.`
   } else if (completion.task === 'detect') {
-    instruction = `Find every visible "${completion.target}". Return ONLY valid JSON in the form {"objects":[{"label":"${completion.target}","box_2d":[100,200,300,400]}]}. Each box_2d must be [y0,x0,y1,x1] on a 0-1000 coordinate grid with y1>y0 and x1>x0. If none are present, return {"objects":[]}.`
+    const boxFormat = boxOrder === 'xyxy' ? '[x0,y0,x1,y1]' : '[y0,x0,y1,x1]'
+    const bounds = boxOrder === 'xyxy' ? 'x1>x0 and y1>y0' : 'y1>y0 and x1>x0'
+    instruction = `Find every visible "${completion.target}". Return ONLY valid JSON in the form {"objects":[{"label":"${completion.target}","box_2d":[100,200,300,400]}]}. Each box_2d must be ${boxFormat} on a 0-1000 coordinate grid with ${bounds}. If none are present, return {"objects":[]}.`
   }
 
   return {
@@ -423,7 +445,7 @@ export function buildVisionInput(completion: ParsedCompletionRequest, images: st
 
 export const buildGemmaInput = buildVisionInput
 
-export function completionContent(output: VisionOutput, task: VisionTask): string {
+export function completionContent(output: VisionOutput, task: VisionTask, boxOrder: BoxOrder = 'yxyx'): string {
   const text = assistantText(output)
   if (text !== undefined && (task === 'query' || task === 'caption')) return text
   if (text !== undefined && task === 'point') {
@@ -431,7 +453,7 @@ export function completionContent(output: VisionOutput, task: VisionTask): strin
     if (points !== undefined) return JSON.stringify({ points })
   }
   if (text !== undefined && task === 'detect') {
-    const objects = parseStructuredText(text, 'objects')
+    const objects = parseStructuredText(text, 'objects', boxOrder)
     if (objects !== undefined) return JSON.stringify({ objects })
   }
   throw new ProtocolError('The vision model returned no usable result; structured tasks must return JSON', {

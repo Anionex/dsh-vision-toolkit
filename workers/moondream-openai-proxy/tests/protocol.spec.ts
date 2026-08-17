@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest'
 import {
   CANONICAL_MODEL,
   ProtocolError,
+  boxOrderForModel,
   buildGemmaInput,
+  buildVisionInput,
   completionContent,
   completionFinishReason,
   normalizeGemmaOutput,
@@ -186,6 +188,30 @@ describe('response mapping', () => {
       temperature: 0.2,
       top_p: 0.8,
     })
+  })
+
+  it('uses Qwen-native xyxy boxes and Gemini-native yxyx boxes for detect', () => {
+    const completion = parseChatCompletionRequest(request({
+      messages: [{
+        content: [
+          { text: 'Find every button', type: 'text' },
+          { image_url: { url: tinyPng }, type: 'image_url' },
+        ],
+        role: 'user',
+      }],
+      task: 'detect',
+    }), 1024)
+    const qwenPrompt = buildVisionInput(completion, [tinyPng], 256, 'xyxy').messages[0].content[0]
+    const geminiPrompt = buildVisionInput(completion, [tinyPng], 256, 'yxyx').messages[0].content[0]
+    expect(qwenPrompt).toMatchObject({ text: expect.stringContaining('[x0,y0,x1,y1]') })
+    expect(qwenPrompt).toMatchObject({ text: expect.stringContaining('x1>x0 and y1>y0') })
+    expect(geminiPrompt).toMatchObject({ text: expect.stringContaining('[y0,x0,y1,x1]') })
+    expect(geminiPrompt).toMatchObject({ text: expect.stringContaining('y1>y0 and x1>x0') })
+  })
+
+  it('maps model names to their native box order', () => {
+    expect(boxOrderForModel('qwen/qwen3.6-27b')).toBe('xyxy')
+    expect(boxOrderForModel('gemini-3.7-flash')).toBe('yxyx')
   })
 
   it('returns OpenAI-style token usage', () => {

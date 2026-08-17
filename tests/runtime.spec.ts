@@ -114,7 +114,7 @@ describe('VisionToolkitRuntime', () => {
     await expect(runtime.resolveVisionEnv()).resolves.toMatchObject({
       VISION_API_KEY: 'https://agent-vision.anionex.me',
       VISION_BASE_URL: 'https://vision.anionex.me/v1',
-      VISION_MODEL: 'qwen/qwen3.6-27b',
+      VISION_MODEL: 'gemini-3.7-flash',
       VISION_API_PROTOCOL: 'chat_completions',
     })
     expect(resolve).not.toHaveBeenCalled()

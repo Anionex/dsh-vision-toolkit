@@ -6,10 +6,12 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ### Changed
 
-- Added another OpenAI-compatible vision endpoint to the persistent least-active upstream pool, so it can carry requests when the primary accounts are cooling down or rejected.
+- Switched the built-in free vision service to Gemini 3.7 Flash by default; Qwen-compatible requests keep routing through Groq.
+- Split grounding prompts by model family so Gemini and Qwen each use their native bounding-box coordinate order.
 
 ### Fixed
 
+- Fixed Qwen detection boxes being swapped by prompting Qwen with `x0,y0,x1,y1` and Gemini with `y0,x0,y1,x1`.
 - Return the standard non-retryable `rate_limit_exceeded` code when every upstream is cooling down, preventing the 15-second client deadline from hiding an immediate provider-capacity response as a timeout.
 
 ## [0.1.20] - 2026-08-17

@@ -472,7 +472,7 @@ describe('Vision Toolkit client plugin', () => {
     initial.settings.value.provider = {
       baseUrl: 'https://vision.anionex.me/v1',
       credential: 'ANIONEX_FREE_VISION',
-      model: 'qwen/qwen3.6-27b',
+      model: 'gemini-3.7-flash',
       protocol: 'openai',
       anthropicThinking: 'omit',
       userAgent: 'fixture-agent/1.0',

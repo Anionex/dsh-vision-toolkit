@@ -28,7 +28,7 @@ const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKi
 // Keep these browser defaults aligned with src/defaults.ts without importing server-side config.
 const BUILT_IN_FREE_VISION_BASE_URL = 'https://vision.anionex.me/v1'
 const BUILT_IN_FREE_VISION_CREDENTIAL = 'ANIONEX_FREE_VISION'
-const BUILT_IN_FREE_VISION_MODEL = 'qwen/qwen3.6-27b'
+const BUILT_IN_FREE_VISION_MODEL = 'gemini-3.7-flash'
 
 const en = {
   nav: 'Vision',
