@@ -4,6 +4,12 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+## [0.1.23] - 2026-08-17
+
+### Added
+
+- Settings now links to the Groq Qwen3.6-27B tutorial and shows a one-line manual update command with a copy button.
+
 ## [0.1.22] - 2026-08-17
 
 ### Docs
