@@ -114,7 +114,7 @@ describe('VisionToolkitRuntime', () => {
     await expect(runtime.resolveVisionEnv()).resolves.toMatchObject({
       VISION_API_KEY: 'https://agent-vision.anionex.me',
       VISION_BASE_URL: 'https://vision.anionex.me/v1',
-      VISION_MODEL: 'qwen/qwen3.6-27b',
+      VISION_MODEL: 'gemini-3.7-flash',
       VISION_API_PROTOCOL: 'chat_completions',
     })
     expect(resolve).not.toHaveBeenCalled()
@@ -765,6 +765,7 @@ describe('Semaphore', () => {
 
 class TrackingAdapter extends UpstreamAdapter {
   active = 0
+  delayMs = 40
   maxActive = 0
 
   override probeImageSize(): Promise<{ width: number; height: number; format: string }> {
@@ -779,7 +780,7 @@ class TrackingAdapter extends UpstreamAdapter {
     this.active += 1
     this.maxActive = Math.max(this.maxActive, this.active)
     try {
-      await new Promise(resolve => setTimeout(resolve, 40))
+      await new Promise(resolve => setTimeout(resolve, this.delayMs))
       return {
         stdout: 'tracked\n',
         stderr: '',
@@ -812,6 +813,47 @@ describe('session-scoped concurrency', () => {
       runtime.glance({ images: ['sample.png'] }, { signal, workspace, sessionId: 'two' }),
     ])
     expect(adapter.maxActive).toBe(2)
+  })
+
+  it('starts a fresh execution timeout after a queued operation acquires its slot', async () => {
+    const { ctx, config } = await setup({ concurrency: 1 })
+    const adapter = new TrackingAdapter(ctx, config, preparedFixture())
+    adapter.delayMs = 650
+    const runtime = new VisionToolkitRuntime(ctx, config, adapter)
+    const workspace = await tempWorkspace()
+
+    await expect(Promise.all([
+      runtime.glance(
+        { images: ['sample.png'] },
+        { signal, workspace, sessionId: 'same', timeoutMs: 1000 },
+      ),
+      runtime.glance(
+        { images: ['sample.png'] },
+        { signal, workspace, sessionId: 'same', timeoutMs: 1000 },
+      ),
+    ])).resolves.toHaveLength(2)
+  })
+
+  it('reports queue timeout separately from the execution deadline', async () => {
+    const { ctx, config } = await setup({ concurrency: 1 })
+    const adapter = new TrackingAdapter(ctx, config, preparedFixture())
+    adapter.delayMs = 1_200
+    const runtime = new VisionToolkitRuntime(ctx, config, adapter)
+    const workspace = await tempWorkspace()
+
+    const first = runtime.glance(
+      { images: ['sample.png'] },
+      { signal, workspace, sessionId: 'same', timeoutMs: 2000 },
+    )
+    await vi.waitFor(() => expect(adapter.active).toBe(1))
+    await expect(runtime.glance(
+      { images: ['sample.png'] },
+      { signal, workspace, sessionId: 'same', timeoutMs: 1000 },
+    )).rejects.toMatchObject({
+      code: 'timeout',
+      message: 'vision_glance: timed out while waiting for a concurrency slot',
+    })
+    await expect(first).resolves.toMatchObject({ answer: 'tracked' })
   })
 })
 

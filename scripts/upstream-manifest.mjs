@@ -16,6 +16,7 @@ async function filesBelow(directory) {
   const files = []
   for (const entry of entries) {
     const path = join(directory, entry.name)
+    if (entry.isDirectory() && entry.name === '__pycache__') continue
     if (entry.isDirectory()) files.push(...await filesBelow(path))
     else if (entry.isFile() && path !== manifestPath) files.push(path)
   }

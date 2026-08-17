@@ -30,7 +30,7 @@ If you use DeepSeek or another text-only model in DeepSeek Harness (DSH), you ma
 
 - **Paste and use it immediately.** Paste an image in DSH Web and the text-only route switches to its `(Vision Toolkit)` variant without manual path copying or model changes.
 - **A seamless image workflow.** Native thumbnails, session history, and workspace paths stay intact; Web can preview artifacts and Headless can continue using the same structured results.
-- **One command to install.** The built-in free Groq Qwen3.6 vision service is ready after installation, with no API key required.
+- **One command to install.** The built-in free Gemini 3.7 Flash vision service is ready after installation, with no API key required.
 - **Built-in free vision.** The shared service works immediately after installation; if shared capacity is temporarily exhausted, it returns a readable `429` response with retry guidance.
 - **Vision guided by intent.** The agent extracts evidence for the task at hand, such as “Where is the error?” or “Where is the button?”, instead of returning a generic caption.
 - **A complete screenshot-to-verification loop.** Reference images, HTML screenshots, difference regions, and pixel comparison work together for UI restoration.
@@ -40,9 +40,9 @@ If you use DeepSeek or another text-only model in DeepSeek Harness (DSH), you ma
 This project has two layers:
 
 1. **Visual tools and a Skill:** the agent learns when to inspect, ground, OCR, crop, trace, or compare pixels.
-2. **Native DSH integration:** those capabilities live inside Profiles, sessions, Settings, Artifacts, and the Web UI, with a free Groq Qwen3.6 vision service ready after installation.
+2. **Native DSH integration:** those capabilities live inside Profiles, sessions, Settings, Artifacts, and the Web UI, with a free Gemini 3.7 Flash vision service ready after installation.
 
-> **Install and use it immediately.** The default setup includes a free Qwen3.6 vision service and requires no API key. Cropping, pixel diffing, color analysis, foreground extraction, SVG tracing, and HTML screenshots run locally without spending vision API requests.
+> **Install and use it immediately.** The default setup includes a free Gemini 3.7 Flash vision service and requires no API key. Cropping, pixel diffing, color analysis, foreground extraction, SVG tracing, and HTML screenshots run locally without spending vision API requests.
 
 ```sh
 dsh plugin --profile web add @anionex/dsh-vision-toolkit
@@ -69,6 +69,7 @@ dsh plugin --profile web add @anionex/dsh-vision-toolkit
 ## Recent updates
 
 - **2026-08-16 · Windows Python:** Added Microsoft Store Python support, fixing first-time isolated-runtime setup failures for affected Windows users.
+- **2026-08-17 · Free vision upgrade:** Switched the built-in no-key service to Gemini 3.7 Flash and fixed Qwen/Gemini bounding-box coordinate order.
 - **2026-08-16 · Better free vision:** Switched the built-in no-key service to Groq Qwen3.6, improving image understanding without adding setup steps.
 - **2026-08-16 · Image paste:** Text-only routes now switch to a `(Vision Toolkit)` variant and keep a workspace path, fixing blocked pastes and images that could not be reused later.
 - **2026-08-16 · More shared capacity:** Expanded the free service capacity to reduce peak-time `429` responses.
@@ -226,9 +227,11 @@ The default setup uses:
 
 ```text
 Base URL: https://vision.anionex.me/v1
-Model:    qwen/qwen3.6-27b
+Model:    gemini-3.7-flash
 API Key:  https://agent-vision.anionex.me (filled automatically)
 ```
+
+Requests that still use the previous `qwen/qwen3.6-27b` model name remain compatible and are routed to the Qwen backend.
 
 This is a shared zero-configuration entry point, not an unlimited private endpoint. Request safeguards include:
 
@@ -246,6 +249,8 @@ Existing clients that still send `api_key="free"` remain compatible.
 ### Bring your own vision model
 
 For higher quotas, private endpoints, or another model, change the provider in **Settings → Vision Toolkit** and store the API key as a DSH Credential. Settings stores the Credential reference and never reads the saved secret back into the browser.
+
+**Step-by-step Groq tutorial:** [Get a free Groq API key and use Qwen3.6-27B for image understanding](docs/groq-qwen3.6-vision.md). It includes screenshots for account/API-key setup, the exact Vision Toolkit settings, and working cURL and Python examples.
 
 You can also configure a Profile patch:
 

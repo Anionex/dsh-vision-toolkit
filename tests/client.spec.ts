@@ -387,6 +387,31 @@ describe('Vision Toolkit client plugin', () => {
     })
   })
 
+  it('links the Groq tutorial and exposes a copyable manual update command', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ ok: true, value: settingsSnapshot() })))
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+
+    const { ctx, registrations } = fakeClientContext()
+    apply(ctx as never)
+    const settings = registrations.find(entry => entry.options.name === 'settings.section')
+    if (settings === undefined) throw new Error('Settings component was not registered')
+    render(createElement(settings.component, {
+      controller: new VisionSettingsController(),
+      t: (key: string) => key,
+    }))
+
+    const tutorial = await screen.findByRole('link', { name: 'groqTutorial' })
+    expect(tutorial.getAttribute('href')).toBe('https://github.com/Anionex/dsh-vision-toolkit/blob/main/docs/groq-qwen3.6-vision.zh.md')
+
+    const command = 'dsh plugin --profile web add @anionex/dsh-vision-toolkit@latest --registry=https://registry.npmjs.org/'
+    const code = screen.getByText(command)
+    expect(code.tagName).toBe('CODE')
+    fireEvent.click(screen.getByRole('button', { name: 'copy' }))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(command))
+    await screen.findByRole('button', { name: 'copied' })
+  })
+
   it('reports a successful install and asks for a manual restart when self-restart is unavailable', async () => {
     const update = {
       supported: true,
@@ -472,7 +497,7 @@ describe('Vision Toolkit client plugin', () => {
     initial.settings.value.provider = {
       baseUrl: 'https://vision.anionex.me/v1',
       credential: 'ANIONEX_FREE_VISION',
-      model: 'qwen/qwen3.6-27b',
+      model: 'gemini-3.7-flash',
       protocol: 'openai',
       anthropicThinking: 'omit',
       userAgent: 'fixture-agent/1.0',

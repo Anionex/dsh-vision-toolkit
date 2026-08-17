@@ -1,6 +1,7 @@
 import {
   CANONICAL_MODEL,
   ProtocolError,
+  boxOrderForModel,
   buildVisionInput,
   completionContent,
   completionFinishReason,
@@ -10,7 +11,7 @@ import {
 } from './protocol'
 import { materializeImage } from './image'
 import { normalizeClientAddress } from './identity'
-import { GroqProviderError, runGroqCompletion } from './groq'
+import { VisionProviderError, runVisionCompletion } from './groq'
 
 const CORS_HEADERS = {
   'access-control-allow-headers': 'authorization, content-type, openai-organization, openai-project, x-stainless-arch, x-stainless-async, x-stainless-helper-method, x-stainless-lang, x-stainless-os, x-stainless-package-version, x-stainless-read-timeout, x-stainless-retry-count, x-stainless-runtime, x-stainless-runtime-version, x-stainless-timeout',
@@ -266,11 +267,12 @@ async function chatCompletion(request: Request, env: Env, context?: ExecutionCon
     )))
     const outputLimit = Number(env.MAX_OUTPUT_TOKENS)
     const maxTokens = Math.min(completion.maxTokens ?? outputLimit, outputLimit)
-    const modelInput = buildVisionInput(completion, images, maxTokens)
+    const boxOrder = boxOrderForModel(completion.model)
+    const modelInput = buildVisionInput(completion, images, maxTokens, boxOrder)
 
     inferenceStarted = true
-    const output: VisionOutput = await runGroqCompletion(modelInput, env, requestId)
-    const content = completionContent(output, completion.task)
+    const output: VisionOutput = await runVisionCompletion(modelInput, env, requestId, boxOrder)
+    const content = completionContent(output, completion.task, boxOrder)
     const usage = tokenUsage(output)
     const headers = new Headers({
       'x-ratelimit-limit-requests': String(quota.limit),
@@ -316,7 +318,7 @@ async function chatCompletion(request: Request, env: Env, context?: ExecutionCon
         }))
       }
     }
-    if (error instanceof GroqProviderError) {
+    if (error instanceof VisionProviderError) {
       const headers = new Headers({ 'x-request-id': requestId })
       if (error.retryAfter) headers.set('retry-after', error.retryAfter)
       return openAiError(error.message, {

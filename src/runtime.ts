@@ -476,6 +476,7 @@ interface GlanceCacheEntry {
 
 interface OperationMetrics {
   startedAt: number
+  queueMs: number
   upstreamMs: number
   imageBytes: number
   imagePixels: number
@@ -694,9 +695,24 @@ export class VisionToolkitRuntime {
     return value
   }
 
-  private operationError(tool: string, error: unknown, deadline: Deadline): VisionToolkitError {
-    if (deadline.cancelled) return new VisionToolkitError('cancelled', `${tool}: cancelled`)
-    if (deadline.timedOut) return new VisionToolkitError('timeout', `${tool}: timed out`)
+  private operationError(
+    tool: string,
+    error: unknown,
+    deadline: Deadline,
+    phase: 'queue' | 'execution' = 'execution',
+  ): VisionToolkitError {
+    if (deadline.cancelled) {
+      return new VisionToolkitError(
+        'cancelled',
+        phase === 'queue' ? `${tool}: cancelled while waiting for a concurrency slot` : `${tool}: cancelled`,
+      )
+    }
+    if (deadline.timedOut) {
+      return new VisionToolkitError(
+        'timeout',
+        phase === 'queue' ? `${tool}: timed out while waiting for a concurrency slot` : `${tool}: timed out`,
+      )
+    }
     if (error instanceof VisionToolkitError) return error
     return new VisionToolkitError('runtime', `${tool}: execution failed`, { cause: error })
   }
@@ -714,10 +730,11 @@ export class VisionToolkitRuntime {
     action: (operation: OperationContext) => Promise<T>,
     permits = 1,
   ): Promise<T> {
-    const deadline = createDeadline(options.signal, this.timeout(options))
+    const timeoutMs = this.timeout(options)
     const semaphore = this.semaphore(options)
     const metrics: OperationMetrics = {
       startedAt: Date.now(),
+      queueMs: 0,
       upstreamMs: 0,
       imageBytes: 0,
       imagePixels: 0,
@@ -726,15 +743,47 @@ export class VisionToolkitRuntime {
       usedVisionService: false,
     }
     let acquired = false
+    const queueDeadline = createDeadline(options.signal, timeoutMs)
     try {
-      await semaphore.value.acquire(deadline.signal, permits)
+      await semaphore.value.acquire(queueDeadline.signal, permits)
       acquired = true
-      const value = await action({ signal: deadline.signal, metrics })
-      if (deadline.signal.aborted) throw this.operationError(tool, undefined, deadline)
+      if (queueDeadline.signal.aborted) throw this.operationError(tool, undefined, queueDeadline, 'queue')
+      metrics.queueMs = Date.now() - metrics.startedAt
+    } catch (error) {
+      metrics.queueMs = Date.now() - metrics.startedAt
+      const classified = this.operationError(tool, error, queueDeadline, 'queue')
+      if (acquired) {
+        semaphore.value.release(permits)
+        acquired = false
+      }
+      this.ctx.logger.warn(
+        'dsh-vision-toolkit tool=%s outcome=error category=%s totalMs=%d queueMs=%d upstreamMs=%d images=%d imageBytes=%d imagePixels=%d cacheHits=%d',
+        tool,
+        classified.code,
+        Date.now() - metrics.startedAt,
+        metrics.queueMs,
+        metrics.upstreamMs,
+        metrics.imageCount,
+        metrics.imageBytes,
+        metrics.imagePixels,
+        metrics.cacheHits,
+      )
+      throw classified
+    } finally {
+      queueDeadline.cleanup()
+      if (!acquired && semaphore.value.idle) this.semaphores.delete(semaphore.key)
+    }
+
+    const executionDeadline = createDeadline(options.signal, timeoutMs)
+    try {
+      if (executionDeadline.signal.aborted) throw this.operationError(tool, undefined, executionDeadline)
+      const value = await action({ signal: executionDeadline.signal, metrics })
+      if (executionDeadline.signal.aborted) throw this.operationError(tool, undefined, executionDeadline)
       this.ctx.logger.info(
-        'dsh-vision-toolkit tool=%s outcome=ok totalMs=%d upstreamMs=%d images=%d imageBytes=%d imagePixels=%d cacheHits=%d model=%s',
+        'dsh-vision-toolkit tool=%s outcome=ok totalMs=%d queueMs=%d upstreamMs=%d images=%d imageBytes=%d imagePixels=%d cacheHits=%d model=%s',
         tool,
         Date.now() - metrics.startedAt,
+        metrics.queueMs,
         metrics.upstreamMs,
         metrics.imageCount,
         metrics.imageBytes,
@@ -744,12 +793,13 @@ export class VisionToolkitRuntime {
       )
       return value
     } catch (error) {
-      const classified = this.operationError(tool, error, deadline)
+      const classified = this.operationError(tool, error, executionDeadline)
       this.ctx.logger.warn(
-        'dsh-vision-toolkit tool=%s outcome=error category=%s totalMs=%d upstreamMs=%d images=%d imageBytes=%d imagePixels=%d cacheHits=%d',
+        'dsh-vision-toolkit tool=%s outcome=error category=%s totalMs=%d queueMs=%d upstreamMs=%d images=%d imageBytes=%d imagePixels=%d cacheHits=%d',
         tool,
         classified.code,
         Date.now() - metrics.startedAt,
+        metrics.queueMs,
         metrics.upstreamMs,
         metrics.imageCount,
         metrics.imageBytes,
@@ -759,7 +809,7 @@ export class VisionToolkitRuntime {
       throw classified
     } finally {
       if (acquired) semaphore.value.release(permits)
-      deadline.cleanup()
+      executionDeadline.cleanup()
       if (semaphore.value.idle) this.semaphores.delete(semaphore.key)
     }
   }

@@ -34,7 +34,7 @@
 
 - **粘贴即可使用。** 在 DSH Web 里粘贴图片，文本模型会自动切换到看图模式变体，不需要手动复制路径或更换模型。
 - **无缝体验。** 图片保留原生缩略图、会话记录和工作区路径；Web 可以预览产物，Headless 也能继续使用同一份结构化结果。
-- **一行命令安装即用。** 安装插件后默认使用内置免费 Groq Qwen3.6 视觉服务，不需要申请 API Key。
+- **一行命令安装即用。** 安装插件后默认使用内置免费 Gemini 3.7 Flash 视觉服务，不需要申请 API Key。
 - **内置免费视觉。** 安装后即可直接使用共享服务；共享容量暂时用尽时，会返回带重试提示的明确 `429` 响应。
 - **带着意图去看图。** Agent 不只生成通用描述，而是围绕“报错在哪里”“按钮在哪”等当前任务提取证据。
 - **从截图到可验证结果。** 参考图、HTML 截图、差异定位和像素对比组成一条完整 UI 还原闭环。
@@ -45,9 +45,9 @@
 本项目提供两层能力：
 
 1. **视觉工具和 Skill**：让 Agent 知道什么时候该看图、定位、OCR、裁剪、描摹或做像素对比。
-2. **DSH 原生接入**：把这些能力放进 Profile、会话、Settings、Artifacts 和 Web 界面，并提供安装即可使用的免费 Groq Qwen3.6 视觉服务。
+2. **DSH 原生接入**：把这些能力放进 Profile、会话、Settings、Artifacts 和 Web 界面，并提供安装即可使用的免费 Gemini 3.7 Flash 视觉服务。
 
-> **安装即可使用。** 默认接入内置免费 Groq Qwen3.6 视觉服务，不需要申请 API Key；
+> **安装即可使用。** 默认接入内置免费 Gemini 3.7 Flash 视觉服务，不需要申请 API Key；
 
 ```sh
 dsh plugin --profile web add @anionex/dsh-vision-toolkit
@@ -74,6 +74,7 @@ dsh plugin --profile web add @anionex/dsh-vision-toolkit
 ## 最近更新
 
 - **2026-08-16 · Windows Python：** 支持 Microsoft Store Python，解决部分 Windows 用户首次创建隔离环境失败的问题。
+- **2026-08-17 · 免费视觉升级：** 默认模型切换到 Gemini 3.7 Flash，并修复 Qwen/Gemini 检测框坐标顺序错位的问题。
 - **2026-08-16 · 免费视觉升级：** 默认模型切换到 Groq Qwen3.6，解决免 Key 方案看图效果不足的问题。
 - **2026-08-16 · 图片粘贴：** 文本模型自动切换到 `(Vision Toolkit)` 变体并保留工作区路径，解决粘贴图片被拦截或后续无法复用的问题。
 - **2026-08-16 · 共享容量：** 扩大免费服务容量，减少高峰期出现 `429` 的情况。
@@ -229,9 +230,11 @@ flowchart LR
 
 ```text
 Base URL: https://vision.anionex.me/v1
-Model:    qwen/qwen3.6-27b
+Model:    gemini-3.7-flash
 API Key:  https://agent-vision.anionex.me（自动填写）
 ```
+
+仍然使用旧模型名 `qwen/qwen3.6-27b` 的请求保持兼容，会自动路由到 Qwen 后端。
 
 这是共享的免费入口，不是无限量私有服务。请求保护规则包括：
 
@@ -249,6 +252,8 @@ API Key:  https://agent-vision.anionex.me（自动填写）
 ### 使用自己的视觉模型
 
 如果你需要更高额度、私有端点或其他模型，可以在 **设置 → 视觉工具** 中修改提供方，并把 API Key 保存为 DSH Credential。Settings 只保存 Credential 引用，不会回显密钥。
+
+**Groq 图文教程：** [免费获取 Groq API Key，并调用 Qwen3.6-27B 识图](docs/groq-qwen3.6-vision.zh.md)。教程包含账号与 API Key 获取截图、Vision Toolkit 的准确配置，以及可直接使用的 cURL 和 Python 示例。
 
 也可以在 Profile patch 中配置：
 

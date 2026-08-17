@@ -32,6 +32,8 @@ export const DEFAULT_VISION_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x
 
 const BUILT_IN_FREE_VISION_MODEL_ALIASES = new Set([
   BUILT_IN_FREE_VISION_MODEL,
+  'gemini-3.7-flash',
+  'qwen/qwen3.6-27b',
   'qwen3.6-27b',
   'gemma-4-26b-a4b-it',
   'gemma-4-26b',

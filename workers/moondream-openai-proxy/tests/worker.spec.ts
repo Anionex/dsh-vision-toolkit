@@ -1,10 +1,24 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import worker from '../src/index'
-import { CANONICAL_MODEL } from '../src/protocol'
+import {
+  GROQ_CHAT_COMPLETIONS_URL,
+  __test__ as providerTest,
+} from '../src/groq'
+import { CANONICAL_MODEL, QWEN_MODEL } from '../src/protocol'
 
 const tinyPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
 const publicApiKey = 'https://agent-vision.anionex.me'
+const fallbackEndpoint = 'https://fallback.example/v1/chat/completions'
+const fallbackModel = 'fallback-vision-model'
+
+interface FakeKeyState {
+  activeRequests: number
+  cooldownUntil: number
+  keySlot: number
+  lastSelectedAt: number
+  leaseExpiresAt: number
+}
 
 class FakeStatement {
   private values: unknown[] = []
@@ -17,6 +31,31 @@ class FakeStatement {
   }
 
   async first<T>(): Promise<T | null> {
+    if (this.sql.includes('RETURNING key_slot')) {
+      const now = Number(this.values[0])
+      const leaseExpiresAt = Number(this.values[1])
+      const slots = new Set(this.values.slice(2).map(Number))
+      const selected = [...this.database.keyStates.values()]
+        .filter(state => slots.has(state.keySlot) && state.cooldownUntil <= now)
+        .sort((left, right) => left.activeRequests - right.activeRequests
+          || left.lastSelectedAt - right.lastSelectedAt
+          || left.keySlot - right.keySlot)[0]
+      if (selected === undefined) return null
+      selected.activeRequests += 1
+      selected.lastSelectedAt = now
+      selected.leaseExpiresAt = Math.max(selected.leaseExpiresAt, leaseExpiresAt)
+      return { key_slot: selected.keySlot } as T
+    }
+    if (this.sql.includes('MIN(cooldown_until)')) {
+      const now = Number(this.values.at(-1))
+      const slots = new Set(this.values.slice(0, -1).map(Number))
+      const next = [...this.database.keyStates.values()]
+        .filter(state => slots.has(state.keySlot) && state.cooldownUntil > now)
+        .reduce<number | null>((minimum, state) => minimum === null
+          ? state.cooldownUntil
+          : Math.min(minimum, state.cooldownUntil), null)
+      return { cooldown_until: next } as T
+    }
     const key = String(this.values[1])
     const count = (this.database.counts.get(key) ?? 0) + 1
     this.database.counts.set(key, count)
@@ -27,6 +66,26 @@ class FakeStatement {
     if (this.sql.includes('WHERE day < ?1')) {
       this.database.cleanupRuns += 1
       return { meta: {} } as D1Result<unknown>
+    }
+    if (this.sql.includes('SET active_requests = 0')) {
+      const now = Number(this.values[0])
+      for (const state of this.database.keyStates.values()) {
+        if (state.activeRequests > 0 && state.leaseExpiresAt <= now) {
+          state.activeRequests = 0
+          state.leaseExpiresAt = 0
+        }
+      }
+    }
+    if (this.sql.includes('active_requests = MAX(0, active_requests - 1)')) {
+      if (this.database.failSchedulerRelease) throw new Error('scheduler release unavailable')
+      const cooldownUntil = Number(this.values[1])
+      const slot = Number(this.values[2])
+      const state = this.database.keyStates.get(slot)
+      if (state !== undefined) {
+        state.activeRequests = Math.max(0, state.activeRequests - 1)
+        state.cooldownUntil = Math.max(state.cooldownUntil, cooldownUntil)
+        if (state.activeRequests === 0) state.leaseExpiresAt = 0
+      }
     }
 
     const key = String(this.values[1])
@@ -47,6 +106,11 @@ class FakeStatement {
 class FakeD1 {
   cleanupRuns = 0
   readonly counts = new Map<string, number>()
+  failSchedulerRelease = false
+  readonly keyStates = new Map<number, FakeKeyState>(Array.from({ length: 6 }, (_, keySlot) => [
+    keySlot,
+    { activeRequests: 0, cooldownUntil: 0, keySlot, lastSelectedAt: 0, leaseExpiresAt: 0 },
+  ]))
 
   prepare(sql: string): FakeStatement {
     return new FakeStatement(this, sql)
@@ -86,6 +150,19 @@ function request(image = tinyPng, body?: BodyInit, apiKey = publicApiKey): Reque
   } as RequestInit)
 }
 
+function qwenRequest(body?: BodyInit): Request {
+  const parsed = typeof body === 'string' ? JSON.parse(body) as Record<string, unknown> : {
+    messages: [{
+      content: [
+        { text: 'Describe this image.', type: 'text' },
+        { image_url: { url: tinyPng }, type: 'image_url' },
+      ],
+      role: 'user',
+    }],
+  }
+  return request(tinyPng, JSON.stringify({ ...parsed, model: QWEN_MODEL }))
+}
+
 function environment(database: FakeD1, burstSuccess = true): Env {
   return {
     BURST_LIMITER: { limit: vi.fn(async () => ({ success: burstSuccess })) },
@@ -103,6 +180,9 @@ function environment(database: FakeD1, burstSuccess = true): Env {
     GROQ_API_KEY_3: 'test-groq-key-3',
     GROQ_API_KEY_4: 'test-groq-key-4',
     GROQ_API_KEY_5: 'test-groq-key-5',
+    FALLBACK_VISION_API_KEY: 'test-fallback-key',
+    FALLBACK_VISION_MODEL: fallbackModel,
+    FALLBACK_VISION_URL: fallbackEndpoint,
     USAGE_DB: database,
   } as Env
 }
@@ -110,6 +190,66 @@ function environment(database: FakeD1, burstSuccess = true): Env {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('Worker request accounting', () => {
+  it('trims configured provider secrets before using them as bearer tokens', () => {
+    const env = environment(new FakeD1()) as Env & Record<string, string>
+    env.GROQ_API_KEY_1 = '  test-groq-key-1\n'
+    expect(providerTest.configuredUpstreams(env, 'xyxy')).toContainEqual(expect.objectContaining({
+      key: 'test-groq-key-1',
+      slot: 0,
+    }))
+  })
+
+  it('keeps Gemini on a stable scheduler slot', () => {
+    const upstream = providerTest.configuredUpstreams(environment(new FakeD1()))
+      .find(candidate => candidate.name === 'gemini')
+    expect(upstream).toMatchObject({
+      endpoint: fallbackEndpoint,
+      key: 'test-fallback-key',
+      model: fallbackModel,
+      name: 'gemini',
+      slot: 5,
+    })
+  })
+
+  it('selects the stable additional slot when primary secrets are absent', async () => {
+    const database = new FakeD1()
+    const waitUntil = vi.fn()
+    const context = { waitUntil } as unknown as ExecutionContext
+    const env = environment(database) as Env & Record<string, string | undefined>
+    for (let index = 1; index <= 5; index += 1) delete env[`GROQ_API_KEY_${index}`]
+    const providerFetch = vi.fn(async (input: RequestInfo | URL) => {
+      expect(String(input)).toBe(fallbackEndpoint)
+      return Response.json({
+        choices: [{ finish_reason: 'stop', message: { content: 'Additional endpoint.', role: 'assistant' } }],
+      })
+    })
+    vi.stubGlobal('fetch', providerFetch)
+
+    const response = await worker.fetch(request(), env as Env, context)
+
+    expect(response.status).toBe(200)
+    expect(providerFetch).toHaveBeenCalledTimes(1)
+    expect(waitUntil).toHaveBeenCalledTimes(1)
+    expect(database.cleanupRuns).toBe(1)
+    expect(database.keyStates.get(5)).toMatchObject({ activeRequests: 0 })
+  })
+
+  it('returns the sparse additional slot cooldown without contacting an upstream', async () => {
+    const database = new FakeD1()
+    database.keyStates.get(5)!.cooldownUntil = Date.now() + 5_000
+    const env = environment(database) as Env & Record<string, string | undefined>
+    for (let index = 1; index <= 5; index += 1) delete env[`GROQ_API_KEY_${index}`]
+    const providerFetch = vi.fn()
+    vi.stubGlobal('fetch', providerFetch)
+
+    const response = await worker.fetch(request(), env as Env)
+
+    expect(response.status).toBe(429)
+    expect(response.headers.get('retry-after')).toMatch(/^[1-5]$/)
+    expect(await response.json()).toMatchObject({ error: { code: 'rate_limit_exceeded' } })
+    expect(providerFetch).not.toHaveBeenCalled()
+  })
+
   it('advertises the branded public key on the discovery route', async () => {
     const response = await worker.fetch(
       new Request('https://vision.example/'),
@@ -124,14 +264,12 @@ describe('Worker request accounting', () => {
     })
   })
 
-  it('calls Groq with an OpenAI vision message and returns its text', async () => {
+  it('calls Groq with an OpenAI vision message for Qwen-compatible requests', async () => {
     const database = new FakeD1()
-    const waitUntil = vi.fn()
-    const context = { waitUntil } as unknown as ExecutionContext
     const groqFetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       expect(init?.headers).toMatchObject({ authorization: expect.stringMatching(/^Bearer test-groq-key-[1-5]$/) })
       const body = JSON.parse(String(init?.body)) as Record<string, unknown>
-      expect(body.model).toBe(CANONICAL_MODEL)
+      expect(body.model).toBe(QWEN_MODEL)
       expect(body.reasoning_effort).toBe('none')
       expect(body).not.toHaveProperty('chat_template_kwargs')
       return Response.json({
@@ -143,7 +281,7 @@ describe('Worker request accounting', () => {
       })
     })
     vi.stubGlobal('fetch', groqFetch)
-    const response = await worker.fetch(request(), environment(database), context)
+    const response = await worker.fetch(qwenRequest(), environment(database))
     expect(response.status).toBe(200)
     expect((await response.json()) as Record<string, unknown>).toMatchObject({
       choices: [{ message: { content: 'A one-pixel test image.' } }],
@@ -151,8 +289,6 @@ describe('Worker request accounting', () => {
       usage: { completion_tokens: 5, prompt_tokens: 12, total_tokens: 17 },
     })
     expect(groqFetch).toHaveBeenCalledTimes(1)
-    expect(waitUntil).toHaveBeenCalledTimes(1)
-    expect(database.cleanupRuns).toBe(1)
     const body = JSON.parse(String(groqFetch.mock.calls[0]?.[1]?.body)) as Record<string, unknown>
     expect(body).toMatchObject({
       messages: [{
@@ -231,7 +367,7 @@ describe('Worker request accounting', () => {
         ],
         role: 'user',
       }],
-      model: CANONICAL_MODEL,
+      model: QWEN_MODEL,
     })), environment(database))
 
     expect(response.status).toBe(200)
@@ -246,12 +382,99 @@ describe('Worker request accounting', () => {
         choices: [{ finish_reason: 'stop', message: { content: 'Recovered.', role: 'assistant' } }],
       }))
     vi.stubGlobal('fetch', groqFetch)
-    const response = await worker.fetch(request(), environment(database))
+    const response = await worker.fetch(qwenRequest(), environment(database))
     expect(response.status).toBe(200)
     expect(groqFetch).toHaveBeenCalledTimes(2)
     const firstAuth = String(groqFetch.mock.calls[0]?.[1]?.headers && new Headers(groqFetch.mock.calls[0]?.[1]?.headers).get('authorization'))
     const secondAuth = String(groqFetch.mock.calls[1]?.[1]?.headers && new Headers(groqFetch.mock.calls[1]?.[1]?.headers).get('authorization'))
     expect(firstAuth).not.toBe(secondAuth)
+    expect(database.keyStates.get(0)).toMatchObject({ activeRequests: 0 })
+    expect(database.keyStates.get(0)?.cooldownUntil).toBeGreaterThan(Date.now())
+  })
+
+  it('assigns simultaneous requests to the least-active Groq accounts', async () => {
+    const database = new FakeD1()
+    let releaseFetches: (() => void) | undefined
+    const fetchGate = new Promise<void>(resolve => { releaseFetches = resolve })
+    const groqFetch = vi.fn(async () => {
+      await fetchGate
+      return Response.json({
+        choices: [{ finish_reason: 'stop', message: { content: 'Balanced.', role: 'assistant' } }],
+      })
+    })
+    vi.stubGlobal('fetch', groqFetch)
+
+    const first = worker.fetch(qwenRequest(), environment(database))
+    const second = worker.fetch(qwenRequest(), environment(database))
+    await vi.waitFor(() => expect(groqFetch).toHaveBeenCalledTimes(2))
+
+    const authorizations = groqFetch.mock.calls.map(call => new Headers(call[1]?.headers).get('authorization'))
+    expect(new Set(authorizations).size).toBe(2)
+    expect([...database.keyStates.values()].map(state => state.activeRequests)).toEqual([1, 1, 0, 0, 0, 0])
+
+    releaseFetches?.()
+    await expect(Promise.all([first, second])).resolves.toHaveLength(2)
+    expect([...database.keyStates.values()].map(state => state.activeRequests)).toEqual([0, 0, 0, 0, 0, 0])
+  })
+
+  it('routes default Gemini requests to the Gemini endpoint', async () => {
+    const database = new FakeD1()
+    const providerFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(input)).toBe(fallbackEndpoint)
+      expect(new Headers(init?.headers).get('authorization')).toBe('Bearer test-fallback-key')
+      expect(JSON.parse(String(init?.body))).toMatchObject({ model: fallbackModel, reasoning_effort: 'none' })
+      return Response.json({
+        choices: [{ finish_reason: 'stop', message: { content: 'Gemini answered.', role: 'assistant' } }],
+      })
+    })
+    vi.stubGlobal('fetch', providerFetch)
+
+    const response = await worker.fetch(request(), environment(database))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      choices: [{ message: { content: 'Gemini answered.' } }],
+    })
+    expect(providerFetch).toHaveBeenCalledTimes(1)
+    expect(String(providerFetch.mock.calls[0]?.[0])).toBe(fallbackEndpoint)
+    expect([...database.keyStates.values()].map(state => state.activeRequests)).toEqual([0, 0, 0, 0, 0, 0])
+  })
+
+  it('keeps Qwen requests on Groq without touching Gemini', async () => {
+    const database = new FakeD1()
+    const providerFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(input)).toBe(GROQ_CHAT_COMPLETIONS_URL)
+      expect(JSON.parse(String(init?.body))).toMatchObject({ model: QWEN_MODEL, reasoning_effort: 'none' })
+      return Response.json({
+        choices: [{ finish_reason: 'stop', message: { content: 'Qwen answered.', role: 'assistant' } }],
+      })
+    })
+    vi.stubGlobal('fetch', providerFetch)
+
+    const response = await worker.fetch(qwenRequest(), environment(database))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      choices: [{ message: { content: 'Qwen answered.' } }],
+    })
+    expect(providerFetch).toHaveBeenCalledTimes(1)
+    expect([...database.keyStates.values()].map(state => state.activeRequests)).toEqual([0, 0, 0, 0, 0, 0])
+  })
+
+  it('keeps a successful inference response when lease cleanup fails', async () => {
+    const database = new FakeD1()
+    database.failSchedulerRelease = true
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({
+      choices: [{ finish_reason: 'stop', message: { content: 'Still returned.', role: 'assistant' } }],
+    })))
+
+    const response = await worker.fetch(qwenRequest(), environment(database))
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      choices: [{ message: { content: 'Still returned.' } }],
+    })
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('vision_upstream_lease_release_failed'))
   })
 
   it('keeps the legacy free API key working during the public key migration', async () => {
@@ -276,15 +499,15 @@ describe('Worker request accounting', () => {
     })
   })
 
-  it('returns a sanitized upstream error when all Groq accounts are rate limited', async () => {
+  it('returns a non-retryable rate-limit code when every upstream is cooling down', async () => {
     const database = new FakeD1()
     const groqFetch = vi.fn(async () => new Response('rate limited', { status: 429 }))
     vi.stubGlobal('fetch', groqFetch)
-    const response = await worker.fetch(request(), environment(database))
+    const response = await worker.fetch(qwenRequest(), environment(database))
     expect(response.status).toBe(429)
     const payload = await response.json()
     expect(payload).toMatchObject({
-      error: { code: 'upstream_rate_limit_exceeded' },
+      error: { code: 'rate_limit_exceeded' },
     })
     expect(groqFetch).toHaveBeenCalledTimes(5)
     expect(JSON.stringify(payload)).not.toContain('test-groq-key')
@@ -300,7 +523,7 @@ describe('Worker request accounting', () => {
     }, { status: 400 }))
     vi.stubGlobal('fetch', groqFetch)
 
-    const response = await worker.fetch(request(), environment(database))
+    const response = await worker.fetch(qwenRequest(), environment(database))
     expect(response.status).toBe(400)
     expect(await response.json()).toMatchObject({
       error: {
@@ -320,7 +543,7 @@ describe('Worker request accounting', () => {
       },
     }, { status: 400 })))
 
-    const response = await worker.fetch(request(), environment(database))
+    const response = await worker.fetch(qwenRequest(), environment(database))
     expect(response.status).toBe(400)
     const payload = await response.json()
     expect(payload).toMatchObject({ error: { code: 'upstream_invalid_request' } })
