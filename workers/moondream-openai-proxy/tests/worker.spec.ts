@@ -24,25 +24,28 @@ class FakeStatement {
   }
 
   async run(): Promise<D1Result<unknown>> {
-    return { meta: {} } as D1Result<unknown>
-  }
-
-  release(): void {
-    // releaseCounters now issues one UPDATE per key (decrement where
-    // request_count > 0) rather than the old count=1 (DELETE) + count>1
-    // (UPDATE) pair, so a single decrement drives every rollback path
-    // (image-validation failure, global-limit-before-error, post-inference
-    // error rollback).
-    const key = String(this.values[1])
-    if (this.sql.includes('request_count - 1')) {
-      const count = this.database.counts.get(key) ?? 0
-      if (count > 1) this.database.counts.set(key, count - 1)
-      else this.database.counts.delete(key)
+    if (this.sql.includes('WHERE day < ?1')) {
+      this.database.cleanupRuns += 1
+      return { meta: {} } as D1Result<unknown>
     }
+
+    const key = String(this.values[1])
+    const count = this.database.counts.get(key) ?? 0
+    if (this.sql.includes('request_count = 1') && count === 1) {
+      this.database.counts.delete(key)
+    }
+    if (this.sql.includes('request_count - 1') && count > 1) {
+      this.database.counts.set(key, count - 1)
+    }
+    if (this.sql.includes('request_count - 1') && count === 1) {
+      throw new Error('CHECK constraint failed: request_count > 0')
+    }
+    return { meta: {} } as D1Result<unknown>
   }
 }
 
 class FakeD1 {
+  cleanupRuns = 0
   readonly counts = new Map<string, number>()
 
   prepare(sql: string): FakeStatement {
@@ -50,8 +53,14 @@ class FakeD1 {
   }
 
   async batch(statements: FakeStatement[]): Promise<D1Result<unknown>[]> {
-    for (const statement of statements) statement.release()
-    return []
+    const snapshot = new Map(this.counts)
+    try {
+      return await Promise.all(statements.map(statement => statement.run()))
+    } catch (error) {
+      this.counts.clear()
+      for (const [key, count] of snapshot) this.counts.set(key, count)
+      throw error
+    }
   }
 }
 
@@ -117,6 +126,8 @@ describe('Worker request accounting', () => {
 
   it('calls Groq with an OpenAI vision message and returns its text', async () => {
     const database = new FakeD1()
+    const waitUntil = vi.fn()
+    const context = { waitUntil } as unknown as ExecutionContext
     const groqFetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       expect(init?.headers).toMatchObject({ authorization: expect.stringMatching(/^Bearer test-groq-key-[1-5]$/) })
       const body = JSON.parse(String(init?.body)) as Record<string, unknown>
@@ -132,7 +143,7 @@ describe('Worker request accounting', () => {
       })
     })
     vi.stubGlobal('fetch', groqFetch)
-    const response = await worker.fetch(request(), environment(database))
+    const response = await worker.fetch(request(), environment(database), context)
     expect(response.status).toBe(200)
     expect((await response.json()) as Record<string, unknown>).toMatchObject({
       choices: [{ message: { content: 'A one-pixel test image.' } }],
@@ -140,6 +151,8 @@ describe('Worker request accounting', () => {
       usage: { completion_tokens: 5, prompt_tokens: 12, total_tokens: 17 },
     })
     expect(groqFetch).toHaveBeenCalledTimes(1)
+    expect(waitUntil).toHaveBeenCalledTimes(1)
+    expect(database.cleanupRuns).toBe(1)
     const body = JSON.parse(String(groqFetch.mock.calls[0]?.[1]?.body)) as Record<string, unknown>
     expect(body).toMatchObject({
       messages: [{
