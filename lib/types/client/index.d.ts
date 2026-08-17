@@ -10,6 +10,7 @@ declare const en: {
     readonly externalNotice: "Remote tools send the selected image bytes to the configured external vision API. Local crop, trace, pixel diff, palette, foreground extraction, and HTML rendering do not upload images.";
     readonly provider: "Vision service";
     readonly providerHint: "Choose the API protocol, then provide the service address, model, and API key used by online vision features.";
+    readonly groqTutorial: "Want a free Groq key for Qwen3.6-27B vision? Follow the step-by-step tutorial →";
     readonly baseUrl: "Base URL";
     readonly apiKey: "API key";
     readonly apiKeyPlaceholderMissing: "Paste the API key";
@@ -64,6 +65,10 @@ declare const en: {
     readonly activeGenerationValue: "Generation {generation}";
     readonly updates: "Plugin updates";
     readonly updatesHint: "Check npm for a newer release, install it into this DSH profile, and restart DSH Web automatically.";
+    readonly manualUpdate: "Manual update";
+    readonly manualUpdateHint: "Run this command in your terminal to install the latest release into this DSH profile.";
+    readonly copy: "Copy";
+    readonly copied: "Copied";
     readonly checkUpdate: "Check for updates";
     readonly checkingUpdate: "Checking for updates…";
     readonly updateAvailable: "Update available";
