@@ -63,6 +63,10 @@ class FakeStatement {
   }
 
   async run(): Promise<D1Result<unknown>> {
+    if (this.sql.includes('WHERE day < ?1')) {
+      this.database.cleanupRuns += 1
+      return { meta: {} } as D1Result<unknown>
+    }
     if (this.sql.includes('SET active_requests = 0')) {
       const now = Number(this.values[0])
       for (const state of this.database.keyStates.values()) {
@@ -83,18 +87,24 @@ class FakeStatement {
         if (state.activeRequests === 0) state.leaseExpiresAt = 0
       }
     }
-    return { meta: {} } as D1Result<unknown>
-  }
 
-  release(): void {
     const key = String(this.values[1])
     const count = this.database.counts.get(key) ?? 0
-    if (this.sql.includes('request_count = 1') && count === 1) this.database.counts.delete(key)
-    if (this.sql.includes('request_count > 1') && count > 1) this.database.counts.set(key, count - 1)
+    if (this.sql.includes('request_count = 1') && count === 1) {
+      this.database.counts.delete(key)
+    }
+    if (this.sql.includes('request_count - 1') && count > 1) {
+      this.database.counts.set(key, count - 1)
+    }
+    if (this.sql.includes('request_count - 1') && count === 1) {
+      throw new Error('CHECK constraint failed: request_count > 0')
+    }
+    return { meta: {} } as D1Result<unknown>
   }
 }
 
 class FakeD1 {
+  cleanupRuns = 0
   readonly counts = new Map<string, number>()
   failSchedulerRelease = false
   readonly keyStates = new Map<number, FakeKeyState>(Array.from({ length: 6 }, (_, keySlot) => [
@@ -107,8 +117,14 @@ class FakeD1 {
   }
 
   async batch(statements: FakeStatement[]): Promise<D1Result<unknown>[]> {
-    for (const statement of statements) statement.release()
-    return []
+    const snapshot = new Map(this.counts)
+    try {
+      return await Promise.all(statements.map(statement => statement.run()))
+    } catch (error) {
+      this.counts.clear()
+      for (const [key, count] of snapshot) this.counts.set(key, count)
+      throw error
+    }
   }
 }
 
@@ -197,6 +213,8 @@ describe('Worker request accounting', () => {
 
   it('selects the stable additional slot when primary secrets are absent', async () => {
     const database = new FakeD1()
+    const waitUntil = vi.fn()
+    const context = { waitUntil } as unknown as ExecutionContext
     const env = environment(database) as Env & Record<string, string | undefined>
     for (let index = 1; index <= 5; index += 1) delete env[`GROQ_API_KEY_${index}`]
     const providerFetch = vi.fn(async (input: RequestInfo | URL) => {
@@ -207,10 +225,12 @@ describe('Worker request accounting', () => {
     })
     vi.stubGlobal('fetch', providerFetch)
 
-    const response = await worker.fetch(request(), env as Env)
+    const response = await worker.fetch(request(), env as Env, context)
 
     expect(response.status).toBe(200)
     expect(providerFetch).toHaveBeenCalledTimes(1)
+    expect(waitUntil).toHaveBeenCalledTimes(1)
+    expect(database.cleanupRuns).toBe(1)
     expect(database.keyStates.get(5)).toMatchObject({ activeRequests: 0 })
   })
 

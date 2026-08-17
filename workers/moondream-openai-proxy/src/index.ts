@@ -28,6 +28,8 @@ interface QuotaReservation {
   remaining: number
 }
 
+let lastUsageCleanupDay: string | undefined
+
 export function preflightHeaders(request: Request): Headers {
   const headers = new Headers(CORS_HEADERS)
   const requestedHeaders = request.headers.get('access-control-request-headers')
@@ -127,7 +129,7 @@ async function clientHash(request: Request, secret: string): Promise<string> {
   return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')
 }
 
-async function releaseCounters(env: Env, day: string, keys: string[]): Promise<void> {
+async function releaseCounters(env: Env, day: string, keys: string[], now: string): Promise<void> {
   const statements = keys.flatMap(key => [
     env.USAGE_DB.prepare(
       'DELETE FROM usage_daily WHERE day = ?1 AND client_hash = ?2 AND request_count = 1',
@@ -136,9 +138,23 @@ async function releaseCounters(env: Env, day: string, keys: string[]): Promise<v
       UPDATE usage_daily
       SET request_count = request_count - 1, updated_at = ?3
       WHERE day = ?1 AND client_hash = ?2 AND request_count > 1
-    `).bind(day, key, new Date().toISOString()),
+    `).bind(day, key, now),
   ])
   await env.USAGE_DB.batch(statements)
+}
+
+function scheduleUsageCleanup(env: Env, day: string, now: string, context?: ExecutionContext): void {
+  if (lastUsageCleanupDay === day) return
+  lastUsageCleanupDay = day
+
+  const cutoff = new Date(Date.parse(now) - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  const cleanup = env.USAGE_DB.prepare('DELETE FROM usage_daily WHERE day < ?1').bind(cutoff).run().catch(error => {
+    console.error(JSON.stringify({
+      error: error instanceof Error ? error.message : String(error),
+      event: 'quota_cleanup_failed',
+    }))
+  })
+  context?.waitUntil(cleanup)
 }
 
 async function consumeCounter(
@@ -160,7 +176,7 @@ async function consumeCounter(
   return row?.request_count ?? null
 }
 
-async function consumeDailyQuota(env: Env, hash: string): Promise<QuotaReservation> {
+async function consumeDailyQuota(env: Env, hash: string, context?: ExecutionContext): Promise<QuotaReservation> {
   const clientLimit = Number(env.DAILY_LIMIT)
   const globalLimit = Number(env.GLOBAL_DAILY_LIMIT)
   const now = new Date().toISOString()
@@ -175,7 +191,7 @@ async function consumeDailyQuota(env: Env, hash: string): Promise<QuotaReservati
   const globalCount = await consumeCounter(env, day, '__global__', globalLimit, now)
   if (globalCount === null) {
     try {
-      await releaseCounters(env, day, [hash])
+      await releaseCounters(env, day, [hash], now)
     } catch (error) {
       console.error(JSON.stringify({
         error: error instanceof Error ? error.message : String(error),
@@ -187,17 +203,7 @@ async function consumeDailyQuota(env: Env, hash: string): Promise<QuotaReservati
       status: 429,
     })
   }
-  if (globalCount === 1) {
-    const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
-    try {
-      await env.USAGE_DB.prepare('DELETE FROM usage_daily WHERE day < ?1').bind(cutoff).run()
-    } catch (error) {
-      console.error(JSON.stringify({
-        error: error instanceof Error ? error.message : String(error),
-        event: 'quota_cleanup_failed',
-      }))
-    }
-  }
+  if (globalCount === 1) scheduleUsageCleanup(env, day, now, context)
   return {
     clientHash: hash,
     day,
@@ -233,7 +239,7 @@ function modelList(): Response {
   })
 }
 
-async function chatCompletion(request: Request, env: Env): Promise<Response> {
+async function chatCompletion(request: Request, env: Env, context?: ExecutionContext): Promise<Response> {
   if (!isAuthorized(request, env)) return authorizationError(env)
 
   const requestId = request.headers.get('cf-ray') ?? crypto.randomUUID()
@@ -253,7 +259,7 @@ async function chatCompletion(request: Request, env: Env): Promise<Response> {
     }
     const body = await readBoundedJson(request, Number(env.MAX_REQUEST_BYTES))
     const completion = parseChatCompletionRequest(body, Number(env.MAX_IMAGE_BYTES))
-    quota = await consumeDailyQuota(env, hash)
+    quota = await consumeDailyQuota(env, hash, context)
     const images = await Promise.all(completion.images.map(image => materializeImage(
       image,
       Number(env.MAX_IMAGE_BYTES),
@@ -303,7 +309,7 @@ async function chatCompletion(request: Request, env: Env): Promise<Response> {
   } catch (error) {
     if (quota && !inferenceStarted) {
       try {
-        await releaseCounters(env, quota.day, [quota.clientHash, '__global__'])
+        await releaseCounters(env, quota.day, [quota.clientHash, '__global__'], new Date().toISOString())
       } catch (rollbackError) {
         console.error(JSON.stringify({
           error: rollbackError instanceof Error ? rollbackError.message : String(rollbackError),
@@ -354,7 +360,7 @@ async function chatCompletion(request: Request, env: Env): Promise<Response> {
   }
 }
 
-async function fetchHandler(request: Request, env: Env): Promise<Response> {
+async function fetchHandler(request: Request, env: Env, context?: ExecutionContext): Promise<Response> {
   if (request.method === 'OPTIONS') return new Response(null, { headers: preflightHeaders(request), status: 204 })
   const url = new URL(request.url)
 
@@ -365,7 +371,7 @@ async function fetchHandler(request: Request, env: Env): Promise<Response> {
     return isAuthorized(request, env) ? modelList() : authorizationError(env)
   }
   if (request.method === 'POST' && (url.pathname === '/v1/chat/completions' || url.pathname === '/chat/completions')) {
-    return chatCompletion(request, env)
+    return chatCompletion(request, env, context)
   }
   if (url.pathname === '/') {
     return jsonResponse({
