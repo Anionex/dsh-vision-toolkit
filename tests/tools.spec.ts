@@ -17,22 +17,12 @@ import * as VisionToolkit from '../src/index.ts'
 import { VISION_TOOLKIT_ACTIVATE } from '../src/exposure.ts'
 import { bundledUpstreamRoot } from '../src/runtime-install.ts'
 import { VISION_TOOLS_SKILL_CONTENT, VISION_TOOLS_SKILL_RESOURCE_BASE } from '../src/skill.ts'
+import { VISION_TOOL_NAMES } from '../src/tools.ts'
 
 const BUNDLED_UPSTREAM = bundledUpstreamRoot()
 const SAMPLE_IMAGE = fileURLToPath(new URL('./fixtures/sample.png', import.meta.url))
 
-const TOOL_NAMES = [
-  'vision_glance',
-  'vision_ground',
-  'vision_detect',
-  'vision_trace',
-  'vision_crop',
-  'vision_pixel_diff',
-  'vision_long_screenshot_ocr',
-  'vision_extract_foreground',
-  'vision_dominant_colors',
-  'vision_html_screenshot',
-]
+const TOOL_NAMES: readonly string[] = Object.values(VISION_TOOL_NAMES)
 
 function fakeCredentials(): Credentials {
   return {
@@ -374,6 +364,9 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
     const { ctx } = await setupContext(BUNDLED_UPSTREAM)
     const agent = await registerAgent(ctx, 'no-skill')
     expect(ctx.tools.schemas(agent).some(tool => TOOL_NAMES.includes(tool.name))).toBe(false)
+    const activation = ctx.tools.get(VISION_TOOLKIT_ACTIVATE, agent)
+    for (const name of TOOL_NAMES) expect(activation?.description).toContain(name)
+    expect(activation?.description).toContain('image understanding, OCR, UI detection')
 
     const result = await ctx.tools.execute({
       signal: new AbortController().signal,
