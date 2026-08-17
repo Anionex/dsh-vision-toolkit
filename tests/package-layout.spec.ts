@@ -68,6 +68,7 @@ describe('package layout contract', () => {
   })
 
   it('has reproducible build and prepack scripts', () => {
+    expect(PACKAGE.scripts.build).toContain('node scripts/python-bootstrap.mjs')
     expect(PACKAGE.scripts.build).toContain('node scripts/upstream-manifest.mjs')
     expect(PACKAGE.scripts.build).toContain('node scripts/verify-skill.mjs')
     expect(PACKAGE.scripts.build).toContain('node scripts/clean-build.mjs')
@@ -75,6 +76,7 @@ describe('package layout contract', () => {
     expect(PACKAGE.scripts.build).toContain('tsc -p tsconfig.client.json')
     expect(PACKAGE.scripts.build).toContain('tsc -p tsconfig.client.public.json')
     expect(PACKAGE.scripts.build).toContain('node scripts/build-client.mjs')
+    expect(PACKAGE.scripts['verify:portable']).toContain('node scripts/python-bootstrap.mjs')
     expect(PACKAGE.scripts['upstream:sync']).toBe('node scripts/sync-upstream.mjs')
     expect(PACKAGE.scripts['upstream:skill:sync']).toBe('node scripts/sync-skill.mjs')
     expect(PACKAGE.scripts['upstream:skill:verify']).toBe('node scripts/verify-skill.mjs')
