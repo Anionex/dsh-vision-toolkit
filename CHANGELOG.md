@@ -4,6 +4,14 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+### Changed
+
+- Added another OpenAI-compatible vision endpoint to the persistent least-active upstream pool, so it can carry requests when the primary accounts are cooling down or rejected.
+
+### Fixed
+
+- Return the standard non-retryable `rate_limit_exceeded` code when every upstream is cooling down, preventing the 15-second client deadline from hiding an immediate provider-capacity response as a timeout.
+
 ## [0.1.20] - 2026-08-17
 
 ### Changed

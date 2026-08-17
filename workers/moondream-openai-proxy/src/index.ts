@@ -10,7 +10,7 @@ import {
 } from './protocol'
 import { materializeImage } from './image'
 import { normalizeClientAddress } from './identity'
-import { GroqProviderError, runGroqCompletion } from './groq'
+import { VisionProviderError, runVisionCompletion } from './groq'
 
 const CORS_HEADERS = {
   'access-control-allow-headers': 'authorization, content-type, openai-organization, openai-project, x-stainless-arch, x-stainless-async, x-stainless-helper-method, x-stainless-lang, x-stainless-os, x-stainless-package-version, x-stainless-read-timeout, x-stainless-retry-count, x-stainless-runtime, x-stainless-runtime-version, x-stainless-timeout',
@@ -263,7 +263,7 @@ async function chatCompletion(request: Request, env: Env): Promise<Response> {
     const modelInput = buildVisionInput(completion, images, maxTokens)
 
     inferenceStarted = true
-    const output: VisionOutput = await runGroqCompletion(modelInput, env, requestId)
+    const output: VisionOutput = await runVisionCompletion(modelInput, env, requestId)
     const content = completionContent(output, completion.task)
     const usage = tokenUsage(output)
     const headers = new Headers({
@@ -310,7 +310,7 @@ async function chatCompletion(request: Request, env: Env): Promise<Response> {
         }))
       }
     }
-    if (error instanceof GroqProviderError) {
+    if (error instanceof VisionProviderError) {
       const headers = new Headers({ 'x-request-id': requestId })
       if (error.retryAfter) headers.set('retry-after', error.retryAfter)
       return openAiError(error.message, {
