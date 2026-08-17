@@ -4,6 +4,12 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+## [0.1.22] - 2026-08-17
+
+### Docs
+
+- Added a step-by-step Groq tutorial (English and 中文) for obtaining a free API key and using Qwen3.6-27B for image understanding, with screenshots and ready-to-run cURL/Python examples.
+
 ## [0.1.21] - 2026-08-17
 
 ### Changed
