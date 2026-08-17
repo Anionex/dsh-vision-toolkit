@@ -269,6 +269,8 @@ API Key:  https://agent-vision.anionex.me（自动填写）
 
 支持 OpenAI Chat Completions 兼容端点和 Anthropic Messages。Web Settings 页面还可以调整超时、图片限制、并发、运行时和图片输入变体。
 
+如果受信任的内部端点使用自签证书或 MITM 代理，可在启动 DSH 进程时设置 `VISION_SSL_VERIFY=0`。插件会把该值传入隔离的 Python 运行环境；未设置或使用其他值时仍默认校验证书。还支持大小写不敏感的假值 `false`、`off`、`no`、`none` 和 `disabled`。
+
 ### 运行要求
 
 - DeepSeek Harness Web 或 Headless Profile。

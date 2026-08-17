@@ -2,7 +2,7 @@ diff --git a/SKILL.md b/SKILL.md
 index 8f42552..f2ee3f2 100644
 --- a/SKILL.md
 +++ b/SKILL.md
-@@ -1,295 +1,308 @@
+@@ -1,295 +1,309 @@
 ----
 -name: vision-tools
 -description: >-
@@ -439,13 +439,14 @@ index 8f42552..f2ee3f2 100644
 -cp "<the temp path>" work/shot.png
 -glance work/shot.png -q "..."
 -```
-+## Work from a durable path, not a temp path
++## Prefer a durable path; platform temp paths are supported
  
 -Exception: the user asked for the image to stay in a temp folder.
-+If an image lives in a temporary directory, copy it into durable workspace
-+storage before the first visual call and run everything against that copy.
-+The exception is when the user explicitly asked for the image to stay in a
-+temporary folder. All paths must remain in the session workspace or a
++Use workspace storage when the image or a derived artifact must remain
++available later. Temporary inputs are also valid: the DSH adapter authorizes
++the current platform temporary directory automatically. On Windows, a model-
++generated `/tmp/...` path is mapped to `%TEMP%\...`; on POSIX systems, use
++`/tmp/...` directly. Other paths must remain in the session workspace or a
 +configured `allowedDirs` entry.
  
  ## When you have a description instead of the image
@@ -526,7 +527,7 @@ index 8f42552..f2ee3f2 100644
  
  | The job | Read |
  |---|---|
-@@ -299,14 +312,17 @@ sequence, and how to tell you got it right.
+@@ -299,14 +313,17 @@ sequence, and how to tell you got it right.
  | Turn a sketch, diagram, or whiteboard into Mermaid, Graphviz, or another structured representation | `references/restore-structure.md` |
  | Operate a GUI from screenshots — locate, act, verify each step | `references/gui.md` |
  

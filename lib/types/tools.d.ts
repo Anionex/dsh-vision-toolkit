@@ -7,6 +7,19 @@
  */
 import { defineTool, type JsonValue } from '@deepseek-ai/dsh-tools';
 import { VisionToolkitRuntime } from './runtime.ts';
+/** Canonical names shared by registration, bootstrap guidance, and tests. */
+export declare const VISION_TOOL_NAMES: {
+    readonly glance: "vision_glance";
+    readonly ground: "vision_ground";
+    readonly detect: "vision_detect";
+    readonly trace: "vision_trace";
+    readonly crop: "vision_crop";
+    readonly pixelDiff: "vision_pixel_diff";
+    readonly longScreenshotOcr: "vision_long_screenshot_ocr";
+    readonly extractForeground: "vision_extract_foreground";
+    readonly dominantColors: "vision_dominant_colors";
+    readonly htmlScreenshot: "vision_html_screenshot";
+};
 /** Runtime lookup accepted by tools so Settings can atomically swap generations. */
 export type VisionToolkitRuntimeSource = VisionToolkitRuntime | (() => VisionToolkitRuntime);
 /** Browser-only metadata projector; the model-visible value remains unchanged. */

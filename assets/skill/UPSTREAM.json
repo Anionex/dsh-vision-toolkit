@@ -3,7 +3,7 @@
   "repository": "https://github.com/Anionex/agent-vision-toolkit",
   "commit": "77c24ad5b5d7a123119862893129f939307f1d3f",
   "patch": "patches/vision-tools-dsh.patch",
-  "patchSha256": "80235867a25d80c515ff2c6f020a57ebfebf43654a915e2136ef015ce996c94c",
+  "patchSha256": "d9eb745ad560031923d320fa6965105d983a135e26a6c7a0bde8f3df3a17f81b",
   "sourceFiles": [
     {
       "path": "SKILL.md",
@@ -39,8 +39,8 @@
   "adaptedFiles": [
     {
       "path": "SKILL.md",
-      "bytes": 15973,
-      "sha256": "626b3e1fe3d598b290e4ca1863d4b15cfd732bd8c155872e56eb210eb732c049"
+      "bytes": 16068,
+      "sha256": "8a0a69f0f695ff20dd79b1ce7e784138445fc0bbf618594931d8d07c2d98554b"
     },
     {
       "path": "references/gui.md",

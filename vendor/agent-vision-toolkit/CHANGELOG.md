@@ -14,6 +14,7 @@ All notable user-facing changes to agent-vision-toolkit are documented in this f
 
 - Send a browser-compatible, configurable User-Agent from the shared Python vision client so Cloudflare-backed OpenAI-compatible endpoints do not reject the default `Python-urllib` signature.
 - Honor `Retry-After` and retry Anthropic 529 overload responses.
+- Allow trusted internal endpoints with self-signed certificates or MITM proxies to opt out of TLS certificate verification through `VISION_SSL_VERIFY`, while preserving verification by default.
 
 ## [0.1.0] - 2026-08-07
 

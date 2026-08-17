@@ -239,12 +239,13 @@ significant colours and their shares. Candidate mode scores each supplied
 value against the pixels and returns the winner. Take the value from here,
 never from `vision_glance` prose.
 
-## Work from a durable path, not a temp path
+## Prefer a durable path; platform temp paths are supported
 
-If an image lives in a temporary directory, copy it into durable workspace
-storage before the first visual call and run everything against that copy.
-The exception is when the user explicitly asked for the image to stay in a
-temporary folder. All paths must remain in the session workspace or a
+Use workspace storage when the image or a derived artifact must remain
+available later. Temporary inputs are also valid: the DSH adapter authorizes
+the current platform temporary directory automatically. On Windows, a model-
+generated `/tmp/...` path is mapped to `%TEMP%\...`; on POSIX systems, use
+`/tmp/...` directly. Other paths must remain in the session workspace or a
 configured `allowedDirs` entry.
 
 ## When you have a description instead of the image
