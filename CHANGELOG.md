@@ -4,6 +4,20 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+## [0.1.27] - 2026-08-17
+
+### Added
+
+- Automatically compress input images above `maxImageBytes` (4 MiB default) or `maxImagePixels`, preferring lossless PNG/WebP/GIF re-encodes before lossy quality reduction and, as a last resort, downscaling.
+- Accept pasted images up to 20 MiB and compress them on first tool use instead of rejecting anything above `maxImageBytes`.
+- Persist compressed copies in a versioned, hash-verified workspace cache so repeated calls reuse the same compressed image.
+- Keep original display names on crop/trace/long-OCR/foreground/pixel-diff outputs and preserve EXIF/ICC metadata when re-encoding.
+
+### Fixed
+
+- Reject tampered or symlinked compressed-cache entries and prune stale or oversized cache files.
+- Mark JPEG q95 as lossy and try true lossless PNG/WebP re-encodes first for every source format.
+
 ## [0.1.26] - 2026-08-17
 
 ### Docs
@@ -294,7 +308,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 - Runtime teardown cancels in-flight operations before removing Agent-scoped tools, the activation bootstrap, and the Skill.
 - The Web client is published through the current nested `dsh.client` manifest and loader-compatible built artifact required by DSH snapshot0810.
 
-[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.26...HEAD
+[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.27...HEAD
+[0.1.27]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.26...v0.1.27
 [0.1.26]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.25...v0.1.26
 [0.1.25]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.24...v0.1.25
 [0.1.24]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.23...v0.1.24
