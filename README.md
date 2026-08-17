@@ -276,7 +276,7 @@ OpenAI Chat Completions-compatible endpoints and Anthropic Messages are supporte
 
 ### Configure the Python runtime
 
-The packaged `managed` runtime creates its own isolated virtual environment. `runtime.python` selects the Python executable used to create or refresh that environment; it does not replace the managed environment with the interpreter's global site-packages. Set it when automatic discovery fails, when several Python installations exist, or when you want a reproducible project-local interpreter. The override is also used by `runtime.mode: external`.
+The packaged `managed` runtime creates its own isolated virtual environment. `runtime.python` selects the Python executable used to bootstrap or refresh that environment; it does not replace the managed environment with the interpreter's global site-packages. Set it when automatic discovery fails or when several Python installations exist. The override is also used by `runtime.mode: external`.
 
 Python 3.11 or newer is required. Without an override, the plugin tries `python3` then `python` on macOS/Linux, and `python`, `py -3`, then `python3` on Windows. A configured value is passed as one executable name or path, not as a shell command with arguments, so use `py` (not `py -3`) for the Windows launcher; use an absolute path when you need a specific version.
 
@@ -296,29 +296,42 @@ Configure it in the Profile patch:
       # python: py
 ```
 
-For a clean project-local setup, run these commands from a Vision Toolkit checkout (or replace `runtime/requirements.lock` with its absolute path):
+For a managed runtime, create the project-local interpreter and point `runtime.python` at it. The plugin installs the locked dependencies into its own managed cache, so installing the lockfile into this bootstrap environment is optional:
 
 ```sh
 python3 --version                         # must report 3.11 or newer
 uv venv .venv --python 3.13
+```
+
+For `runtime.mode: external`, run the following from a Vision Toolkit checkout (or replace `runtime/requirements.lock` with its absolute path), then also set `runtime.agentVisionToolkitPath` to that clean checkout:
+
+```sh
 uv pip install --python .venv/bin/python -r runtime/requirements.lock
 ```
 
-On Windows, use `.venv\\Scripts\\python.exe` as the `uv pip --python` value. Point `runtime.python` at that same interpreter, save the Profile patch, and restart the Web Profile. Then open **Settings → Vision Toolkit**: the Runtime panel should show the resolved interpreter and Python version, and **Run health check** plus **Test vision model** should complete without the Python-version error. A final smoke test is to place a PNG/JPEG in the session workspace and call `vision_glance`.
+On Windows, use `py -3 --version` for the version check and `.venv\Scripts\python.exe` plus `runtime\requirements.lock` in the corresponding commands:
 
-The path fence allows images from the session workspace by default. If a model or workflow stages an image in the operating system's temporary directory, add that directory to `allowedDirs` using its real absolute path:
+```powershell
+py -3 --version                         # must report 3.11 or newer
+uv venv .venv --python 3.13
+uv pip install --python .venv\Scripts\python.exe -r runtime\requirements.lock
+```
+
+Point `runtime.python` at the same interpreter, save the Profile patch, and restart the Web Profile. Then open **Settings → Vision Toolkit**: the Runtime panel should show the resolved interpreter and Python version, and **Run health check** plus **Test vision model** should complete without the Python-version error. A final smoke test is to place a PNG/JPEG in the session workspace and call `vision_glance`.
+
+The path fence allows images from the session workspace by default. Prefer that workspace for temporary images. If a model or workflow must use the operating system's temporary directory, create a dedicated subdirectory first and add that directory to `allowedDirs` using its real absolute path:
 
 ```yaml
 - id: vision-toolkit
   config:
     allowedDirs:
-      # macOS/Linux: usually /tmp (or the value of $TMPDIR)
-      - /tmp
-      # Windows: replace with the value printed by PowerShell `$env:TEMP`
-      # - C:/Users/you/AppData/Local/Temp
+      # macOS/Linux: replace with a dedicated directory under $TMPDIR or /tmp
+      - /tmp/dsh-vision-toolkit
+      # Windows: use a dedicated directory under the value of PowerShell `$env:TEMP`
+      # - C:/Users/you/AppData/Local/Temp/dsh-vision-toolkit
 ```
 
-`allowedDirs` is an input allowlist, not the managed runtime cache. The managed runtime keeps its own files under `$DSH_HOME/cache/dsh-vision-toolkit`; that directory does not need to be added. Environment-variable forms such as `$env:TEMP` and `%TEMP%` are not expanded in Profile patches, so resolve them to an absolute path first. Only add directories you trust, and keep the session workspace as the preferred location for temporary images.
+`allowedDirs` is an input allowlist, not the managed runtime cache. The managed runtime keeps its own files under `$DSH_HOME/cache/dsh-vision-toolkit` (or `~/.dsh/cache/dsh-vision-toolkit` when `DSH_HOME` is unset); that directory does not need to be added. The allowlist grants access but does not translate paths: Windows does not turn `/tmp/image.png` into `%TEMP%\image.png`. The tool argument must use the session-workspace path or the actual absolute path under the configured directory. Environment-variable forms such as `$env:TEMP` and `%TEMP%` are not expanded in Profile patches, so resolve them to an absolute path first. Avoid allowing the entire shared `/tmp` or `%TEMP%` directory unless you accept the broader local read access.
 
 <details>
 <summary><strong>Install, upgrade, disable, and uninstall</strong></summary>

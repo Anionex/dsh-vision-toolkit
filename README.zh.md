@@ -279,7 +279,7 @@ API Key:  https://agent-vision.anionex.me（自动填写）
 
 ### 配置 Python 运行时
 
-打包的 `managed` 运行时会创建自己的隔离虚拟环境。`runtime.python` 指定的是创建或刷新该环境时使用的 Python 解释器，并不会把 managed 运行时替换成系统解释器的全局 site-packages。当自动发现失败、机器上有多个 Python，或你希望固定使用项目内解释器时，应设置这个选项；`runtime.mode: external` 也使用该覆盖值。
+打包的 `managed` 运行时会创建自己的隔离虚拟环境。`runtime.python` 指定的是引导或刷新该环境时使用的 Python 解释器，并不会把 managed 运行时替换成系统解释器的全局 site-packages。当自动发现失败或机器上有多个 Python 时，应设置这个选项；`runtime.mode: external` 也使用该覆盖值。
 
 要求 Python 3.11 或更高版本。不设置覆盖值时，插件在 macOS/Linux 上依次尝试 `python3`、`python`，在 Windows 上依次尝试 `python`、`py -3`、`python3`。手动配置的值会作为一个可执行文件名或路径传入，而不是作为带参数的 Shell 命令，因此 Windows 启动器应填写 `py`（不要填写 `py -3`）；需要固定版本时，请填写绝对路径。
 
@@ -299,29 +299,42 @@ API Key:  https://agent-vision.anionex.me（自动填写）
       # python: py
 ```
 
-如果需要手动准备项目内环境，请在 Vision Toolkit 源码 checkout 中运行以下命令（或者把 `runtime/requirements.lock` 换成绝对路径）：
+对于 managed 运行时，创建项目内解释器并将 `runtime.python` 指向它即可。插件会把锁定依赖安装到自己的 managed 缓存中，因此将 lockfile 安装到这个引导环境是可选的：
 
 ```sh
 python3 --version                         # 必须是 3.11 或更高
 uv venv .venv --python 3.13
+```
+
+对于 `runtime.mode: external`，请在 Vision Toolkit 源码 checkout 中运行以下命令（或者把 `runtime/requirements.lock` 换成绝对路径），并同时将 `runtime.agentVisionToolkitPath` 指向该干净 checkout：
+
+```sh
 uv pip install --python .venv/bin/python -r runtime/requirements.lock
 ```
 
-Windows 请将 `uv pip --python` 的值换成 `.venv\\Scripts\\python.exe`。把 `runtime.python` 指向同一个解释器，保存 Profile patch 后重启 Web Profile。然后打开 **设置 → 视觉工具**：运行时面板应显示实际使用的解释器和 Python 版本；点击 **运行健康检查** 和 **测试视觉模型**，确认不再出现 Python 版本错误。最后可将一张 PNG/JPEG 放入会话工作区并调用 `vision_glance` 做冒烟测试。
+Windows 请使用 `py -3 --version` 检查版本，并在对应命令中使用 `.venv\Scripts\python.exe` 和 `runtime\requirements.lock`：
 
-路径围栏默认允许读取会话工作区中的图片。如果模型或工作流把图片放在操作系统临时目录中，请用真实的绝对路径加入 `allowedDirs`：
+```powershell
+py -3 --version                         # 必须是 3.11 或更高
+uv venv .venv --python 3.13
+uv pip install --python .venv\Scripts\python.exe -r runtime\requirements.lock
+```
+
+把 `runtime.python` 指向同一个解释器，保存 Profile patch 后重启 Web Profile。然后打开 **设置 → 视觉工具**：运行时面板应显示实际使用的解释器和 Python 版本；点击 **运行健康检查** 和 **测试视觉模型**，确认不再出现 Python 版本错误。最后可将一张 PNG/JPEG 放入会话工作区并调用 `vision_glance` 做冒烟测试。
+
+路径围栏默认允许读取会话工作区中的图片。临时图片也应优先放在该工作区。如果模型或工作流必须使用操作系统临时目录，请先创建专用子目录，再用真实的绝对路径加入 `allowedDirs`：
 
 ```yaml
 - id: vision-toolkit
   config:
     allowedDirs:
-      # macOS/Linux：通常是 /tmp（也可能是 $TMPDIR 的值）
-      - /tmp
-      # Windows：替换成 PowerShell `$env:TEMP` 打印出的实际路径
-      # - C:/Users/you/AppData/Local/Temp
+      # macOS/Linux：替换成 $TMPDIR 或 /tmp 下的专用目录
+      - /tmp/dsh-vision-toolkit
+      # Windows：使用 PowerShell `$env:TEMP` 值下的专用目录
+      # - C:/Users/you/AppData/Local/Temp/dsh-vision-toolkit
 ```
 
-`allowedDirs` 是输入目录白名单，不是 managed 运行时缓存目录。managed 运行时自己的文件位于 `$DSH_HOME/cache/dsh-vision-toolkit`，无需加入白名单。Profile patch 不会展开 `$env:TEMP` 或 `%TEMP%` 这类环境变量，因此请先把它们解析为绝对路径。只添加你信任的目录，并优先把临时图片放入会话工作区。
+`allowedDirs` 是输入目录白名单，不是 managed 运行时缓存目录。managed 运行时自己的文件位于 `$DSH_HOME/cache/dsh-vision-toolkit`（未设置 `DSH_HOME` 时是 `~/.dsh/cache/dsh-vision-toolkit`），无需加入白名单。白名单只负责授权，不会转换路径：Windows 不会把 `/tmp/image.png` 自动变成 `%TEMP%\image.png`；工具参数必须使用会话工作区路径，或使用白名单目录下的真实绝对路径。Profile patch 不会展开 `$env:TEMP` 或 `%TEMP%` 这类环境变量，因此请先把它们解析为绝对路径。除非你接受更大的本地读取范围，否则不要直接放行整个共享的 `/tmp` 或 `%TEMP%` 目录。
 
 <details>
 <summary><strong>安装、升级、禁用和卸载</strong></summary>
