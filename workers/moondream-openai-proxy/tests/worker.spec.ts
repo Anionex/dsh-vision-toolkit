@@ -1,10 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import worker from '../src/index'
+import { __test__ as groqTest } from '../src/groq'
 import { CANONICAL_MODEL } from '../src/protocol'
 
 const tinyPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
 const publicApiKey = 'https://agent-vision.anionex.me'
+
+interface FakeKeyState {
+  activeRequests: number
+  cooldownUntil: number
+  keySlot: number
+  lastSelectedAt: number
+  leaseExpiresAt: number
+}
 
 class FakeStatement {
   private values: unknown[] = []
@@ -17,6 +26,31 @@ class FakeStatement {
   }
 
   async first<T>(): Promise<T | null> {
+    if (this.sql.includes('RETURNING key_slot')) {
+      const now = Number(this.values[0])
+      const leaseExpiresAt = Number(this.values[1])
+      const keyCount = Number(this.values[2])
+      const selected = [...this.database.keyStates.values()]
+        .filter(state => state.keySlot < keyCount && state.cooldownUntil <= now)
+        .sort((left, right) => left.activeRequests - right.activeRequests
+          || left.lastSelectedAt - right.lastSelectedAt
+          || left.keySlot - right.keySlot)[0]
+      if (selected === undefined) return null
+      selected.activeRequests += 1
+      selected.lastSelectedAt = now
+      selected.leaseExpiresAt = Math.max(selected.leaseExpiresAt, leaseExpiresAt)
+      return { key_slot: selected.keySlot } as T
+    }
+    if (this.sql.includes('MIN(cooldown_until)')) {
+      const keyCount = Number(this.values[0])
+      const now = Number(this.values[1])
+      const next = [...this.database.keyStates.values()]
+        .filter(state => state.keySlot < keyCount && state.cooldownUntil > now)
+        .reduce<number | null>((minimum, state) => minimum === null
+          ? state.cooldownUntil
+          : Math.min(minimum, state.cooldownUntil), null)
+      return { cooldown_until: next } as T
+    }
     const key = String(this.values[1])
     const count = (this.database.counts.get(key) ?? 0) + 1
     this.database.counts.set(key, count)
@@ -24,6 +58,26 @@ class FakeStatement {
   }
 
   async run(): Promise<D1Result<unknown>> {
+    if (this.sql.includes('SET active_requests = 0')) {
+      const now = Number(this.values[0])
+      for (const state of this.database.keyStates.values()) {
+        if (state.activeRequests > 0 && state.leaseExpiresAt <= now) {
+          state.activeRequests = 0
+          state.leaseExpiresAt = 0
+        }
+      }
+    }
+    if (this.sql.includes('active_requests = MAX(0, active_requests - 1)')) {
+      if (this.database.failSchedulerRelease) throw new Error('scheduler release unavailable')
+      const cooldownUntil = Number(this.values[1])
+      const slot = Number(this.values[2])
+      const state = this.database.keyStates.get(slot)
+      if (state !== undefined) {
+        state.activeRequests = Math.max(0, state.activeRequests - 1)
+        state.cooldownUntil = Math.max(state.cooldownUntil, cooldownUntil)
+        if (state.activeRequests === 0) state.leaseExpiresAt = 0
+      }
+    }
     return { meta: {} } as D1Result<unknown>
   }
 
@@ -37,6 +91,11 @@ class FakeStatement {
 
 class FakeD1 {
   readonly counts = new Map<string, number>()
+  failSchedulerRelease = false
+  readonly keyStates = new Map<number, FakeKeyState>(Array.from({ length: 5 }, (_, keySlot) => [
+    keySlot,
+    { activeRequests: 0, cooldownUntil: 0, keySlot, lastSelectedAt: 0, leaseExpiresAt: 0 },
+  ]))
 
   prepare(sql: string): FakeStatement {
     return new FakeStatement(this, sql)
@@ -94,6 +153,12 @@ function environment(database: FakeD1, burstSuccess = true): Env {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('Worker request accounting', () => {
+  it('trims configured Groq secrets before using them as bearer tokens', () => {
+    const env = environment(new FakeD1()) as Env & Record<string, string>
+    env.GROQ_API_KEY_1 = '  test-groq-key-1\n'
+    expect(groqTest.configuredKeys(env)).toContain('test-groq-key-1')
+  })
+
   it('advertises the branded public key on the discovery route', async () => {
     const response = await worker.fetch(
       new Request('https://vision.example/'),
@@ -232,6 +297,49 @@ describe('Worker request accounting', () => {
     const firstAuth = String(groqFetch.mock.calls[0]?.[1]?.headers && new Headers(groqFetch.mock.calls[0]?.[1]?.headers).get('authorization'))
     const secondAuth = String(groqFetch.mock.calls[1]?.[1]?.headers && new Headers(groqFetch.mock.calls[1]?.[1]?.headers).get('authorization'))
     expect(firstAuth).not.toBe(secondAuth)
+    expect(database.keyStates.get(0)).toMatchObject({ activeRequests: 0 })
+    expect(database.keyStates.get(0)?.cooldownUntil).toBeGreaterThan(Date.now())
+  })
+
+  it('assigns simultaneous requests to the least-active Groq accounts', async () => {
+    const database = new FakeD1()
+    let releaseFetches: (() => void) | undefined
+    const fetchGate = new Promise<void>(resolve => { releaseFetches = resolve })
+    const groqFetch = vi.fn(async () => {
+      await fetchGate
+      return Response.json({
+        choices: [{ finish_reason: 'stop', message: { content: 'Balanced.', role: 'assistant' } }],
+      })
+    })
+    vi.stubGlobal('fetch', groqFetch)
+
+    const first = worker.fetch(request(), environment(database))
+    const second = worker.fetch(request(), environment(database))
+    await vi.waitFor(() => expect(groqFetch).toHaveBeenCalledTimes(2))
+
+    const authorizations = groqFetch.mock.calls.map(call => new Headers(call[1]?.headers).get('authorization'))
+    expect(new Set(authorizations).size).toBe(2)
+    expect([...database.keyStates.values()].map(state => state.activeRequests)).toEqual([1, 1, 0, 0, 0])
+
+    releaseFetches?.()
+    await expect(Promise.all([first, second])).resolves.toHaveLength(2)
+    expect([...database.keyStates.values()].map(state => state.activeRequests)).toEqual([0, 0, 0, 0, 0])
+  })
+
+  it('keeps a successful inference response when lease cleanup fails', async () => {
+    const database = new FakeD1()
+    database.failSchedulerRelease = true
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({
+      choices: [{ finish_reason: 'stop', message: { content: 'Still returned.', role: 'assistant' } }],
+    })))
+
+    const response = await worker.fetch(request(), environment(database))
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      choices: [{ message: { content: 'Still returned.' } }],
+    })
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('groq_lease_release_failed'))
   })
 
   it('keeps the legacy free API key working during the public key migration', async () => {
