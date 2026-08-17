@@ -37,7 +37,8 @@ function configuredKeys(env: GroqEnv): string[] {
     env.GROQ_API_KEY_4,
     env.GROQ_API_KEY_5,
   ]
-    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .map(value => value?.trim())
+    .filter((value): value is string => typeof value === 'string' && value.length > 0)
 }
 
 interface KeyLease {

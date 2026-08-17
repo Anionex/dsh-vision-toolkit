@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import worker from '../src/index'
+import { __test__ as groqTest } from '../src/groq'
 import { CANONICAL_MODEL } from '../src/protocol'
 
 const tinyPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
@@ -152,6 +153,12 @@ function environment(database: FakeD1, burstSuccess = true): Env {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('Worker request accounting', () => {
+  it('trims configured Groq secrets before using them as bearer tokens', () => {
+    const env = environment(new FakeD1()) as Env & Record<string, string>
+    env.GROQ_API_KEY_1 = '  test-groq-key-1\n'
+    expect(groqTest.configuredKeys(env)).toContain('test-groq-key-1')
+  })
+
   it('advertises the branded public key on the discovery route', async () => {
     const response = await worker.fetch(
       new Request('https://vision.example/'),
