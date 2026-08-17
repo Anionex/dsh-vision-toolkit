@@ -116,3 +116,76 @@ jobs:
               ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
           print(f"parsed {len(files)} vendored Python files")
           PY
+
+  portable-package-windows:
+    if: github.event.repository.visibility == 'public'
+    name: Portable package (Windows, Node 24)
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: pnpm
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python test dependencies
+        run: python -m pip install --requirement runtime/requirements.lock
+
+      - name: Install project dependencies
+        run: pnpm install --frozen-lockfile --trust-lockfile --registry=https://registry.npmjs.org
+
+      - name: Install the compatible DSH CLI for Profile acceptance
+        shell: bash
+        run: |
+          npm install --global --prefix "$RUNNER_TEMP/dsh-cli" \
+            @deepseek-ai/dsh@0.1.0-rc.6 \
+            --registry=https://registry.npmjs.org
+          echo "$RUNNER_TEMP/dsh-cli" >> "$GITHUB_PATH"
+
+      - name: Build against public registry exports
+        run: pnpm run build
+
+      - name: Verify committed build artifacts
+        run: git diff --exit-code -- lib
+
+      - name: Run unit and required Profile acceptance tests
+        run: pnpm test
+        env:
+          DSH_VISION_REQUIRE_PROFILE_E2E: "1"
+
+      - name: Verify portable package surface
+        run: npm run verify:portable
+
+      - name: Exercise vendored provider transports
+        shell: bash
+        run: PYTHONDONTWRITEBYTECODE=1 python vendor/agent-vision-toolkit/tests/test_vision_client.py
+
+      - name: Parse vendored Python sources without writing bytecode
+        shell: bash
+        run: |
+          python - <<'PY'
+          import ast
+          from pathlib import Path
+
+          root = Path("vendor/agent-vision-toolkit")
+          files = sorted(root.rglob("*.py"))
+          if not files:
+              raise SystemExit("no vendored Python sources found")
+          for path in files:
+              ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+          print(f"parsed {len(files)} vendored Python files")
+          PY

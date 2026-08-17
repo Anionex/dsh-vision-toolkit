@@ -57,7 +57,7 @@ const VISION_MODEL_TEST_PROMPT = 'This is an explicit service readiness test. Re
 
 /** Bump when the Pillow compression ladder changes so stale cache entries are ignored. */
 const COMPRESSED_IMAGE_CACHE_VERSION = 'v2'
-/** Cache keys carry 64-bit digests so Windows paths stay below MAX_PATH; full sha256 is still checked per entry. */
+/** Cache keys carry 64-bit digests so Windows paths stay below MAX_PATH; the full file sha256 is computed on read and compared against this prefix. */
 const COMPRESSED_IMAGE_CACHE_KEY_DIGEST_LENGTH = 16
 const COMPRESSED_IMAGE_CACHE_MAX_ENTRIES = 200
 const COMPRESSED_IMAGE_CACHE_MAX_BYTES = 512 * 1024 * 1024
