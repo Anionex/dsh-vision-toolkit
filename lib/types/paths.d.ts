@@ -1,8 +1,8 @@
 /**
- * Path fence shared by every tool: inputs must live in the workspace or an
- * explicitly authorized directory, outputs stay inside the plugin-managed
- * output directory, and a symbolic link is allowed only when its real target
- * stays inside the fence.
+ * Path fence shared by every tool: inputs must live in the workspace, the
+ * platform temporary directory, or an explicitly authorized directory;
+ * outputs stay inside the plugin-managed output directory, and a symbolic
+ * link is allowed only when its real target stays inside the fence.
  * @module dsh-vision-toolkit/paths
  */
 /** Supported input image extensions (the upstream client's allowlist). */
@@ -11,20 +11,30 @@ export declare const SUPPORTED_IMAGE_EXTENSIONS: readonly [".png", ".jpg", ".jpe
 export interface PathPolicy {
     /** Real workspace root. */
     workspace: string;
-    /** Real allowed roots: workspace plus configured extra directories. */
+    /** Real platform temporary directory, authorized for transient inputs. */
+    tempDir: string;
+    /** Real allowed roots: workspace, platform temp, and configured directories. */
     allowedDirs: string[];
     /** Real plugin-managed output directory inside the fence. */
     outputDir: string;
 }
 /** Whether `child` equals or lies under `parent` on the same path root. */
 export declare function isWithin(parent: string, child: string): boolean;
+/** Current platform temporary directory before realpath canonicalization. */
+export declare function platformTempDirectory(platform?: NodeJS.Platform, environment?: NodeJS.ProcessEnv): string;
+/**
+ * Translate the POSIX-shaped `/tmp/...` paths commonly emitted by models to
+ * the actual Windows temporary directory. Other paths and platforms are left
+ * unchanged, and the normal realpath fence still validates the result.
+ */
+export declare function normalizePlatformTempPath(raw: string, platform?: NodeJS.Platform, tempDirectory?: string): string;
 /**
  * Build the per-invocation path policy: realpath the workspace, resolve and
- * realpath allowed directories, and create the output directory inside the
- * fence.
+ * realpath the platform temp directory and allowed directories, and create
+ * the output directory inside the fence.
  * @param workspaceRaw - session workspace (or process cwd fallback).
  * @param allowedDirs - configured extra allowed roots.
-   * @param outputDirRaw - configured output directory (default `.dsh-vision-toolkit/artifacts`).
+ * @param outputDirRaw - configured output directory (default `.dsh-vision-toolkit/artifacts`).
  * @returns the resolved policy.
  */
 export declare function createPathPolicy(workspaceRaw: string, allowedDirs: readonly string[], outputDirRaw?: string): Promise<PathPolicy>;
