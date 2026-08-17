@@ -4,6 +4,17 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+## [0.1.19] - 2026-08-17
+
+### Changed
+
+- Raised the built-in public vision service output ceiling from 512 to 4,096 tokens, leaving enough room under Groq's free-tier token budget for image input while avoiding premature truncation of dense element inventories.
+
+### Fixed
+
+- Parse Qwen-family grounding coordinates as `x0,y0,x1,y1` while retaining Gemini-family `y0,x0,y1,x1` compatibility and an explicit override for custom providers.
+- Reject incomplete bounding-box JSON instead of silently returning a misleading partial detection result, and avoid duplicating already-complete detect category instructions.
+
 ## [0.1.18] - 2026-08-16
 
 ### Changed
@@ -225,7 +236,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 - Runtime teardown cancels in-flight operations before removing Agent-scoped tools, the activation bootstrap, and the Skill.
 - The Web client is published through the current nested `dsh.client` manifest and loader-compatible built artifact required by DSH snapshot0810.
 
-[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.18...HEAD
+[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.19...HEAD
+[0.1.19]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.18...v0.1.19
 [0.1.18]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.17...v0.1.18
 [0.1.17]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.16...v0.1.17
 [0.1.16]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.15...v0.1.16
