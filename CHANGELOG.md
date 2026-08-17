@@ -4,6 +4,11 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+### Changed
+
+- Raised the default vision operation timeout from 15 seconds to 30 seconds for both semaphore queueing and tool execution.
+- Removed the practical global ceiling on the built-in free vision service (raised from 5,000 to 1,000,000,000 requests per UTC day) while keeping the per-client daily and burst quotas.
+
 ## [0.1.29] - 2026-08-17
 
 ### Added

@@ -1077,7 +1077,7 @@ function draftOf(value: SettingsValue): Draft {
     anthropicThinking: value.provider?.anthropicThinking ?? 'omit',
     userAgent: value.provider?.userAgent ?? DEFAULT_USER_AGENT,
     language: value.language ?? 'zh',
-    timeoutMs: String(value.timeoutMs ?? 15000),
+    timeoutMs: String(value.timeoutMs ?? 30000),
     maxImageBytes: String(value.maxImageBytes ?? 4194304),
     maxImagePixels: String(value.maxImagePixels ?? 20000000),
     concurrency: String(value.concurrency ?? 4),
