@@ -136,7 +136,7 @@ check(pkg.dsh?.client?.platform === 'web', 'dsh.client.platform must publish the
 check(pkg.dshClient === undefined, 'legacy top-level dshClient metadata must remain absent')
 check(pkg.exports?.['./client']?.default === './lib/client.js', 'the Web client export must resolve to lib/client.js')
 check(Array.isArray(pkg.files) && pkg.files.includes('assets'), 'package files must include README visual assets')
-check(pkg.scripts?.['verify:portable'] === 'node scripts/upstream-manifest.mjs && node scripts/verify-skill.mjs && node scripts/verify-portable.mjs', 'verify:portable script is missing or changed')
+check(pkg.scripts?.['verify:portable'] === 'node scripts/python-bootstrap.mjs && node scripts/upstream-manifest.mjs && node scripts/verify-skill.mjs && node scripts/verify-portable.mjs', 'verify:portable script is missing or changed')
 check(pkg.peerDependencies?.['@deepseek-ai/schemastery'] === '^3.18.1', '@deepseek-ai/schemastery must be a host-provided peer dependency')
 check(pkg.peerDependencies?.schemastery === undefined, 'unscoped schemastery peer dependency must remain absent')
 check(pkg.peerDependencies?.['@deepseek-ai/cordis'] === '^4.0.1', '@deepseek-ai/cordis must be a host-provided peer dependency')

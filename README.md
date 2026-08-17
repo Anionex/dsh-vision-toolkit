@@ -143,7 +143,7 @@ dsh plugin --profile headless add @anionex/dsh-vision-toolkit
 
 Restart a running Web Profile, then open **Settings → Vision Toolkit**. The free provider is already configured; run **Test vision model** to confirm it is reachable.
 
-The first start prepares an isolated runtime, so it needs access to the Python package cache or the network. A normal installation does not require an `agent-vision-toolkit` source checkout or a local path setting.
+The first start prepares an isolated runtime: the plugin prefers a system Python 3.11+; when none is found, it downloads a hash-verified standalone Python (about 35 MB) from a pinned release source on first use. A normal installation does not require an `agent-vision-toolkit` source checkout or a local path setting.
 
 ### 3. Paste an image and describe the outcome you want
 
@@ -274,15 +274,17 @@ For a trusted internal endpoint that uses a self-signed certificate or MITM prox
 
 - A DeepSeek Harness Web or Headless Profile.
 - Node.js `^22.19.0` or `>=24.0.0`.
-- Python 3.11+; the plugin prepares an isolated environment by default.
+- Python 3.11+ is usually not needed in advance: the plugin prefers a system Python and otherwise downloads a pinned standalone Python 3.13 automatically, preparing its own isolated environment. Only that first automatic download needs network access.
 - Only `vision_html_screenshot` requires Chrome, Chromium, or Edge.
 - Inputs must be PNG, JPEG, GIF, or WebP files in the session workspace, the platform temporary directory, or an explicitly allowed directory.
 
 ### Configure the Python runtime
 
+By default the plugin picks a system Python 3.11+, or downloads a standalone Python when none is found; most users never need to configure this section. The rest is for advanced setups where automatic discovery fails, a specific interpreter is required, or an external runtime is used.
+
 The packaged `managed` runtime creates its own isolated virtual environment. `runtime.python` selects the Python executable used to bootstrap or refresh that environment; it does not replace the managed environment with the interpreter's global site-packages. Set it when automatic discovery fails or when several Python installations exist. The override is also used by `runtime.mode: external`.
 
-Python 3.11 or newer is required. Without an override, the plugin tries `python3` then `python` on macOS/Linux, and `python`, `py -3`, then `python3` on Windows. A configured value is passed as one executable name or path, not as a shell command with arguments, so use `py` (not `py -3`) for the Windows launcher; use an absolute path when you need a specific version.
+Python 3.11 or newer is required; the automatically downloaded standalone Python is 3.13.15 and, like a system interpreter, is only used to bootstrap the isolated environment. Without an override, the plugin tries `python3` then `python` on macOS/Linux, and `python`, `py -3`, then `python3` on Windows, before falling back to the standalone download. A configured value is passed as one executable name or path, not as a shell command with arguments, so use `py` (not `py -3`) for the Windows launcher; use an absolute path when you need a specific version.
 
 Configure it in the Profile patch:
 
@@ -385,7 +387,7 @@ The updater revalidates the Profile before mutation, snapshots the original mani
 | The free service returns 429 | Wait for the `Retry-After` interval, or switch to your own endpoint when you need stable higher volume |
 | The image exceeds a size or pixel limit | Crop or resize it first; the error identifies whether bytes or decoded pixels caused the rejection |
 | A custom Credential is missing | Enter the API key in **Settings → Vision Toolkit** and confirm the Credential name matches the provider configuration |
-| First-time runtime setup fails | Check Python 3.11+, network or package-cache access, and disk permissions, then retry the model test in Settings |
+| First-time runtime setup fails | The standalone-Python download needs network and disk access. Check connectivity or package-cache access, or install Python 3.11+ / configure `runtime.python` in Settings, then retry the model test |
 | Chrome is not found | Install Chrome, Chromium, or Edge. Only HTML screenshot rendering is unavailable; the other tools still work |
 | An artifact cannot be previewed | Use **Open file** or the workspace path in the result. Preview URLs exist only while the Web route is available |
 

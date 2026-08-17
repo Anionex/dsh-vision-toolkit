@@ -59,10 +59,10 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "node scripts/upstream-manifest.mjs && node scripts/verify-skill.mjs && node scripts/clean-build.mjs && tsc -p tsconfig.json && tsc -p tsconfig.client.json && tsc -p tsconfig.client.public.json && node scripts/build-client.mjs",
+    "build": "node scripts/python-bootstrap.mjs && node scripts/upstream-manifest.mjs && node scripts/verify-skill.mjs && node scripts/clean-build.mjs && tsc -p tsconfig.json && tsc -p tsconfig.client.json && tsc -p tsconfig.client.public.json && node scripts/build-client.mjs",
     "prepack": "npm run build",
     "test": "vitest run tests",
-    "verify:portable": "node scripts/upstream-manifest.mjs && node scripts/verify-skill.mjs && node scripts/verify-portable.mjs",
+    "verify:portable": "node scripts/python-bootstrap.mjs && node scripts/upstream-manifest.mjs && node scripts/verify-skill.mjs && node scripts/verify-portable.mjs",
     "example:ui-restoration": "node scripts/run-ui-restoration-example.mjs --check",
     "example:ui-restoration:write": "node scripts/run-ui-restoration-example.mjs --write",
     "upstream:manifest": "node scripts/upstream-manifest.mjs --write",
@@ -94,7 +94,9 @@
     }
   },
   "dependencies": {
-    "saxes": "6.0.0"
+    "saxes": "6.0.0",
+    "tar": "7.5.22",
+    "undici": "8.10.0"
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-agent": "^0.1.0-rc.6",

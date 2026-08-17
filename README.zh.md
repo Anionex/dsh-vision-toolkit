@@ -146,7 +146,7 @@ dsh plugin --profile headless add @anionex/dsh-vision-toolkit
 
 重启正在运行的 Web Profile，打开 **设置 → 视觉工具**。默认免费服务已经配置好；你可以直接运行**测试视觉模型**确认连接。
 
-首次启动会自动准备隔离运行环境，因此需要能访问 Python 包缓存或网络。普通安装不需要下载 `agent-vision-toolkit` 源码，也不需要设置本地路径。
+首次启动会自动准备隔离运行环境：插件优先使用系统已有的 Python 3.11+；如果系统没有，会自动从固定发布源下载一个带完整性校验的托管 Python（约 35MB，仅首次需要网络）。普通安装不需要下载 `agent-vision-toolkit` 源码，也不需要设置本地路径。
 
 ### 3. 粘贴图片，直接说你要做什么
 
@@ -275,15 +275,17 @@ API Key:  https://agent-vision.anionex.me（自动填写）
 
 - DeepSeek Harness Web 或 Headless Profile。
 - Node.js `^22.19.0` 或 `>=24.0.0`。
-- Python 3.11+；插件默认自动创建隔离环境。
+- Python 3.11+，通常无需预装：插件优先使用系统 Python；找不到时会自动下载固定版本托管 Python（3.13）并创建隔离环境，仅首次自动下载需要网络。
 - 只有 `vision_html_screenshot` 需要 Chrome、Chromium 或 Edge。
 - 图片需为 PNG、JPEG、GIF 或 WebP，并位于会话工作区、平台临时目录或明确允许的目录中。
 
 ### 配置 Python 运行时
 
+默认情况下插件会自动选择系统 Python 3.11+，找不到时下载托管 Python，普通用户无需配置本节。以下内容供自动发现失败、需要固定版本或使用外部运行时的高级场景参考。
+
 打包的 `managed` 运行时会创建自己的隔离虚拟环境。`runtime.python` 指定的是引导或刷新该环境时使用的 Python 解释器，并不会把 managed 运行时替换成系统解释器的全局 site-packages。当自动发现失败或机器上有多个 Python 时，应设置这个选项；`runtime.mode: external` 也使用该覆盖值。
 
-要求 Python 3.11 或更高版本。不设置覆盖值时，插件在 macOS/Linux 上依次尝试 `python3`、`python`，在 Windows 上依次尝试 `python`、`py -3`、`python3`。手动配置的值会作为一个可执行文件名或路径传入，而不是作为带参数的 Shell 命令，因此 Windows 启动器应填写 `py`（不要填写 `py -3`）；需要固定版本时，请填写绝对路径。
+要求 Python 3.11 或更高版本；自动下载的托管 Python 为 3.13.15，与系统 Python 一样只用于引导隔离环境。不设置覆盖值时，插件在 macOS/Linux 上依次尝试 `python3`、`python`，在 Windows 上依次尝试 `python`、`py -3`、`python3`，全部不可用时会自动下载托管 Python。手动配置的值会作为一个可执行文件名或路径传入，而不是作为带参数的 Shell 命令，因此 Windows 启动器应填写 `py`（不要填写 `py -3`）；需要固定版本时，请填写绝对路径。
 
 在 Profile patch 中配置：
 
@@ -386,7 +388,7 @@ dsh plugin --profile web remove @anionex/dsh-vision-toolkit
 | 免费服务提示 429 | 按错误中的 `Retry-After` 等待后重试；如果需要稳定高额度，切换到自己的视觉端点 |
 | 图片过大或像素超限 | 先裁剪或缩放图片；错误会明确显示是字节还是像素限制 |
 | 自定义 Credential 缺失 | 在 **设置 → 视觉工具** 填写 API Key，并确认 Credential 名称与配置一致 |
-| 首次运行时准备失败 | 检查 Python 3.11+、网络或包缓存、磁盘权限，然后在 Settings 中重新测试 |
+| 首次运行时准备失败 | 自动下载托管 Python 需要网络和磁盘权限；失败时检查网络或包缓存，也可以安装 Python 3.11+ 或在 Settings 中配置 `runtime.python`，然后重新测试 |
 | 找不到 Chrome | 安装 Chrome、Chromium 或 Edge；只有 HTML 截图不可用，其他工具不受影响 |
 | 产物无法预览 | 使用“打开文件”或结果中的工作区路径；预览 URL 只在 Web 路由可用时存在 |
 
