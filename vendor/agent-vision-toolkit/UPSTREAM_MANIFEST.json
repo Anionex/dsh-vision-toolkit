@@ -3,7 +3,7 @@
   "repository": "https://github.com/Anionex/agent-vision-toolkit",
   "version": "v0.1.0+snapshot.bc9803d",
   "commit": "bc9803d7d6300c864d17460ecbb33540b26638e0",
-  "contentSha256": "dbcc6d6214976be415ee660557d4ad0abb8b59b91a9d9ca07ef5fda8fd9cf4b9",
+  "contentSha256": "f730f247b0f3647187bd9f4ccf9e77cefd9b080489914bef81d2ba54a0e778e1",
   "files": [
     {
       "path": "CHANGELOG.md",
@@ -47,13 +47,13 @@
     },
     {
       "path": "detect.py",
-      "bytes": 2052,
-      "sha256": "0e79f6cfbeb27d52cea57a6a642bb658d9c9d3f10e175416c320d91affc1d562"
+      "bytes": 2218,
+      "sha256": "48a7070084f5b23b1477fa9a690ef1e679da8a03228e64a1ac583de633040bfc"
     },
     {
       "path": "ground.py",
-      "bytes": 8361,
-      "sha256": "52c1b69f3c78f37acd33f7f542bdbceeabb3546e8e28be7278d72e04024699b9"
+      "bytes": 10117,
+      "sha256": "845e56dbdf92f2c79495170f5d215de49985b3099012b4d398231d3c78bd0090"
     },
     {
       "path": "skills/vision-tools/scripts/dominant_colors.py",

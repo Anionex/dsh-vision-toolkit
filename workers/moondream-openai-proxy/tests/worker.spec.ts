@@ -78,7 +78,7 @@ function environment(database: FakeD1, burstSuccess = true): Env {
     IP_HASH_SECRET: '0123456789abcdef0123456789abcdef',
     MAX_IMAGE_BYTES: '4194304',
     MAX_IMAGE_PIXELS: '20000000',
-    MAX_OUTPUT_TOKENS: '512',
+    MAX_OUTPUT_TOKENS: '8192',
     MAX_REQUEST_BYTES: '33554432',
     LEGACY_PUBLIC_API_KEY: 'free',
     PUBLIC_API_KEY: publicApiKey,
@@ -142,9 +142,48 @@ describe('Worker request accounting', () => {
         ],
         role: 'user',
       }],
-      max_tokens: 512,
+      max_tokens: 8192,
       stream: false,
     })
+  })
+
+  it('honors smaller token budgets and caps larger requests at the upstream detect budget', async () => {
+    const database = new FakeD1()
+    const forwarded: number[] = []
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { max_tokens: number }
+      forwarded.push(body.max_tokens)
+      return Response.json({
+        choices: [{ finish_reason: 'stop', message: { content: 'ok', role: 'assistant' } }],
+      })
+    }))
+
+    const lower = await worker.fetch(request(tinyPng, JSON.stringify({
+      max_tokens: 1024,
+      messages: [{
+        content: [
+          { text: 'Describe this image.', type: 'text' },
+          { image_url: { url: tinyPng }, type: 'image_url' },
+        ],
+        role: 'user',
+      }],
+      model: CANONICAL_MODEL,
+    })), environment(database))
+    const capped = await worker.fetch(request(tinyPng, JSON.stringify({
+      max_tokens: 16_384,
+      messages: [{
+        content: [
+          { text: 'Detect every visible element.', type: 'text' },
+          { image_url: { url: tinyPng }, type: 'image_url' },
+        ],
+        role: 'user',
+      }],
+      model: CANONICAL_MODEL,
+    })), environment(database))
+
+    expect(lower.status).toBe(200)
+    expect(capped.status).toBe(200)
+    expect(forwarded).toEqual([1024, 8192])
   })
 
   it('materializes and forwards multiple images in one Groq request', async () => {

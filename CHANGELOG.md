@@ -4,6 +4,15 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+### Changed
+
+- Raised the built-in public vision service output ceiling from 512 to 8,192 tokens, matching the upstream grounding and detection request budget instead of truncating dense element inventories.
+
+### Fixed
+
+- Parse Qwen-family grounding coordinates as `x0,y0,x1,y1` while retaining Gemini-family `y0,x0,y1,x1` compatibility and an explicit override for custom providers.
+- Reject incomplete bounding-box JSON instead of silently returning a misleading partial detection result, and avoid duplicating already-complete detect category instructions.
+
 ## [0.1.18] - 2026-08-16
 
 ### Changed

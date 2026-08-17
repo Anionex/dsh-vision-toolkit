@@ -237,7 +237,7 @@ This is a shared zero-configuration entry point, not an unlimited private endpoi
 | Images per request | Up to 5 |
 | Image size | 4 MiB per image |
 | Decoded pixels | 20,000,000 per image |
-| Output | 512 tokens per request |
+| Output | Up to 8,192 tokens per request |
 
 These safeguards prevent unusually large requests from monopolizing memory or request time. When shared capacity is reached, the service returns a readable `429` response with `Retry-After` instead of collapsing into an unexplained model failure.
 

@@ -258,7 +258,8 @@ async function chatCompletion(request: Request, env: Env): Promise<Response> {
       Number(env.MAX_IMAGE_BYTES),
       Number(env.MAX_IMAGE_PIXELS),
     )))
-    const maxTokens = Math.min(completion.maxTokens ?? 512, Number(env.MAX_OUTPUT_TOKENS))
+    const outputLimit = Number(env.MAX_OUTPUT_TOKENS)
+    const maxTokens = Math.min(completion.maxTokens ?? outputLimit, outputLimit)
     const modelInput = buildVisionInput(completion, images, maxTokens)
 
     inferenceStarted = true
