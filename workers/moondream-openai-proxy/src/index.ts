@@ -126,17 +126,15 @@ async function clientHash(request: Request, secret: string): Promise<string> {
   return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')
 }
 
-async function releaseCounters(env: Env, day: string, keys: string[]): Promise<void> {
-  const statements = keys.flatMap(key => [
-    env.USAGE_DB.prepare(
-      'DELETE FROM usage_daily WHERE day = ?1 AND client_hash = ?2 AND request_count = 1',
-    ).bind(day, key),
-    env.USAGE_DB.prepare(`
-      UPDATE usage_daily
-      SET request_count = request_count - 1, updated_at = ?3
-      WHERE day = ?1 AND client_hash = ?2 AND request_count > 1
-    `).bind(day, key, new Date().toISOString()),
-  ])
+async function releaseCounters(env: Env, day: string, keys: string[], now: string): Promise<void> {
+  // One UPDATE per key covers both the count=1 (delete the row) and count>1
+  // (decrement) cases, instead of issuing DELETE + UPDATE per key and relying
+  // on each to no-op for the other. One statement per key, in one batch.
+  const statements = keys.map(key => env.USAGE_DB.prepare(`
+    UPDATE usage_daily
+    SET request_count = request_count - 1, updated_at = ?3
+    WHERE day = ?1 AND client_hash = ?2 AND request_count > 0
+  `).bind(day, key, now))
   await env.USAGE_DB.batch(statements)
 }
 
@@ -174,7 +172,7 @@ async function consumeDailyQuota(env: Env, hash: string): Promise<QuotaReservati
   const globalCount = await consumeCounter(env, day, '__global__', globalLimit, now)
   if (globalCount === null) {
     try {
-      await releaseCounters(env, day, [hash])
+      await releaseCounters(env, day, [hash], now)
     } catch (error) {
       console.error(JSON.stringify({
         error: error instanceof Error ? error.message : String(error),
@@ -185,17 +183,6 @@ async function consumeDailyQuota(env: Env, hash: string): Promise<QuotaReservati
       code: 'global_daily_limit_exceeded',
       status: 429,
     })
-  }
-  if (globalCount === 1) {
-    const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
-    try {
-      await env.USAGE_DB.prepare('DELETE FROM usage_daily WHERE day < ?1').bind(cutoff).run()
-    } catch (error) {
-      console.error(JSON.stringify({
-        error: error instanceof Error ? error.message : String(error),
-        event: 'quota_cleanup_failed',
-      }))
-    }
   }
   return {
     clientHash: hash,
@@ -301,7 +288,7 @@ async function chatCompletion(request: Request, env: Env): Promise<Response> {
   } catch (error) {
     if (quota && !inferenceStarted) {
       try {
-        await releaseCounters(env, quota.day, [quota.clientHash, '__global__'])
+        await releaseCounters(env, quota.day, [quota.clientHash, '__global__'], new Date().toISOString())
       } catch (rollbackError) {
         console.error(JSON.stringify({
           error: rollbackError instanceof Error ? rollbackError.message : String(rollbackError),

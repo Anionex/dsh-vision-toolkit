@@ -28,10 +28,17 @@ class FakeStatement {
   }
 
   release(): void {
+    // releaseCounters now issues one UPDATE per key (decrement where
+    // request_count > 0) rather than the old count=1 (DELETE) + count>1
+    // (UPDATE) pair, so a single decrement drives every rollback path
+    // (image-validation failure, global-limit-before-error, post-inference
+    // error rollback).
     const key = String(this.values[1])
-    const count = this.database.counts.get(key) ?? 0
-    if (this.sql.includes('request_count = 1') && count === 1) this.database.counts.delete(key)
-    if (this.sql.includes('request_count > 1') && count > 1) this.database.counts.set(key, count - 1)
+    if (this.sql.includes('request_count - 1')) {
+      const count = this.database.counts.get(key) ?? 0
+      if (count > 1) this.database.counts.set(key, count - 1)
+      else this.database.counts.delete(key)
+    }
   }
 }
 
