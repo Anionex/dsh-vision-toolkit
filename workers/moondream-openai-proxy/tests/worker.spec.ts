@@ -167,11 +167,7 @@ describe('Worker request accounting', () => {
   it('calls Groq with an OpenAI vision message and returns its text', async () => {
     const database = new FakeD1()
     const groqFetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-      expect(init?.headers).toMatchObject({
-        accept: 'application/json',
-        authorization: expect.stringMatching(/^Bearer test-groq-key-[1-5]$/),
-        'user-agent': expect.stringContaining('Mozilla/5.0'),
-      })
+      expect(init?.headers).toMatchObject({ authorization: expect.stringMatching(/^Bearer test-groq-key-[1-5]$/) })
       const body = JSON.parse(String(init?.body)) as Record<string, unknown>
       expect(body.model).toBe(CANONICAL_MODEL)
       expect(body.reasoning_effort).toBe('none')

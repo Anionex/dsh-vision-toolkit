@@ -14,7 +14,6 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 ### Fixed
 
 - Cool down rate-limited, unauthorized, and transiently failing Groq accounts before retrying another account, reducing repeated collisions and timeout cascades during concurrent visual grounding.
-- Send an explicit browser-compatible User-Agent to Groq so its edge security does not misclassify Worker-originated API calls as unsupported automated traffic.
 - Report queue time separately in runtime diagnostics and return an explicit queue-timeout message when the session concurrency gate itself is saturated.
 
 ## [0.1.19] - 2026-08-17
