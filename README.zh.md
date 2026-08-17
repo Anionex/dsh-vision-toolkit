@@ -306,10 +306,20 @@ python3 --version                         # 必须是 3.11 或更高
 uv venv .venv --python 3.13
 ```
 
-对于 `runtime.mode: external`，请在 Vision Toolkit 源码 checkout 中运行以下命令（或者把 `runtime/requirements.lock` 换成绝对路径），并同时将 `runtime.agentVisionToolkitPath` 指向该干净 checkout：
+对于 `runtime.mode: external`，请使用 **DSH Vision Toolkit 插件** checkout 中的 `runtime/requirements.lock` 安装锁定依赖，再把 `runtime.agentVisionToolkitPath` 指向另一个准确的 `agent-vision-toolkit` 快照。未被修改的打包目录 `vendor/agent-vision-toolkit` 就是这样的快照：
 
 ```sh
-uv pip install --python .venv/bin/python -r runtime/requirements.lock
+uv pip install --python .venv/bin/python \
+  -r /absolute/path/to/dsh-vision-toolkit/runtime/requirements.lock
+```
+
+```yaml
+- id: vision-toolkit
+  config:
+    runtime:
+      mode: external
+      python: /absolute/path/to/dsh-vision-toolkit/.venv/bin/python
+      agentVisionToolkitPath: /absolute/path/to/dsh-vision-toolkit/vendor/agent-vision-toolkit
 ```
 
 Windows 请使用 `py -3 --version` 检查版本，并在对应命令中使用 `.venv\Scripts\python.exe` 和 `runtime\requirements.lock`：
@@ -317,7 +327,9 @@ Windows 请使用 `py -3 --version` 检查版本，并在对应命令中使用 `
 ```powershell
 py -3 --version                         # 必须是 3.11 或更高
 uv venv .venv --python 3.13
-uv pip install --python .venv\Scripts\python.exe -r runtime\requirements.lock
+# 仅 external 模式需要；请使用插件 checkout 中 lockfile 的绝对路径：
+uv pip install --python .venv\Scripts\python.exe \
+  -r C:\absolute\path\to\dsh-vision-toolkit\runtime\requirements.lock
 ```
 
 把 `runtime.python` 指向同一个解释器，保存 Profile patch 后重启 Web Profile。然后打开 **设置 → 视觉工具**：运行时面板应显示实际使用的解释器和 Python 版本；点击 **运行健康检查** 和 **测试视觉模型**，确认不再出现 Python 版本错误。最后可将一张 PNG/JPEG 放入会话工作区并调用 `vision_glance` 做冒烟测试。

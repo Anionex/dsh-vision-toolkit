@@ -303,10 +303,20 @@ python3 --version                         # must report 3.11 or newer
 uv venv .venv --python 3.13
 ```
 
-For `runtime.mode: external`, run the following from a Vision Toolkit checkout (or replace `runtime/requirements.lock` with its absolute path), then also set `runtime.agentVisionToolkitPath` to that clean checkout:
+For `runtime.mode: external`, install the locked dependencies using the `runtime/requirements.lock` from the **DSH Vision Toolkit plugin** checkout, then point `runtime.agentVisionToolkitPath` at a separate exact `agent-vision-toolkit` snapshot. The packaged `vendor/agent-vision-toolkit` directory is such a snapshot when it has not been modified:
 
 ```sh
-uv pip install --python .venv/bin/python -r runtime/requirements.lock
+uv pip install --python .venv/bin/python \
+  -r /absolute/path/to/dsh-vision-toolkit/runtime/requirements.lock
+```
+
+```yaml
+- id: vision-toolkit
+  config:
+    runtime:
+      mode: external
+      python: /absolute/path/to/dsh-vision-toolkit/.venv/bin/python
+      agentVisionToolkitPath: /absolute/path/to/dsh-vision-toolkit/vendor/agent-vision-toolkit
 ```
 
 On Windows, use `py -3 --version` for the version check and `.venv\Scripts\python.exe` plus `runtime\requirements.lock` in the corresponding commands:
@@ -314,7 +324,9 @@ On Windows, use `py -3 --version` for the version check and `.venv\Scripts\pytho
 ```powershell
 py -3 --version                         # must report 3.11 or newer
 uv venv .venv --python 3.13
-uv pip install --python .venv\Scripts\python.exe -r runtime\requirements.lock
+# External mode only; use the plugin checkout's absolute lockfile path:
+uv pip install --python .venv\Scripts\python.exe \
+  -r C:\absolute\path\to\dsh-vision-toolkit\runtime\requirements.lock
 ```
 
 Point `runtime.python` at the same interpreter, save the Profile patch, and restart the Web Profile. Then open **Settings → Vision Toolkit**: the Runtime panel should show the resolved interpreter and Python version, and **Run health check** plus **Test vision model** should complete without the Python-version error. A final smoke test is to place a PNG/JPEG in the session workspace and call `vision_glance`.
