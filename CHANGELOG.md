@@ -4,9 +4,16 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+## [0.1.29] - 2026-08-17
+
 ### Added
 
 - **Install and use with zero Python setup.** When no system Python 3.11+ is available, the plugin downloads a pinned, sha256-verified standalone Python 3.13 build (about 35 MB) on first use and prepares its isolated runtime with it, so new users no longer need to install Python first. A system Python or an explicit `runtime.python` override still takes precedence, and a committed manifest plus `scripts/python-bootstrap.mjs` keeps the pinned build auditable and updatable.
+
+### Fixed
+
+- Keep the `vision_toolkit_activate` bootstrap callable until the end of the model step when the Skill and the bootstrap are invoked in parallel, preventing a race that surfaced as `unknown tool "vision_toolkit_activate"` while the Skill call was already activating the visual tools.
+- Reword the `vision-tools` Skill description so screenshot-to-UI restoration reliably triggers visual-tool activation.
 
 ## [0.1.28] - 2026-08-17
 
@@ -318,7 +325,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 - Runtime teardown cancels in-flight operations before removing Agent-scoped tools, the activation bootstrap, and the Skill.
 - The Web client is published through the current nested `dsh.client` manifest and loader-compatible built artifact required by DSH snapshot0810.
 
-[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.28...HEAD
+[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.29...HEAD
+[0.1.29]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.28...v0.1.29
 [0.1.28]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.27...v0.1.28
 [0.1.27]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.26...v0.1.27
 [0.1.26]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.25...v0.1.26
