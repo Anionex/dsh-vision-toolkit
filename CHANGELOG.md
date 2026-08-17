@@ -14,6 +14,7 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 - Fixed the compressed-image cache silently missing on Windows when cache file paths exceeded the 260-character `MAX_PATH` limit; cache keys now use shorter 64-bit digests and are versioned as `v2`, so old oversized entries are pruned automatically.
 - Made the portable package verification and the test suite Windows-compatible, including `npm.cmd` invocation, path-separator handling, Python bootstrap fixture layout, a profile E2E prompt that avoids newline-carrying argv, and restart-helper test skips where automatic restart is intentionally unavailable.
+- Routed Windows `pnpm` batch shims through `cmd.exe` so plugin updates work when the harness resolves `pnpm` to a `pnpm.CMD` path.
 - Added a Windows CI job that runs the portable-package build, tests, and verification on `windows-latest`.
 
 ## [0.1.30] - 2026-08-17

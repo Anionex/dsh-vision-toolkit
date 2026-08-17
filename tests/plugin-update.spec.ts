@@ -184,6 +184,32 @@ describe('VisionToolkitPluginUpdateService', () => {
     await expect(service.capability()).resolves.toMatchObject({ supported: true, profile: 'web' })
   })
 
+  it('routes Windows pnpm batch shims through cmd.exe', async () => {
+    const fixture = await profileFixture()
+    const subprocess = new FakeSubprocess(async () => ({ stdout: '"0.2.0"\n' }))
+    subprocess.resolveExecutable.mockResolvedValue('C:\\Users\\tester\\AppData\\Roaming\\npm\\pnpm.CMD')
+    const service = new VisionToolkitPluginUpdateService(host(subprocess), '0.1.0', {
+      profileDir: fixture.profileDir,
+      packageRoot: fixture.installedDir,
+      argv: ['web'],
+      allowDetachedRestart: true,
+      platform: 'win32',
+    })
+
+    await expect(service.check()).resolves.toMatchObject({ latestVersion: '0.2.0' })
+    expect(subprocess.spawns[0]?.argv).toEqual([
+      'cmd.exe',
+      '/d',
+      '/s',
+      '/c',
+      'C:\\Users\\tester\\AppData\\Roaming\\npm\\pnpm.CMD',
+      'view',
+      VISION_TOOLKIT_PACKAGE,
+      'version',
+      '--json',
+    ])
+  })
+
   it('installs successfully without automatic restart and reports that a manual restart is required', async () => {
     const fixture = await profileFixture()
     const subprocess = new FakeSubprocess(async (spec) => {

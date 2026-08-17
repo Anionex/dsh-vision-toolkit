@@ -822,6 +822,13 @@ export class VisionToolkitPluginUpdateService {
     profile: ProfileInstall,
     pnpmPath: string,
   ): Promise<CommandResult> {
+    // Windows batch shims cannot be spawned directly; route them through cmd.exe.
+    const program = this.platform === 'win32' && /\.(?:cmd|bat)$/i.test(pnpmPath)
+      ? process.env.COMSPEC ?? 'cmd.exe'
+      : pnpmPath
+    const argv = program === pnpmPath
+      ? [pnpmPath, ...args]
+      : [program, '/d', '/s', '/c', pnpmPath, ...args]
     const controller = new AbortController()
     let timedOut = false
     const timeout = setTimeout(() => {
@@ -830,7 +837,7 @@ export class VisionToolkitPluginUpdateService {
     }, timeoutMs)
     try {
       const handle = this.ctx.subprocess.spawn({
-        argv: [pnpmPath, ...args],
+        argv,
         cwd: profile.profileDir,
         stdio: {
           stdin: 'ignore',
