@@ -1,7 +1,8 @@
 /**
  * Agent-scoped progressive exposure for the model-facing visual tools.
- * Runtime readiness is global, while tool schemas enter only an Agent that has
- * loaded the matching Skill; administrative diagnostics stay on the Web seam.
+ * Runtime readiness is global, while tool schemas enter only an Agent through
+ * the matching Skill or its bootstrap tool; administrative diagnostics stay on
+ * the Web seam.
  * @module dsh-vision-toolkit/exposure
  */
 
@@ -98,7 +99,8 @@ function hasLoadedVisionSkill(session: Session): boolean {
 /**
  * Owns one progressive-exposure generation for a ready Vision Toolkit runtime.
  * The bootstrap tool is global; visual definitions are created and registered
- * in an Agent scope only after the Skill load is durable or just succeeded.
+ * in an Agent scope after the Skill load is durable, just succeeded, or the
+ * model explicitly invokes the bootstrap fallback.
  */
 export class VisionToolExposure {
   readonly activationTool: ToolDefinition
@@ -115,8 +117,8 @@ export class VisionToolExposure {
   ) {
     this.activationTool = defineTool({
       name: VISION_TOOLKIT_ACTIVATE,
-      description: `Activate the independent Vision Toolkit execution tools for this Agent after loading the ${VISION_TOOLS_SKILL_NAME} Skill. `
-        + 'The Skill tool normally activates them automatically; call this once only after a direct Skill invocation when the visual tools are still absent. This activation tool disappears after success.',
+      description: `Activate the independent Vision Toolkit execution tools for this Agent. `
+        + `The ${VISION_TOOLS_SKILL_NAME} Skill normally activates them automatically; if the visual tools are still absent, call this bootstrap tool once. It is safe to call before the Skill is loaded, and this activation tool disappears after success.`,
       parameters: {},
       output: {
         schema: {
@@ -132,9 +134,6 @@ export class VisionToolExposure {
       execute: (_args, exec): Promise<VisionToolkitActivationResult> => {
         if (exec.agent === undefined) {
           throw new Error(`${VISION_TOOLKIT_ACTIVATE}: an Agent Session is required`)
-        }
-        if (!hasLoadedVisionSkill(exec.agent.session)) {
-          throw new Error(`${VISION_TOOLKIT_ACTIVATE}: load the ${VISION_TOOLS_SKILL_NAME} Skill first`)
         }
         return Promise.resolve(this.activate(exec.agent))
       },

@@ -360,26 +360,21 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
     expect(ctx.tools.schemas(agent).map(tool => tool.name)).toContain(VISION_TOOLKIT_ACTIVATE)
   })
 
-  it('rejects same-name direct Skill evidence with non-bundled content', async () => {
+  it('does not restore activation from same-name direct Skill evidence with non-bundled content', async () => {
     const { ctx } = await setupContext(BUNDLED_UPSTREAM)
     const session = Session.create(SessionId('foreign-direct-skill'))
-    const agent = await registerAgent(ctx, 'foreign-direct-skill', session)
     recordDirectSkillInvocation(session, 1, '# unrelated vision-tools instructions')
+    const agent = await registerAgent(ctx, 'foreign-direct-skill', session)
 
-    const result = await ctx.tools.execute({
-      signal: new AbortController().signal,
-      callId: CallId('activate-after-foreign-direct-skill'),
-      name: VISION_TOOLKIT_ACTIVATE,
-      arguments: {},
-      agent,
-    })
-    expect(result.isError).toBe(true)
     expect(ctx.tools.schemas(agent).some(tool => TOOL_NAMES.includes(tool.name))).toBe(false)
+    expect(ctx.tools.schemas(agent).map(tool => tool.name)).toContain(VISION_TOOLKIT_ACTIVATE)
   })
 
-  it('rejects activation when the Skill has not been loaded', async () => {
+  it('activates without a prior Skill load', async () => {
     const { ctx } = await setupContext(BUNDLED_UPSTREAM)
     const agent = await registerAgent(ctx, 'no-skill')
+    expect(ctx.tools.schemas(agent).some(tool => TOOL_NAMES.includes(tool.name))).toBe(false)
+
     const result = await ctx.tools.execute({
       signal: new AbortController().signal,
       callId: CallId('activate-without-skill'),
@@ -387,9 +382,11 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
       arguments: {},
       agent,
     })
-    expect(result.isError).toBe(true)
-    expect(result.content).toEqual([{ type: 'text', text: expect.stringContaining('load the vision-tools Skill first') }])
-    expect(ctx.tools.schemas(agent).some(tool => TOOL_NAMES.includes(tool.name))).toBe(false)
+    expect(result.isError, JSON.stringify(result)).toBe(false)
+
+    const names = ctx.tools.schemas(agent).map(tool => tool.name)
+    for (const name of TOOL_NAMES) expect(names).toContain(name)
+    expect(names).not.toContain(VISION_TOOLKIT_ACTIVATE)
   })
 
   it('cancels an in-flight upstream tool when the plugin is disposed', async () => {
