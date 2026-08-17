@@ -222,7 +222,7 @@ async function startProgressiveToolServer(
 ) {
   return startScriptedLlmServer([
     activation === 'skill'
-      ? { kind: 'tool', name: 'skill', arguments: JSON.stringify({ name: 'vision-tools' }) }
+      ? { kind: 'tool', name: 'skill', arguments: JSON.stringify({ name: 'vision-skills' }) }
       : { kind: 'tool', name: VISION_TOOLKIT_ACTIVATE, arguments: '{}' },
     { kind: 'tool', name: toolName, arguments: toolArguments },
     { kind: 'text', text: successText },
@@ -587,7 +587,7 @@ describe.skipIf(!profileE2eAvailable)('dsh-vision-toolkit profile install (keyle
         expect(disabled.code, disabled.stderr).toBe(0)
         expect(disabled.stdout).toBe('disabled ok')
         const disabledBodies = JSON.stringify(disabledServer.requests.map(request => request.body))
-        expect(disabledBodies).not.toContain('vision-tools')
+        expect(disabledBodies).not.toContain('vision-skills')
         expect(disabledBodies).not.toContain(VISION_TOOLKIT_ACTIVATE)
         for (const name of [...VISUAL_TOOL_NAMES, ...DIAGNOSTIC_TOOL_NAMES]) {
           expect(disabledBodies).not.toContain(name)
@@ -609,7 +609,7 @@ describe.skipIf(!profileE2eAvailable)('dsh-vision-toolkit profile install (keyle
       try {
         const reenabled = await runDsh([
           '--profile', 'headless', '--patch', patch,
-          '/vision-tools\nconfirm the Vision Toolkit is available again',
+          '/vision-skills\nconfirm the Vision Toolkit is available again',
         ], {
           DSH_HOME: home,
           DSH_TELEMETRY_DISABLED: '1',

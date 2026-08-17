@@ -31,7 +31,7 @@
 
 🏆 本项目为deepseek harness生态首个综合性视觉工具插件：内测前已立项，并在内测期间参考本人的[`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit)做出
 
-> **原创声明：** 这套视觉工具的体系和划分方式，以及 `vision-tools` Skill，均由作者个人原创并持续打磨，相关工具、方法和工作流来自长期的真实使用与反复迭代。
+> **原创声明：** 这套视觉工具的体系和划分方式，以及 `vision-skills` Skill，均由作者个人原创并持续打磨，相关工具、方法和工作流来自长期的真实使用与反复迭代。
 
 ## 亮点
 
@@ -153,7 +153,7 @@ dsh plugin --profile headless add @anionex/dsh-vision-toolkit
 
 ### 3. 粘贴图片，直接说你要做什么
 
-在会话中粘贴截图，或把图片放进会话工作区，然后调用 `/vision-tools`。例如：
+在会话中粘贴截图，或把图片放进会话工作区，然后调用 `/vision-skills`。例如：
 
 ```text
 看看这张截图，告诉我报错原因和最值得先修的地方。
@@ -203,7 +203,7 @@ dsh plugin --profile headless add @anionex/dsh-vision-toolkit
 
 ```mermaid
 flowchart LR
-    Image["截图或本地 HTML"] --> Skill["vision-tools Skill"]
+    Image["截图或本地 HTML"] --> Skill["vision-skills Skill"]
     Skill --> Agent["文本 Agent 选择任务"]
     Agent --> Vision["需要理解图片时调用视觉模型"]
     Agent --> Local["裁剪、SVG、像素等任务在本地处理"]
@@ -215,7 +215,7 @@ flowchart LR
 
 视觉能力来自打包的固定版本 `agent-vision-toolkit`。DSH 插件负责安装、会话级工具暴露、Credential、路径校验、取消、超时、结果文件和 Web 展示。运行时不会在后台拉取上游 `main`。
 
-`vision-tools` Skill 现在以上游 `SKILL.md` 和全部 5 篇上游 SOP 为明确底稿：
+`vision-skills` Skill（上游原名 `vision-tools`）现在以上游 `SKILL.md` 和全部 5 篇上游 SOP 为明确底稿：
 只适配工具名、结构化参数、Artifact 交付、渐进式暴露，以及 DSH 的路径和生命周期边界；
 上游的工具选择规则、由粗到细方法和任务流程保持不变。精确的上游 Skill commit、
 源文件哈希、适配后哈希和可审查补丁分别记录在 `assets/skill/UPSTREAM.json` 与
@@ -388,7 +388,7 @@ dsh plugin --profile web remove @anionex/dsh-vision-toolkit
 
 | 问题 | 处理方式 |
 |---|---|
-| 粘贴图片后仍提示模型不支持图片 | 重启 Web Profile 并刷新页面，确认当前模型已切换到带 `(Vision Toolkit)` 的变体；也可以把图片先放进会话工作区，再调用 `/vision-tools` |
+| 粘贴图片后仍提示模型不支持图片 | 重启 Web Profile 并刷新页面，确认当前模型已切换到带 `(Vision Toolkit)` 的变体；也可以把图片先放进会话工作区，再调用 `/vision-skills` |
 | 免费服务提示 429 | 按错误中的 `Retry-After` 等待后重试；如果需要稳定高额度，切换到自己的视觉端点 |
 | 图片过大或像素超限 | 先裁剪或缩放图片；错误会明确显示是字节还是像素限制 |
 | 自定义 Credential 缺失 | 在 **设置 → 视觉工具** 填写 API Key，并确认 Credential 名称与配置一致 |

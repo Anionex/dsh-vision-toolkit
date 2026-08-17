@@ -46,6 +46,8 @@ for (const path of expectedFiles) {
 }
 
 const content = await readFile(join(skillRoot, 'SKILL.md'), 'utf8')
+check(content.startsWith('# vision-skills\n'), 'adapted SKILL.md must use the vision-skills title')
+check(content.includes('`/vision-skills`'), 'adapted SKILL.md must reference the vision-skills invocation')
 for (const name of [
   'vision_glance',
   'vision_ground',

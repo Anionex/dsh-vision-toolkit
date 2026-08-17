@@ -29,7 +29,7 @@ If you use DeepSeek or another text-only model in DeepSeek Harness (DSH), you ma
 
 🏆 This project is the first comprehensive vision-tool plugin in the DeepSeek Harness ecosystem: it was initiated before internal beta and built during the beta with reference to [`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit).
 
-> **Original work:** The system and division of responsibilities behind these visual tools, together with the `vision-tools` Skill, were personally created and continuously refined by the author through long-term real-world use and repeated iteration.
+> **Original work:** The system and division of responsibilities behind these visual tools, together with the `vision-skills` Skill, were personally created and continuously refined by the author through long-term real-world use and repeated iteration.
 
 ## Highlights
 
@@ -150,7 +150,7 @@ The first start prepares an isolated runtime: the plugin prefers a system Python
 
 ### 3. Paste an image and describe the outcome you want
 
-Paste a screenshot into the conversation or place an image in the session workspace, then invoke `/vision-tools`. For example:
+Paste a screenshot into the conversation or place an image in the session workspace, then invoke `/vision-skills`. For example:
 
 ```text
 Inspect this screenshot. Explain the error and tell me what to fix first.
@@ -200,7 +200,7 @@ The plugin keeps image understanding and deterministic local image processing in
 
 ```mermaid
 flowchart LR
-    Image["Screenshot or local HTML"] --> Skill["vision-tools Skill"]
+    Image["Screenshot or local HTML"] --> Skill["vision-skills Skill"]
     Skill --> Agent["Text agent selects a task"]
     Agent --> Vision["Use a vision model when image understanding is needed"]
     Agent --> Local["Run crop, SVG, and pixel work locally"]
@@ -212,13 +212,13 @@ flowchart LR
 
 The visual capabilities come from a packaged, pinned `agent-vision-toolkit` snapshot. The DSH plugin handles installation, session-scoped tool exposure, Credentials, path checks, cancellation, timeouts, result files, and Web presentation. The runtime never fetches upstream `main` in the background.
 
-The `vision-tools` Skill is maintained as an explicit adapter of the upstream
-`SKILL.md` plus all five upstream playbooks. Tool names, argument syntax,
-Artifact delivery, progressive exposure, and DSH path/lifecycle boundaries are
-adapted; the upstream tool-selection rules, coarse-to-fine method, and task SOPs
-remain intact. The exact upstream Skill commit, source hashes, adapted hashes,
-and reviewable adapter patch are recorded in `assets/skill/UPSTREAM.json` and
-`patches/vision-tools-dsh.patch`.
+The bundled `vision-skills` Skill is the DSH adapter of the upstream
+`vision-tools` Skill: its `SKILL.md` plus all five upstream playbooks. Tool
+names, argument syntax, Artifact delivery, progressive exposure, and DSH
+path/lifecycle boundaries are adapted; the upstream tool-selection rules,
+coarse-to-fine method, and task SOPs remain intact. The exact upstream Skill
+commit, source hashes, adapted hashes, and reviewable adapter patch are
+recorded in `assets/skill/UPSTREAM.json` and `patches/vision-tools-dsh.patch`.
 
 For routes that DSH positively identifies as text-only, the plugin registers a sibling `<model> (Vision Toolkit)` variant. By default, pasting an image in DSH Web switches to that variant and gives the model both a reusable workspace path and a visual description focused on the current task.
 
@@ -387,7 +387,7 @@ The updater revalidates the Profile before mutation, snapshots the original mani
 
 | Problem | What to do |
 |---|---|
-| Pasting an image still says the model does not support image input | Restart the Web Profile, refresh the page, and confirm the selected route has the `(Vision Toolkit)` suffix. You can also place the image in the session workspace and invoke `/vision-tools` |
+| Pasting an image still says the model does not support image input | Restart the Web Profile, refresh the page, and confirm the selected route has the `(Vision Toolkit)` suffix. You can also place the image in the session workspace and invoke `/vision-skills` |
 | The free service returns 429 | Wait for the `Retry-After` interval, or switch to your own endpoint when you need stable higher volume |
 | The image exceeds a size or pixel limit | Crop or resize it first; the error identifies whether bytes or decoded pixels caused the rejection |
 | A custom Credential is missing | Enter the API key in **Settings → Vision Toolkit** and confirm the Credential name matches the provider configuration |

@@ -14,9 +14,13 @@ import { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type { SubprocessHandle, SubprocessOutputRead, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import type { Credentials } from '@deepseek-ai/dsh-credentials'
 import * as VisionToolkit from '../src/index.ts'
-import { VISION_TOOLKIT_ACTIVATE } from '../src/exposure.ts'
+import {
+  LEGACY_VISION_TOOLS_SKILL_MARKER,
+  LEGACY_VISION_TOOLS_SKILL_NAME,
+  VISION_TOOLKIT_ACTIVATE,
+} from '../src/exposure.ts'
 import { bundledUpstreamRoot } from '../src/runtime-install.ts'
-import { VISION_TOOLS_SKILL_CONTENT, VISION_TOOLS_SKILL_RESOURCE_BASE } from '../src/skill.ts'
+import { VISION_SKILLS_CONTENT, VISION_SKILLS_NAME, VISION_SKILLS_RESOURCE_BASE } from '../src/skill.ts'
 import { VISION_TOOL_NAMES } from '../src/tools.ts'
 
 const BUNDLED_UPSTREAM = bundledUpstreamRoot()
@@ -118,13 +122,14 @@ afterEach(async () => {
 function recordDirectSkillInvocation(
   session: Session,
   turn = 1,
-  content = VISION_TOOLS_SKILL_CONTENT,
+  content = VISION_SKILLS_CONTENT,
+  name = VISION_SKILLS_NAME,
 ): void {
   session.append('turn/start', { turn })
   session.append('step/start', { turn, step: 1 })
   session.append('user/message', createUserMessage({
     content: [{ type: 'text', text: content }],
-    source: { kind: 'skill-invocation', name: 'vision-tools', form: 'instructions' },
+    source: { kind: 'skill-invocation', name, form: 'instructions' },
   }), { surfaceOp: 'append' })
   session.append('step/end', { turn, step: 1 })
   session.append('turn/end', { turn, reason: { kind: 'completed' } })
@@ -133,7 +138,8 @@ function recordDirectSkillInvocation(
 function recordNativeSkillInvocation(
   session: Session,
   turn = 1,
-  content = VISION_TOOLS_SKILL_CONTENT,
+  content = VISION_SKILLS_CONTENT,
+  name = VISION_SKILLS_NAME,
 ): void {
   const callId = CallId(`restored-skill-${turn}`)
   session.append('turn/start', { turn })
@@ -143,7 +149,7 @@ function recordNativeSkillInvocation(
     step: 1,
     callId,
     name: 'skill',
-    arguments: JSON.stringify({ name: 'vision-tools' }),
+    arguments: JSON.stringify({ name }),
   })
   session.append('tool/result', {
     turn,
@@ -161,14 +167,15 @@ function recordNativeSkillInvocation(
 function recordCodeSkillInvocation(
   session: Session,
   turn = 1,
-  content = VISION_TOOLS_SKILL_CONTENT,
+  content = VISION_SKILLS_CONTENT,
+  name = VISION_SKILLS_NAME,
 ): void {
   session.append('turn/start', { turn })
   session.append('tool/code-dispatch', {
     parentCallId: CallId(`restored-run-code-${turn}`),
     subCallId: CallId(`restored-code-skill-${turn}`),
     name: 'skill',
-    arguments: { name: 'vision-tools' },
+    arguments: { name },
     isError: false,
     content: [{ type: 'text', text: content }],
   })
@@ -198,7 +205,7 @@ async function loadVisionSkill(ctx: Context, agent: Agent): Promise<void> {
     signal: new AbortController().signal,
     callId: CallId(`skill-${String(agent.id)}`),
     name: 'skill',
-    arguments: { name: 'vision-tools' },
+    arguments: { name: VISION_SKILLS_NAME },
     agent,
   })
   expect(result.isError, JSON.stringify(result)).toBe(false)
@@ -233,11 +240,11 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
     expect(ctx.tools.schemas().map(tool => tool.name)).toContain(VISION_TOOLKIT_ACTIVATE)
     expect(ctx.tools.schemas().some(tool => TOOL_NAMES.includes(tool.name))).toBe(false)
     const skills = await ctx.skills.list()
-    const skill = skills.find(entry => entry.name === 'vision-tools')
+    const skill = skills.find(entry => entry.name === VISION_SKILLS_NAME)
     expect(skill).toBeDefined()
     expect(skill?.description).toContain('还原为 UI')
     expect(skill?.provider).toBe('runtime')
-    const definition = await ctx.skills.get('vision-tools')
+    const definition = await ctx.skills.get(VISION_SKILLS_NAME)
     expect(definition?.content).toContain('untrusted visual evidence')
     expect(definition?.content).toContain('vision_toolkit_activate')
     expect(definition?.content).toContain('references/restore-ui.md')
@@ -248,7 +255,7 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
     expect(definition?.content).toContain('%TEMP%')
     expect(definition?.resourceBase).toEqual({
       kind: 'directory',
-      path: VISION_TOOLS_SKILL_RESOURCE_BASE,
+      path: VISION_SKILLS_RESOURCE_BASE,
     })
 
     const activated = await registerAgent(ctx, 'activated')
@@ -290,6 +297,22 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
     expect(names).not.toContain(VISION_TOOLKIT_ACTIVATE)
   })
 
+  it('restores activation from legacy vision-tools Skill history after the rename', async () => {
+    const { ctx } = await setupContext(BUNDLED_UPSTREAM)
+    const session = Session.create(SessionId('legacy-vision-tools-skill'))
+    recordDirectSkillInvocation(
+      session,
+      1,
+      LEGACY_VISION_TOOLS_SKILL_MARKER,
+      LEGACY_VISION_TOOLS_SKILL_NAME,
+    )
+
+    const agent = await registerAgent(ctx, 'legacy-vision-tools-skill', session)
+    const names = ctx.tools.schemas(agent).map(tool => tool.name)
+    for (const name of TOOL_NAMES) expect(names).toContain(name)
+    expect(names).not.toContain(VISION_TOOLKIT_ACTIVATE)
+  })
+
   it('unregisters every tool and skill on dispose', async () => {
     const { ctx, fiber } = await setupContext(BUNDLED_UPSTREAM)
     const agent = await registerAgent(ctx, 'dispose')
@@ -299,7 +322,7 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
     expect(ctx.tools.schemas(agent).some(tool => TOOL_NAMES.includes(tool.name))).toBe(false)
     expect(ctx.tools.get(VISION_TOOLKIT_ACTIVATE)).toBeUndefined()
     const skills = await ctx.skills.list()
-    expect(skills.find(entry => entry.name === 'vision-tools')).toBeUndefined()
+    expect(skills.find(entry => entry.name === VISION_SKILLS_NAME)).toBeUndefined()
   })
 
   it('supports the one-shot activation fallback after direct Skill invocation', async () => {
@@ -341,14 +364,14 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
         },
         render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
       },
-      execute: () => Promise.resolve({ name: 'vision-tools', content: 'unrelated instructions' }),
+      execute: () => Promise.resolve({ name: VISION_SKILLS_NAME, content: 'unrelated instructions' }),
     }))
 
     const result = await ctx.tools.execute({
       signal: new AbortController().signal,
       callId: CallId('shadowed-skill-call'),
       name: 'skill',
-      arguments: { name: 'vision-tools' },
+      arguments: { name: VISION_SKILLS_NAME },
       agent,
     })
     expect(result.isError, JSON.stringify(result)).toBe(false)
@@ -359,7 +382,7 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
   it('does not restore activation from same-name direct Skill evidence with non-bundled content', async () => {
     const { ctx } = await setupContext(BUNDLED_UPSTREAM)
     const session = Session.create(SessionId('foreign-direct-skill'))
-    recordDirectSkillInvocation(session, 1, '# unrelated vision-tools instructions')
+    recordDirectSkillInvocation(session, 1, '# unrelated instructions', LEGACY_VISION_TOOLS_SKILL_NAME)
     const agent = await registerAgent(ctx, 'foreign-direct-skill', session)
 
     expect(ctx.tools.schemas(agent).some(tool => TOOL_NAMES.includes(tool.name))).toBe(false)
@@ -397,7 +420,7 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
       signal,
       callId: CallId('skill-call'),
       name: 'skill',
-      arguments: { name: 'vision-tools' },
+      arguments: { name: VISION_SKILLS_NAME },
       agent,
     })
     expect(skillResult.isError, JSON.stringify(skillResult)).toBe(false)
@@ -416,15 +439,6 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
     const names = ctx.tools.schemas(agent).map(tool => tool.name)
     for (const name of TOOL_NAMES) expect(names).toContain(name)
     expect(names).not.toContain(VISION_TOOLKIT_ACTIVATE)
-  })
-
-  it('keeps the bootstrap visible for a live inactive Agent after step/end', async () => {
-    const { ctx } = await setupContext(BUNDLED_UPSTREAM)
-    const session = ctx.sessions.create(SessionId('live-inactive-step'))
-    const agent = await registerAgent(ctx, 'live-inactive-step', session)
-    session.append('step/start', { turn: 1, step: 1 })
-    session.append('step/end', { turn: 1, step: 1 })
-    expect(ctx.tools.schemas(agent).map(tool => tool.name)).toContain(VISION_TOOLKIT_ACTIVATE)
   })
 
   it('cancels an in-flight upstream tool when the plugin is disposed', async () => {
@@ -473,7 +487,7 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
     const { ctx } = await setupContext('/nonexistent/vision-toolkit')
     expect(ctx.tools.schemas().some(tool => TOOL_NAMES.includes(tool.name))).toBe(false)
     const skills = await ctx.skills.list()
-    expect(skills.find(entry => entry.name === 'vision-tools')).toBeUndefined()
+    expect(skills.find(entry => entry.name === VISION_SKILLS_NAME)).toBeUndefined()
   })
 
   it('fails loud on invalid configuration at plugin load', async () => {

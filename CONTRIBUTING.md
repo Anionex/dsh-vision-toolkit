@@ -14,7 +14,7 @@ Focused fixes, tests, DSH integration improvements, visual workflows, and docume
 DSH Vision Toolkit is an out-of-tree DeepSeek Harness Profile Bundle. Contributions must preserve these responsibilities:
 
 - The pinned `agent-vision-toolkit` snapshot owns visual algorithms. The DSH package owns validation, lifecycle, structured conversion, Credentials, Artifacts, Settings, and Web presentation.
-- Ten execution tools remain independent. Runtime readiness does not make every schema globally visible; the `vision-tools` Skill activates them for one Agent.
+- Ten execution tools remain independent. Runtime readiness does not make every schema globally visible; the `vision-skills` Skill activates them for one Agent.
 - Health, connection testing, and version inspection remain administrative Settings actions rather than model tools.
 - Model-visible output stays text, numbers, coordinates, JSON, and file descriptors that can be reconstructed from the Session log.
 - Credentials, image base64, authorization headers, and unbounded upstream responses never enter model output or logs.
@@ -23,8 +23,9 @@ DSH Vision Toolkit is an out-of-tree DeepSeek Harness Profile Bundle. Contributi
 
 Changes to vendored upstream files must use `npm run upstream:sync -- <checkout>`, preserve the upstream license, update `UPSTREAM_MANIFEST.json`, and include adapter compatibility coverage. Do not edit the snapshot as an untracked fork of the algorithm.
 
-Changes to the model-facing `vision-tools` Skill must start from the pinned
-upstream Skill commit. Update the reviewable adapter patch, then run
+Changes to the model-facing `vision-skills` Skill (the DSH adapter of the
+upstream `vision-tools` Skill) must start from the pinned upstream Skill
+commit. Update the reviewable adapter patch, then run
 `npm run upstream:skill:sync -- <checkout>` and
 `npm run upstream:skill:verify`. Preserve upstream methodology and playbooks;
 limit adapter changes to native tool invocation, DSH resources/Artifacts,

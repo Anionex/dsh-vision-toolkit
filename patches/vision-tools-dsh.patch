@@ -16,7 +16,8 @@ index 8f42552..f2ee3f2 100644
 -  image yourself when a description you were given lacks a detail.
 ----
 -
- # vision-tools
+-# vision-tools
++# vision-skills
  
 -Five local CLIs that give a text-only agent eyes. They read one shared
 -vision config (`VISION_API_KEY` / `VISION_BASE_URL` / `VISION_MODEL` /
@@ -29,7 +30,7 @@ index 8f42552..f2ee3f2 100644
 +
 +The visual execution schemas are mounted only for the current Agent after this
 +Skill is loaded. A normal `skill` call activates them for the next model step.
-+If this content arrived through a direct `/vision-tools` invocation and the
++If this content arrived through a direct `/vision-skills` invocation and the
 +visual tools are still absent, call `vision_toolkit_activate` once. Do not call
 +that bootstrap when the visual tools are already present.
  

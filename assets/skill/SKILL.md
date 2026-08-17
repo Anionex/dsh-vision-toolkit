@@ -1,4 +1,4 @@
-# vision-tools
+# vision-skills
 
 Ten native DSH tools give a text-only agent eyes. Use these structured tools
 directly; do not shell out to the bundled Python scripts or reproduce their
@@ -7,7 +7,7 @@ plugin, so tool calls do not receive credentials.
 
 The visual execution schemas are mounted only for the current Agent after this
 Skill is loaded. A normal `skill` call activates them for the next model step.
-If this content arrived through a direct `/vision-tools` invocation and the
+If this content arrived through a direct `/vision-skills` invocation and the
 visual tools are still absent, call `vision_toolkit_activate` once. Do not call
 that bootstrap when the visual tools are already present.
 
