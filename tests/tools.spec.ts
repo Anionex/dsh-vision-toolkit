@@ -17,22 +17,12 @@ import * as VisionToolkit from '../src/index.ts'
 import { VISION_TOOLKIT_ACTIVATE } from '../src/exposure.ts'
 import { bundledUpstreamRoot } from '../src/runtime-install.ts'
 import { VISION_TOOLS_SKILL_CONTENT, VISION_TOOLS_SKILL_RESOURCE_BASE } from '../src/skill.ts'
+import { VISION_TOOL_NAMES } from '../src/tools.ts'
 
 const BUNDLED_UPSTREAM = bundledUpstreamRoot()
 const SAMPLE_IMAGE = fileURLToPath(new URL('./fixtures/sample.png', import.meta.url))
 
-const TOOL_NAMES = [
-  'vision_glance',
-  'vision_ground',
-  'vision_detect',
-  'vision_trace',
-  'vision_crop',
-  'vision_pixel_diff',
-  'vision_long_screenshot_ocr',
-  'vision_extract_foreground',
-  'vision_dominant_colors',
-  'vision_html_screenshot',
-]
+const TOOL_NAMES: readonly string[] = Object.values(VISION_TOOL_NAMES)
 
 function fakeCredentials(): Credentials {
   return {
@@ -360,26 +350,24 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
     expect(ctx.tools.schemas(agent).map(tool => tool.name)).toContain(VISION_TOOLKIT_ACTIVATE)
   })
 
-  it('rejects same-name direct Skill evidence with non-bundled content', async () => {
+  it('does not restore activation from same-name direct Skill evidence with non-bundled content', async () => {
     const { ctx } = await setupContext(BUNDLED_UPSTREAM)
     const session = Session.create(SessionId('foreign-direct-skill'))
-    const agent = await registerAgent(ctx, 'foreign-direct-skill', session)
     recordDirectSkillInvocation(session, 1, '# unrelated vision-tools instructions')
+    const agent = await registerAgent(ctx, 'foreign-direct-skill', session)
 
-    const result = await ctx.tools.execute({
-      signal: new AbortController().signal,
-      callId: CallId('activate-after-foreign-direct-skill'),
-      name: VISION_TOOLKIT_ACTIVATE,
-      arguments: {},
-      agent,
-    })
-    expect(result.isError).toBe(true)
     expect(ctx.tools.schemas(agent).some(tool => TOOL_NAMES.includes(tool.name))).toBe(false)
+    expect(ctx.tools.schemas(agent).map(tool => tool.name)).toContain(VISION_TOOLKIT_ACTIVATE)
   })
 
-  it('rejects activation when the Skill has not been loaded', async () => {
+  it('activates without a prior Skill load', async () => {
     const { ctx } = await setupContext(BUNDLED_UPSTREAM)
     const agent = await registerAgent(ctx, 'no-skill')
+    expect(ctx.tools.schemas(agent).some(tool => TOOL_NAMES.includes(tool.name))).toBe(false)
+    const activation = ctx.tools.get(VISION_TOOLKIT_ACTIVATE, agent)
+    for (const name of TOOL_NAMES) expect(activation?.description).toContain(name)
+    expect(activation?.description).toContain('image understanding, OCR, UI detection')
+
     const result = await ctx.tools.execute({
       signal: new AbortController().signal,
       callId: CallId('activate-without-skill'),
@@ -387,9 +375,11 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
       arguments: {},
       agent,
     })
-    expect(result.isError).toBe(true)
-    expect(result.content).toEqual([{ type: 'text', text: expect.stringContaining('load the vision-tools Skill first') }])
-    expect(ctx.tools.schemas(agent).some(tool => TOOL_NAMES.includes(tool.name))).toBe(false)
+    expect(result.isError, JSON.stringify(result)).toBe(false)
+
+    const names = ctx.tools.schemas(agent).map(tool => tool.name)
+    for (const name of TOOL_NAMES) expect(names).toContain(name)
+    expect(names).not.toContain(VISION_TOOLKIT_ACTIVATE)
   })
 
   it('cancels an in-flight upstream tool when the plugin is disposed', async () => {
