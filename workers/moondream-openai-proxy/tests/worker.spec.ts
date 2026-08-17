@@ -78,7 +78,7 @@ function environment(database: FakeD1, burstSuccess = true): Env {
     IP_HASH_SECRET: '0123456789abcdef0123456789abcdef',
     MAX_IMAGE_BYTES: '4194304',
     MAX_IMAGE_PIXELS: '20000000',
-    MAX_OUTPUT_TOKENS: '8192',
+    MAX_OUTPUT_TOKENS: '4096',
     MAX_REQUEST_BYTES: '33554432',
     LEGACY_PUBLIC_API_KEY: 'free',
     PUBLIC_API_KEY: publicApiKey,
@@ -142,7 +142,7 @@ describe('Worker request accounting', () => {
         ],
         role: 'user',
       }],
-      max_tokens: 8192,
+      max_tokens: 4096,
       stream: false,
     })
   })
@@ -183,7 +183,7 @@ describe('Worker request accounting', () => {
 
     expect(lower.status).toBe(200)
     expect(capped.status).toBe(200)
-    expect(forwarded).toEqual([1024, 8192])
+    expect(forwarded).toEqual([1024, 4096])
   })
 
   it('materializes and forwards multiple images in one Groq request', async () => {

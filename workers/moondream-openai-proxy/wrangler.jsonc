@@ -37,7 +37,7 @@
     "GLOBAL_DAILY_LIMIT": "5000",
     "MAX_IMAGE_BYTES": "4194304",
     "MAX_IMAGE_PIXELS": "20000000",
-    "MAX_OUTPUT_TOKENS": "8192",
+    "MAX_OUTPUT_TOKENS": "4096",
     "MAX_REQUEST_BYTES": "33554432"
   },
   "observability": {

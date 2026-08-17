@@ -8,7 +8,7 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ### Changed
 
-- Raised the built-in public vision service output ceiling from 512 to 8,192 tokens, matching the upstream grounding and detection request budget instead of truncating dense element inventories.
+- Raised the built-in public vision service output ceiling from 512 to 4,096 tokens, leaving enough room under Groq's free-tier token budget for image input while avoiding premature truncation of dense element inventories.
 
 ### Fixed
 
