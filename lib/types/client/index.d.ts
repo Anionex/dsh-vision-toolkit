@@ -171,6 +171,7 @@ declare const en: {
     readonly healthConnectionCredentialMissing: "Connection test skipped because the credential is unavailable.";
     readonly healthServiceResponded: "Service responded at {endpoint} (HTTP {status}).";
     readonly healthServiceRejectedCredential: "Service rejected the configured credential (HTTP {status}).";
+    readonly healthServiceForbidden: "Service is reachable, but GET /models is restricted (HTTP {status}). This is often an account or model-list permission limit, not an invalid key; you can ignore this warning when the vision-model test reports success.";
     readonly healthServiceNoModels: "Service is reachable but does not support GET /models (HTTP {status}).";
     readonly healthServiceRateLimited: "Service is reachable, but the connection test was rate-limited (HTTP 429).";
     readonly healthServiceHttpFailed: "Connection test failed with HTTP {status}.";

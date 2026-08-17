@@ -703,6 +703,39 @@ describe('VisionToolkitRuntime', () => {
     }
   })
 
+  it('treats a 403 from GET /models as a warning instead of claiming the key was rejected', async () => {
+    const server = createServer((_request, response) => {
+      response.writeHead(403, { 'content-type': 'application/json' })
+      response.end('{"error":{"message":"Forbidden","type":"permission_error","code":"restricted"}}')
+    })
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+    try {
+      const address = server.address()
+      if (address === null || typeof address === 'string') throw new Error('missing fixture server address')
+      const { runtime } = await setup({
+        provider: {
+          baseUrl: `http://127.0.0.1:${address.port}/v1`,
+          credential: 'VISION_API_KEY',
+          model: 'fixture-model',
+        },
+      })
+      const workspace = await tempWorkspace()
+      const result = await runtime.health(true, { signal, workspace })
+      expect(result).toMatchObject({
+        healthy: true,
+        connectionTested: true,
+        checks: {
+          service: {
+            status: 'warning',
+            detail: expect.stringContaining('restricted GET /models (HTTP 403)'),
+          },
+        },
+      })
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close(error => error === undefined ? resolve() : reject(error)))
+    }
+  })
+
   it('checks output readiness without resolving session-relative allowed directories', async () => {
     const runtimeHome = await tempWorkspace()
     const { runtime } = await setup(
