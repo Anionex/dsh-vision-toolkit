@@ -274,7 +274,7 @@ For a trusted internal endpoint that uses a self-signed certificate or MITM prox
 - Node.js `^22.19.0` or `>=24.0.0`.
 - Python 3.11+; the plugin prepares an isolated environment by default.
 - Only `vision_html_screenshot` requires Chrome, Chromium, or Edge.
-- Inputs must be PNG, JPEG, GIF, or WebP files in the session workspace or an explicitly allowed directory.
+- Inputs must be PNG, JPEG, GIF, or WebP files in the session workspace, the platform temporary directory, or an explicitly allowed directory.
 
 ### Configure the Python runtime
 
@@ -333,19 +333,21 @@ uv pip install --python .venv\Scripts\python.exe \
 
 Point `runtime.python` at the same interpreter, save the Profile patch, and restart the Web Profile. Then open **Settings → Vision Toolkit**: the Runtime panel should show the resolved interpreter and Python version, and **Run health check** plus **Test vision model** should complete without the Python-version error. A final smoke test is to place a PNG/JPEG in the session workspace and call `vision_glance`.
 
-The path fence allows images from the session workspace by default. Prefer that workspace for temporary images. If a model or workflow must use the operating system's temporary directory, create a dedicated subdirectory first and add that directory to `allowedDirs` using its real absolute path:
+The path fence automatically allows the session workspace and the platform temporary directory. On macOS/Linux the temporary root is `/tmp`. On Windows it is `TEMP`, then `TMP`, with the operating-system fallback if neither is set; model-generated `/tmp/...` paths are translated to that Windows directory before the normal realpath fence runs. No `allowedDirs` entry is needed for these platform temporary paths.
+
+Use `allowedDirs` only for additional trusted input roots outside the workspace and platform temporary directory:
 
 ```yaml
 - id: vision-toolkit
   config:
     allowedDirs:
-      # macOS/Linux: replace with a dedicated directory under $TMPDIR or /tmp
-      - /tmp/dsh-vision-toolkit
-      # Windows: use a dedicated directory under the value of PowerShell `$env:TEMP`
-      # - C:/Users/you/AppData/Local/Temp/dsh-vision-toolkit
+      # macOS/Linux example
+      - /srv/vision-inputs
+      # Windows example (use this instead on Windows)
+      # - D:/vision-inputs
 ```
 
-`allowedDirs` is an input allowlist, not the managed runtime cache. The managed runtime keeps its own files under `$DSH_HOME/cache/dsh-vision-toolkit` (or `~/.dsh/cache/dsh-vision-toolkit` when `DSH_HOME` is unset); that directory does not need to be added. The allowlist grants access but does not translate paths: Windows does not turn `/tmp/image.png` into `%TEMP%\image.png`. The tool argument must use the session-workspace path or the actual absolute path under the configured directory. Environment-variable forms such as `$env:TEMP` and `%TEMP%` are not expanded in Profile patches, so resolve them to an absolute path first. Avoid allowing the entire shared `/tmp` or `%TEMP%` directory unless you accept the broader local read access.
+`allowedDirs` is an input allowlist, not the managed runtime cache. The managed runtime keeps its own files under `$DSH_HOME/cache/dsh-vision-toolkit` (or `~/.dsh/cache/dsh-vision-toolkit` when `DSH_HOME` is unset); that directory does not need to be added. Environment-variable forms such as `$env:TEMP` and `%TEMP%` are not expanded inside `allowedDirs`, so configure extra roots with real absolute paths.
 
 <details>
 <summary><strong>Install, upgrade, disable, and uninstall</strong></summary>

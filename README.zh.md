@@ -277,7 +277,7 @@ API Key:  https://agent-vision.anionex.me（自动填写）
 - Node.js `^22.19.0` 或 `>=24.0.0`。
 - Python 3.11+；插件默认自动创建隔离环境。
 - 只有 `vision_html_screenshot` 需要 Chrome、Chromium 或 Edge。
-- 图片需为 PNG、JPEG、GIF 或 WebP，并位于会话工作区或明确允许的目录中。
+- 图片需为 PNG、JPEG、GIF 或 WebP，并位于会话工作区、平台临时目录或明确允许的目录中。
 
 ### 配置 Python 运行时
 
@@ -336,19 +336,21 @@ uv pip install --python .venv\Scripts\python.exe \
 
 把 `runtime.python` 指向同一个解释器，保存 Profile patch 后重启 Web Profile。然后打开 **设置 → 视觉工具**：运行时面板应显示实际使用的解释器和 Python 版本；点击 **运行健康检查** 和 **测试视觉模型**，确认不再出现 Python 版本错误。最后可将一张 PNG/JPEG 放入会话工作区并调用 `vision_glance` 做冒烟测试。
 
-路径围栏默认允许读取会话工作区中的图片。临时图片也应优先放在该工作区。如果模型或工作流必须使用操作系统临时目录，请先创建专用子目录，再用真实的绝对路径加入 `allowedDirs`：
+路径围栏会自动允许会话工作区和平台临时目录。macOS/Linux 的临时目录根路径是 `/tmp`。Windows 依次读取 `TEMP`、`TMP`，两者都未设置时使用操作系统回退值；模型生成的 `/tmp/...` 路径会先映射到该 Windows 临时目录，再执行常规 realpath 路径围栏检查。这些平台临时路径无需加入 `allowedDirs`。
+
+只有在需要读取会话工作区和平台临时目录之外的可信输入根目录时，才配置 `allowedDirs`：
 
 ```yaml
 - id: vision-toolkit
   config:
     allowedDirs:
-      # macOS/Linux：替换成 $TMPDIR 或 /tmp 下的专用目录
-      - /tmp/dsh-vision-toolkit
-      # Windows：使用 PowerShell `$env:TEMP` 值下的专用目录
-      # - C:/Users/you/AppData/Local/Temp/dsh-vision-toolkit
+      # macOS/Linux 示例
+      - /srv/vision-inputs
+      # Windows 示例（Windows 上改用这一项）
+      # - D:/vision-inputs
 ```
 
-`allowedDirs` 是输入目录白名单，不是 managed 运行时缓存目录。managed 运行时自己的文件位于 `$DSH_HOME/cache/dsh-vision-toolkit`（未设置 `DSH_HOME` 时是 `~/.dsh/cache/dsh-vision-toolkit`），无需加入白名单。白名单只负责授权，不会转换路径：Windows 不会把 `/tmp/image.png` 自动变成 `%TEMP%\image.png`；工具参数必须使用会话工作区路径，或使用白名单目录下的真实绝对路径。Profile patch 不会展开 `$env:TEMP` 或 `%TEMP%` 这类环境变量，因此请先把它们解析为绝对路径。除非你接受更大的本地读取范围，否则不要直接放行整个共享的 `/tmp` 或 `%TEMP%` 目录。
+`allowedDirs` 是输入目录白名单，不是 managed 运行时缓存目录。managed 运行时自己的文件位于 `$DSH_HOME/cache/dsh-vision-toolkit`（未设置 `DSH_HOME` 时是 `~/.dsh/cache/dsh-vision-toolkit`），无需加入白名单。`allowedDirs` 内不会展开 `$env:TEMP` 或 `%TEMP%` 这类环境变量，因此额外输入根目录必须填写真实绝对路径。
 
 <details>
 <summary><strong>安装、升级、禁用和卸载</strong></summary>
