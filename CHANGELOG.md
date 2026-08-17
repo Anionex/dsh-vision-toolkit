@@ -4,6 +4,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+## [0.1.30] - 2026-08-17
+
 ### Changed
 
 - Raised the default vision operation timeout from 15 seconds to 30 seconds for both semaphore queueing and tool execution.
@@ -330,7 +332,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 - Runtime teardown cancels in-flight operations before removing Agent-scoped tools, the activation bootstrap, and the Skill.
 - The Web client is published through the current nested `dsh.client` manifest and loader-compatible built artifact required by DSH snapshot0810.
 
-[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.29...HEAD
+[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.30...HEAD
+[0.1.30]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.29...v0.1.30
 [0.1.29]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.28...v0.1.29
 [0.1.28]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.27...v0.1.28
 [0.1.27]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.26...v0.1.27
