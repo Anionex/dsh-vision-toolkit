@@ -198,7 +198,7 @@ describe('VisionToolkitPluginUpdateService', () => {
 
     await expect(service.check()).resolves.toMatchObject({ latestVersion: '0.2.0' })
     expect(subprocess.spawns[0]?.argv).toEqual([
-      'cmd.exe',
+      process.env.COMSPEC ?? 'cmd.exe',
       '/d',
       '/s',
       '/c',
