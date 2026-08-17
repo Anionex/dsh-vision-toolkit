@@ -1,6 +1,6 @@
 import { lstat, mkdtemp, mkdir, readFile, realpath, symlink, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { homedir, tmpdir } from 'node:os'
+import { basename, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   commitStagedOutput,
@@ -8,6 +8,8 @@ import {
   createPathPolicy,
   createStagedDirectory,
   createStagedOutput,
+  normalizePlatformTempPath,
+  platformTempDirectory,
   resolveHtmlFile,
   resolveInputFile,
   resolveOutputDirectory,
@@ -19,6 +21,12 @@ import { VisionToolkitError } from '../src/errors.ts'
 const tempDirs: string[] = []
 async function tempDir(prefix: string): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), `dsh-vision-toolkit-${prefix}-`))
+  tempDirs.push(dir)
+  return dir
+}
+
+async function outsideTempDir(prefix: string): Promise<string> {
+  const dir = await mkdtemp(join(homedir(), `.dsh-vision-toolkit-${prefix}-`))
   tempDirs.push(dir)
   return dir
 }
@@ -37,7 +45,7 @@ describe('createPathPolicy', () => {
 
   it('rejects an output directory outside the fence', async () => {
     const workspace = await tempDir('workspace')
-    const outside = await tempDir('outside')
+    const outside = await outsideTempDir('outside')
     await expect(createPathPolicy(workspace, [], join(outside, 'out')))
       .rejects.toMatchObject({ code: 'path' })
   })
@@ -47,6 +55,37 @@ describe('createPathPolicy', () => {
     const allowed = await tempDir('allowed')
     const policy = await createPathPolicy(workspace, [allowed])
     expect(policy.allowedDirs).toContain(await realpath(allowed))
+  })
+
+  it('includes the platform temporary directory in the input fence', async () => {
+    const workspace = await tempDir('workspace')
+    const policy = await createPathPolicy(workspace, [])
+    expect(policy.tempDir).toBe(await realpath(platformTempDirectory()))
+    expect(policy.allowedDirs).toContain(policy.tempDir)
+  })
+})
+
+describe('platform temporary paths', () => {
+  it('maps model-generated POSIX temp paths to Windows TEMP', () => {
+    expect(platformTempDirectory('win32', { TEMP: 'C:\\Users\\tester\\AppData\\Local\\Temp' } as NodeJS.ProcessEnv))
+      .toBe('C:\\Users\\tester\\AppData\\Local\\Temp')
+    expect(normalizePlatformTempPath(
+      '/tmp/screenshot.png',
+      'win32',
+      'C:\\Users\\tester\\AppData\\Local\\Temp',
+    )).toBe('C:\\Users\\tester\\AppData\\Local\\Temp\\screenshot.png')
+    expect(normalizePlatformTempPath('/tmp', 'win32', 'C:\\Temp'))
+      .toBe('C:\\Temp')
+    expect(platformTempDirectory('win32', { TEMP: ' ', TMP: 'D:\\Temp' } as NodeJS.ProcessEnv))
+      .toBe('D:\\Temp')
+    expect(normalizePlatformTempPath('/tmp-file.png', 'win32', 'C:\\Temp'))
+      .toBe('/tmp-file.png')
+  })
+
+  it('does not rewrite POSIX temp paths on POSIX platforms', () => {
+    expect(platformTempDirectory('linux')).toBe('/tmp')
+    expect(normalizePlatformTempPath('/tmp/screenshot.png', 'linux', '/var/tmp'))
+      .toBe('/tmp/screenshot.png')
   })
 })
 
@@ -69,6 +108,20 @@ describe('resolveInputFile', () => {
     expect(image.path).toBe(await realpath(join(allowed, 'b.webp')))
   })
 
+  it('accepts an image in the platform temporary directory', async () => {
+    const workspace = await tempDir('workspace')
+    const temporary = await mkdtemp(join(platformTempDirectory(), 'dsh-vision-toolkit-platform-temp-'))
+    tempDirs.push(temporary)
+    const path = join(temporary, 'temporary.png')
+    await writeFile(path, 'data')
+    const policy = await createPathPolicy(workspace, [])
+    const input = process.platform === 'win32'
+      ? `/tmp/${basename(temporary)}/temporary.png`
+      : path
+    const image = await resolveInputFile(input, policy)
+    expect(image.path).toBe(await realpath(path))
+  })
+
   it('rejects missing files, directories, and unsupported extensions', async () => {
     const workspace = await tempDir('workspace')
     await mkdir(join(workspace, 'dir.png'))
@@ -81,7 +134,7 @@ describe('resolveInputFile', () => {
 
   it('rejects traversal and absolute escapes', async () => {
     const workspace = await tempDir('workspace')
-    const outside = await tempDir('outside')
+    const outside = await outsideTempDir('outside')
     await writeFile(join(outside, 'x.png'), 'data')
     const policy = await createPathPolicy(workspace, [])
     await expect(resolveInputFile('../x.png', policy)).rejects.toMatchObject({ code: 'input' })
@@ -90,7 +143,7 @@ describe('resolveInputFile', () => {
 
   it('rejects a symlink whose real target escapes the fence', async () => {
     const workspace = await tempDir('workspace')
-    const outside = await tempDir('outside')
+    const outside = await outsideTempDir('outside')
     await writeFile(join(outside, 'secret.png'), 'data')
     await symlink(join(outside, 'secret.png'), join(workspace, 'link.png'))
     const policy = await createPathPolicy(workspace, [])
@@ -138,7 +191,7 @@ describe('resolveOutputFile', () => {
 
   it('replaces a destination symlink itself without writing through it', async () => {
     const workspace = await tempDir('workspace')
-    const outside = await tempDir('outside')
+    const outside = await outsideTempDir('outside')
     const protectedPath = join(outside, 'protected.svg')
     await writeFile(protectedPath, 'outside\n')
     const policy = await createPathPolicy(workspace, [])
@@ -180,7 +233,7 @@ describe('managed artifact directories', () => {
 
   it('restores the previous run only from a real managed directory', async () => {
     const workspace = await tempDir('workspace')
-    const outside = await tempDir('outside')
+    const outside = await outsideTempDir('outside')
     const policy = await createPathPolicy(workspace, [])
     const finalPath = resolveOutputDirectory('run-link', policy, 'default-run')
     await symlink(outside, finalPath)
@@ -190,7 +243,7 @@ describe('managed artifact directories', () => {
 
   it('rejects symbolic links anywhere inside a staged run directory', async () => {
     const workspace = await tempDir('workspace')
-    const outside = await tempDir('outside')
+    const outside = await outsideTempDir('outside')
     const policy = await createPathPolicy(workspace, [])
     const staged = await createStagedDirectory(policy)
     await writeFile(join(outside, 'secret.txt'), 'secret\n')

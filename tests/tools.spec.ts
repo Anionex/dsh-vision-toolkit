@@ -243,6 +243,9 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
     expect(definition?.content).toContain('references/restore-ui.md')
     expect(definition?.content).toContain('immediately repeated `vision_glance`')
     expect(definition?.content).toContain('Disabling or unloading the plugin cancels')
+    expect(definition?.content).toContain('platform temporary directory automatically')
+    expect(definition?.content).toContain('`/tmp/...`')
+    expect(definition?.content).toContain('%TEMP%')
     expect(definition?.resourceBase).toEqual({
       kind: 'directory',
       path: VISION_TOOLS_SKILL_RESOURCE_BASE,
@@ -258,6 +261,9 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
     const activatedNames = ctx.tools.schemas(activated).map(tool => tool.name)
     for (const name of TOOL_NAMES) expect(activatedNames).toContain(name)
     expect(activatedNames).not.toContain(VISION_TOOLKIT_ACTIVATE)
+    const glance = ctx.tools.schemas(activated).find(tool => tool.name === 'vision_glance')
+    expect(glance?.description).toContain('platform temporary directory')
+    expect(glance?.description).toContain('/tmp/')
     expect(ctx.tools.schemas(untouched).map(tool => tool.name)).toContain(VISION_TOOLKIT_ACTIVATE)
     expect(ctx.tools.schemas(untouched).some(tool => TOOL_NAMES.includes(tool.name))).toBe(false)
   })

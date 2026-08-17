@@ -1,15 +1,15 @@
 /**
- * Path fence shared by every tool: inputs must live in the workspace or an
- * explicitly authorized directory, outputs stay inside the plugin-managed
- * output directory, and a symbolic link is allowed only when its real target
- * stays inside the fence.
+ * Path fence shared by every tool: inputs must live in the workspace, the
+ * platform temporary directory, or an explicitly authorized directory;
+ * outputs stay inside the plugin-managed output directory, and a symbolic
+ * link is allowed only when its real target stays inside the fence.
  * @module dsh-vision-toolkit/paths
  */
 
 import { randomUUID } from 'node:crypto'
 import { cp, link, lstat, mkdir, readdir, realpath, rename, rm, stat } from 'node:fs/promises'
-import { extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
-import { homedir } from 'node:os'
+import { extname, isAbsolute, join, relative, resolve, sep, win32 } from 'node:path'
+import { homedir, tmpdir } from 'node:os'
 import { VisionToolkitError } from './errors.ts'
 
 /** Supported input image extensions (the upstream client's allowlist). */
@@ -19,7 +19,9 @@ export const SUPPORTED_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.we
 export interface PathPolicy {
   /** Real workspace root. */
   workspace: string
-  /** Real allowed roots: workspace plus configured extra directories. */
+  /** Real platform temporary directory, authorized for transient inputs. */
+  tempDir: string
+  /** Real allowed roots: workspace, platform temp, and configured directories. */
   allowedDirs: string[]
   /** Real plugin-managed output directory inside the fence. */
   outputDir: string
@@ -37,13 +39,39 @@ function expandUserHome(raw: string): string {
   return raw
 }
 
+/** Current platform temporary directory before realpath canonicalization. */
+export function platformTempDirectory(
+  platform: NodeJS.Platform = process.platform,
+  environment: NodeJS.ProcessEnv = process.env,
+): string {
+  if (platform !== 'win32') return '/tmp'
+  const configured = environment.TEMP?.trim() || environment.TMP?.trim()
+  return configured === undefined || configured.length === 0 ? tmpdir() : configured
+}
+
+/**
+ * Translate the POSIX-shaped `/tmp/...` paths commonly emitted by models to
+ * the actual Windows temporary directory. Other paths and platforms are left
+ * unchanged, and the normal realpath fence still validates the result.
+ */
+export function normalizePlatformTempPath(
+  raw: string,
+  platform: NodeJS.Platform = process.platform,
+  tempDirectory: string = platformTempDirectory(platform),
+): string {
+  if (platform !== 'win32') return raw
+  if (raw === '/tmp') return tempDirectory
+  if (!raw.startsWith('/tmp/')) return raw
+  return win32.join(tempDirectory, raw.slice('/tmp/'.length))
+}
+
 /**
  * Build the per-invocation path policy: realpath the workspace, resolve and
- * realpath allowed directories, and create the output directory inside the
- * fence.
+ * realpath the platform temp directory and allowed directories, and create
+ * the output directory inside the fence.
  * @param workspaceRaw - session workspace (or process cwd fallback).
  * @param allowedDirs - configured extra allowed roots.
-   * @param outputDirRaw - configured output directory (default `.dsh-vision-toolkit/artifacts`).
+ * @param outputDirRaw - configured output directory (default `.dsh-vision-toolkit/artifacts`).
  * @returns the resolved policy.
  */
 export async function createPathPolicy(
@@ -57,7 +85,14 @@ export async function createPathPolicy(
   } catch (error) {
     throw new VisionToolkitError('path', `workspace is not accessible: ${workspaceRaw}`, { cause: error })
   }
-  const roots = [workspace]
+  let tempDir: string
+  const tempDirectoryRaw = platformTempDirectory()
+  try {
+    tempDir = await realpath(tempDirectoryRaw)
+  } catch (error) {
+    throw new VisionToolkitError('path', `platform temporary directory is not accessible: ${tempDirectoryRaw}`, { cause: error })
+  }
+  const roots = [workspace, tempDir]
   for (const raw of allowedDirs) {
     const candidate = expandUserHome(raw)
     const target = isAbsolute(candidate) ? candidate : resolve(workspace, candidate)
@@ -80,7 +115,7 @@ export async function createPathPolicy(
   } catch (error) {
     throw new VisionToolkitError('path', `output directory is not writable: ${outputRaw}`, { cause: error })
   }
-  return { workspace, allowedDirs: roots, outputDir }
+  return { workspace, tempDir, allowedDirs: [...new Set(roots)], outputDir }
 }
 
 /**
@@ -110,7 +145,7 @@ export async function resolveAuthorizedFile(
   extensions: readonly string[],
   kind: string,
 ): Promise<{ path: string; bytes: number }> {
-  const candidate = expandUserHome(raw)
+  const candidate = expandUserHome(normalizePlatformTempPath(raw, process.platform, policy.tempDir))
   const target = isAbsolute(candidate) ? candidate : resolve(policy.workspace, candidate)
   let real: string
   try {
