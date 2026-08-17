@@ -219,7 +219,9 @@ export class VisionToolExposure {
 
   private applyHideActivationForSession(session: Session): void {
     for (const agent of this.ctx.agents.list()) {
-      if (agent.session === session) this.applyHideActivation(agent)
+      if (agent.session === session && this.states.get(agent)?.active === true) {
+        this.applyHideActivation(agent)
+      }
     }
   }
 

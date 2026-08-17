@@ -418,6 +418,15 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
     expect(names).not.toContain(VISION_TOOLKIT_ACTIVATE)
   })
 
+  it('keeps the bootstrap visible for a live inactive Agent after step/end', async () => {
+    const { ctx } = await setupContext(BUNDLED_UPSTREAM)
+    const session = ctx.sessions.create(SessionId('live-inactive-step'))
+    const agent = await registerAgent(ctx, 'live-inactive-step', session)
+    session.append('step/start', { turn: 1, step: 1 })
+    session.append('step/end', { turn: 1, step: 1 })
+    expect(ctx.tools.schemas(agent).map(tool => tool.name)).toContain(VISION_TOOLKIT_ACTIVATE)
+  })
+
   it('cancels an in-flight upstream tool when the plugin is disposed', async () => {
     const ctx = new Context()
     contexts.push(ctx)
