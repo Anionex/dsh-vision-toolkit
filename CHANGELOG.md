@@ -4,6 +4,14 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+## [0.1.26] - 2026-08-17
+
+### Docs
+
+- Documented how and when to configure the Python 3.11+ `runtime.python` override with system interpreters, project-local virtual environments, and the Windows `py` launcher.
+- Added reproducible `uv` setup, managed-versus-external dependency guidance, Profile health/model checks, and a `vision_glance` smoke-test workflow.
+- Clarified automatic platform temporary-directory authorization, Windows `/tmp/...` mapping, extra `allowedDirs` roots, and ignored project-local `.venv/` directories.
+
 ## [0.1.25] - 2026-08-17
 
 ### Fixed
@@ -286,7 +294,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 - Runtime teardown cancels in-flight operations before removing Agent-scoped tools, the activation bootstrap, and the Skill.
 - The Web client is published through the current nested `dsh.client` manifest and loader-compatible built artifact required by DSH snapshot0810.
 
-[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.25...HEAD
+[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.26...HEAD
+[0.1.26]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.25...v0.1.26
 [0.1.25]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.24...v0.1.25
 [0.1.24]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.23...v0.1.24
 [0.1.23]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.22...v0.1.23
