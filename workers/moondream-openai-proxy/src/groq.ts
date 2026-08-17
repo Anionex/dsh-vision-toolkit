@@ -122,6 +122,24 @@ function cooldownForStatus(status: number, retryAfter: string | null): number {
   return 0
 }
 
+async function releaseLease(
+  scheduler: GroqKeyScheduler,
+  slot: number,
+  requestId: string,
+  cooldownMs = 0,
+): Promise<void> {
+  try {
+    await scheduler.release(slot, cooldownMs)
+  } catch (error) {
+    console.error(JSON.stringify({
+      error: error instanceof Error ? error.message : String(error),
+      event: 'groq_lease_release_failed',
+      keySlot: slot + 1,
+      requestId,
+    }))
+  }
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -213,13 +231,13 @@ export async function runGroqCompletion(
         method: 'POST',
       })
     } catch {
-      await scheduler.release(lease.slot, TRANSIENT_COOLDOWN_MS)
+      await releaseLease(scheduler, lease.slot, requestId, TRANSIENT_COOLDOWN_MS)
       if (attempt + 1 < keys.length) continue
       throw new GroqProviderError('Vision provider is temporarily unavailable', 502, 'upstream_error')
     }
 
     if (response.ok) {
-      await scheduler.release(lease.slot)
+      await releaseLease(scheduler, lease.slot, requestId)
       let payload: unknown
       try {
         payload = await response.json()
@@ -238,7 +256,7 @@ export async function runGroqCompletion(
     const cooldownMs = cooldownForStatus(response.status, retryAfter)
     lastRetryAfter = retryAfter
       ?? (response.status === 429 ? String(Math.ceil(cooldownMs / 1000)) : lastRetryAfter)
-    await scheduler.release(lease.slot, cooldownMs)
+    await releaseLease(scheduler, lease.slot, requestId, cooldownMs)
     console.warn(JSON.stringify({
       attempt: attempt + 1,
       cooldownMs,

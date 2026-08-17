@@ -67,6 +67,7 @@ class FakeStatement {
       }
     }
     if (this.sql.includes('active_requests = MAX(0, active_requests - 1)')) {
+      if (this.database.failSchedulerRelease) throw new Error('scheduler release unavailable')
       const cooldownUntil = Number(this.values[1])
       const slot = Number(this.values[2])
       const state = this.database.keyStates.get(slot)
@@ -89,6 +90,7 @@ class FakeStatement {
 
 class FakeD1 {
   readonly counts = new Map<string, number>()
+  failSchedulerRelease = false
   readonly keyStates = new Map<number, FakeKeyState>(Array.from({ length: 5 }, (_, keySlot) => [
     keySlot,
     { activeRequests: 0, cooldownUntil: 0, keySlot, lastSelectedAt: 0, leaseExpiresAt: 0 },
@@ -315,6 +317,22 @@ describe('Worker request accounting', () => {
     releaseFetches?.()
     await expect(Promise.all([first, second])).resolves.toHaveLength(2)
     expect([...database.keyStates.values()].map(state => state.activeRequests)).toEqual([0, 0, 0, 0, 0])
+  })
+
+  it('keeps a successful inference response when lease cleanup fails', async () => {
+    const database = new FakeD1()
+    database.failSchedulerRelease = true
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({
+      choices: [{ finish_reason: 'stop', message: { content: 'Still returned.', role: 'assistant' } }],
+    })))
+
+    const response = await worker.fetch(request(), environment(database))
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      choices: [{ message: { content: 'Still returned.' } }],
+    })
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('groq_lease_release_failed'))
   })
 
   it('keeps the legacy free API key working during the public key migration', async () => {
