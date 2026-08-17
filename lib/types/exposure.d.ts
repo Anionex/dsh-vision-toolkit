@@ -1,7 +1,8 @@
 /**
  * Agent-scoped progressive exposure for the model-facing visual tools.
- * Runtime readiness is global, while tool schemas enter only an Agent that has
- * loaded the matching Skill; administrative diagnostics stay on the Web seam.
+ * Runtime readiness is global, while tool schemas enter only an Agent through
+ * the matching Skill or its bootstrap tool; administrative diagnostics stay on
+ * the Web seam.
  * @module dsh-vision-toolkit/exposure
  */
 import { type ToolDefinition } from '@deepseek-ai/dsh-tools';
@@ -16,7 +17,8 @@ export interface VisionToolkitActivationResult {
 /**
  * Owns one progressive-exposure generation for a ready Vision Toolkit runtime.
  * The bootstrap tool is global; visual definitions are created and registered
- * in an Agent scope only after the Skill load is durable or just succeeded.
+ * in an Agent scope after the Skill load is durable, just succeeded, or the
+ * model explicitly invokes the bootstrap fallback.
  */
 export declare class VisionToolExposure {
     private readonly ctx;

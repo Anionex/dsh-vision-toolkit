@@ -906,6 +906,19 @@ describe('upstream adapter version facts', () => {
     })
   })
 
+  it('forwards VISION_SSL_VERIFY to the isolated upstream process', async () => {
+    vi.stubEnv('VISION_SSL_VERIFY', 'off')
+    const { ctx, adapter, runtime } = await setup()
+    const spawn = vi.spyOn(ctx.subprocess, 'spawn')
+
+    const env = await runtime.resolveVisionEnv()
+    expect(env.VISION_SSL_VERIFY).toBe('off')
+    await adapter.run('glance', [SAMPLE_IMAGE], { signal, env })
+
+    expect(spawn).toHaveBeenCalledOnce()
+    expect(spawn.mock.calls[0]?.[0].env).toMatchObject({ VISION_SSL_VERIFY: 'off' })
+  })
+
   it('fails prepare with a clear runtime error when the external path is missing', async () => {
     const ctx = new Context()
     contexts.push(ctx)

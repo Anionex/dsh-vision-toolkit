@@ -4,6 +4,10 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+### Fixed
+
+- Added the documented `VISION_SSL_VERIFY` escape hatch for trusted self-signed or MITM-proxied vision endpoints, forwarded it through the isolated DSH runtime, and kept TLS certificate verification enabled by default.
+
 ## [0.1.24] - 2026-08-17
 
 ### Fixed

@@ -40,6 +40,7 @@ export interface UpstreamEnvironment {
   VISION_MODEL: string
   VISION_API_PROTOCOL: 'chat_completions' | 'anthropic'
   VISION_ANTHROPIC_THINKING: 'omit' | 'disabled' | 'adaptive'
+  VISION_SSL_VERIFY?: string
   VISION_USER_AGENT: string
   LANG: 'zh' | 'en'
 }
@@ -627,6 +628,9 @@ export class UpstreamAdapter {
           VISION_MODEL: options.env.VISION_MODEL,
           VISION_API_PROTOCOL: options.env.VISION_API_PROTOCOL,
           VISION_ANTHROPIC_THINKING: options.env.VISION_ANTHROPIC_THINKING,
+          ...(options.env.VISION_SSL_VERIFY === undefined
+            ? {}
+            : { VISION_SSL_VERIFY: options.env.VISION_SSL_VERIFY }),
           VISION_USER_AGENT: options.env.VISION_USER_AGENT,
           LANG: options.env.LANG,
           VISION_ENV_FILE: join(prepared.cleanHome, 'vision.env'),
