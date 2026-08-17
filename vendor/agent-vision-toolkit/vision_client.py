@@ -10,6 +10,7 @@ import json
 import mimetypes
 import os
 from pathlib import Path
+import ssl
 import sys
 import time
 import urllib.error
@@ -146,6 +147,17 @@ def _redact(text: str, *secrets: str) -> str:
     return text
 
 
+def _ssl_context() -> ssl.SSLContext | None:
+    """Return an unverified context when VISION_SSL_VERIFY disables certificate checks."""
+    verify = os.environ.get("VISION_SSL_VERIFY", "").strip().lower()
+    if verify in {"0", "false", "off", "no", "none", "disabled"}:
+        context = ssl.create_default_context()
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+        return context
+    return None
+
+
 def _retry_delay(error: urllib.error.HTTPError, attempt: int) -> float:
     value = error.headers.get("Retry-After")
     if value:
@@ -263,11 +275,12 @@ def describe_image(image_url: str | list[str], prompt: str | None = None, max_to
     else:
         headers["Authorization"] = "Bearer " + api_key
     request = urllib.request.Request(base_url + endpoint, data=json.dumps(payload).encode(), headers=headers)
+    context = _ssl_context()
     retries = 2
     timeout = 180
     for attempt in range(retries + 1):
         try:
-            with urllib.request.urlopen(request, timeout=timeout) as response:
+            with urllib.request.urlopen(request, timeout=timeout, context=context) as response:
                 data = json.load(response)
             try:
                 text = extract_text(data)

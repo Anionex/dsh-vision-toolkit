@@ -5,6 +5,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import os
 from pathlib import Path
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -118,16 +119,51 @@ def main():
     environment.pop("VISION_API_PROTOCOL", None)
     environment.pop("VISION_REASONING_EFFORT", None)
     environment.pop("VISION_ANTHROPIC_THINKING", None)
+    environment.pop("VISION_SSL_VERIFY", None)
     environment.pop("VISION_USER_AGENT", None)
     environment.pop("VISION_ENV_FILE", None)
     saved = dict(os.environ)
     os.environ.pop("VISION_API_PROTOCOL", None)
     os.environ.pop("VISION_REASONING_EFFORT", None)
     os.environ.pop("VISION_ANTHROPIC_THINKING", None)
+    os.environ.pop("VISION_SSL_VERIFY", None)
     os.environ.pop("VISION_USER_AGENT", None)
     os.environ.pop("VISION_ENV_FILE", None)
     os.environ.update(environment)
     try:
+        assert vision_client._ssl_context() is None
+        for disabled_value in ("0", "false", "off", "no", "none", "disabled", " FALSE "):
+            os.environ["VISION_SSL_VERIFY"] = disabled_value
+            context = vision_client._ssl_context()
+            assert isinstance(context, ssl.SSLContext)
+            assert context.check_hostname is False
+            assert context.verify_mode == ssl.CERT_NONE
+        for enabled_value in ("", "1", "true", "on", "yes"):
+            os.environ["VISION_SSL_VERIFY"] = enabled_value
+            assert vision_client._ssl_context() is None
+        os.environ.pop("VISION_SSL_VERIFY", None)
+
+        Handler.calls, Handler.statuses, Handler.bodies = 0, [200, 200], []
+        original_urlopen = vision_client.urllib.request.urlopen
+        contexts = []
+
+        def capture_context(*args, **kwargs):
+            contexts.append(kwargs.get("context"))
+            return original_urlopen(*args, **kwargs)
+
+        vision_client.urllib.request.urlopen = capture_context
+        try:
+            os.environ["VISION_SSL_VERIFY"] = "off"
+            assert vision_client.describe_image("data:image/png;base64,AAAA") == "fixture answer"
+            os.environ["VISION_SSL_VERIFY"] = "true"
+            assert vision_client.describe_image("data:image/png;base64,AAAA") == "fixture answer"
+        finally:
+            vision_client.urllib.request.urlopen = original_urlopen
+            os.environ.pop("VISION_SSL_VERIFY", None)
+        assert contexts[0].check_hostname is False
+        assert contexts[0].verify_mode == ssl.CERT_NONE
+        assert contexts[1] is None
+
         Handler.calls, Handler.statuses, Handler.bodies, Handler.response_headers = (
             0, [429, 200], [], [{"Retry-After": "17"}, {}]
         )

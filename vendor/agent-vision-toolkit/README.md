@@ -335,6 +335,7 @@ The standalone CLIs and Python proxy use these environment variables; just three
 | `VISION_REASONING_EFFORT` | No | Optional provider-supported reasoning effort for the Python client/proxy when using `responses` |
 | `VISION_ANTHROPIC_THINKING` | No | Anthropic thinking mode. `omit` (default) sends no thinking field and has the broadest compatibility. Use `disabled` or `adaptive` only when the selected model documents that mode; restore `omit` first if the provider returns HTTP 400. Manual `enabled` plus `budget_tokens` is not exposed. |
 | `VISION_USER_AGENT` | No | Outbound User-Agent for the Python client/proxy; defaults to a browser-compatible value and can be overridden for provider requirements |
+| `VISION_SSL_VERIFY` | No | TLS certificate verification remains enabled by default. Set `0`, `false`, `off`, `no`, `none`, or `disabled` to use a trusted internal endpoint with a self-signed certificate or MITM proxy. |
 
 </details>
 
