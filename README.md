@@ -36,7 +36,7 @@ If you use DeepSeek or another text-only model in DeepSeek Harness (DSH), you ma
 - **Paste and use it immediately.** Paste an image in DSH Web and the text-only route switches to its `(Vision Toolkit)` variant without manual path copying or model changes.
 - **A seamless image workflow.** Native thumbnails, session history, and workspace paths stay intact; Web can preview artifacts and Headless can continue using the same structured results.
 - **One command to install.** The built-in free Gemini 3.7 Flash vision service is ready after installation, with no API key required.
-- **Built-in free vision.** The shared service works immediately after installation; if shared capacity is temporarily exhausted, it returns a readable `429` response with retry guidance.
+- **Built-in free vision.** The shared service works immediately after installation with a quota of **300 images per machine per day**.
 - **Vision guided by intent.** The agent extracts evidence for the task at hand, such as “Where is the error?” or “Where is the button?”, instead of returning a generic caption.
 - **A complete screenshot-to-verification loop.** Reference images, HTML screenshots, difference regions, and pixel comparison work together for UI restoration.
 
@@ -242,6 +242,7 @@ This is a shared zero-configuration entry point, not an unlimited private endpoi
 
 | Limit | Current value |
 |---|---:|
+| Daily quota | 300 images per machine per day |
 | Images per request | Up to 5 |
 | Image size | 4 MiB per image |
 | Decoded pixels | 20,000,000 per image |
