@@ -4,6 +4,12 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+## [0.1.24] - 2026-08-17
+
+### Fixed
+
+- Kept Vision Toolkit Settings panels, form fields, action buttons, and advanced runtime details within the available Web Settings modal width instead of forcing horizontal overflow and clipping the right column.
+
 ## [0.1.23] - 2026-08-17
 
 ### Added
