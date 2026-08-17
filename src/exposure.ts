@@ -11,11 +11,17 @@ import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { Session } from '@deepseek-ai/dsh-session'
 import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
 import type { Context } from '@deepseek-ai/cordis'
-import { VISION_TOOLS_SKILL_CONTENT, VISION_TOOLS_SKILL_NAME } from './skill.ts'
+import { VISION_SKILLS_CONTENT, VISION_SKILLS_NAME } from './skill.ts'
 import { VISION_TOOL_NAMES } from './tools.ts'
 
 /** Small bootstrap tool retained only until the current Agent gains visual tools. */
 export const VISION_TOOLKIT_ACTIVATE = 'vision_toolkit_activate'
+
+/** Skill name used by releases before the rename to vision-skills. */
+export const LEGACY_VISION_TOOLS_SKILL_NAME = 'vision-tools'
+
+/** Unique pre-rename line in bundled instructions, kept for Session restore. */
+export const LEGACY_VISION_TOOLS_SKILL_MARKER = 'If this content arrived through a direct `/vision-tools` invocation and the'
 
 interface AgentExposure {
   active: boolean
@@ -38,8 +44,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
+function isBundledSkillName(name: unknown): boolean {
+  return name === VISION_SKILLS_NAME || name === LEGACY_VISION_TOOLS_SKILL_NAME
+}
+
+function isBundledSkillContent(text: string): boolean {
+  return text.includes(VISION_SKILLS_CONTENT) || text.includes(LEGACY_VISION_TOOLS_SKILL_MARKER)
+}
+
 function isVisionSkillArguments(value: unknown): boolean {
-  return isRecord(value) && value.name === VISION_TOOLS_SKILL_NAME
+  return isRecord(value) && isBundledSkillName(value.name)
 }
 
 function nativeSkillCall(raw: string): boolean {
@@ -54,13 +68,14 @@ function containsBundledSkillContent(blocks: readonly unknown[]): boolean {
   return blocks.some(block => isRecord(block)
     && block.type === 'text'
     && typeof block.text === 'string'
-    && block.text.includes(VISION_TOOLS_SKILL_CONTENT))
+    && isBundledSkillContent(block.text))
 }
 
 function isBundledSkillResult(value: unknown): boolean {
   return isRecord(value)
-    && value.name === VISION_TOOLS_SKILL_NAME
-    && value.content === VISION_TOOLS_SKILL_CONTENT
+    && isBundledSkillName(value.name)
+    && typeof value.content === 'string'
+    && isBundledSkillContent(value.content)
 }
 
 /** Whether durable history proves that this Session loaded the bundled Skill. */
@@ -70,7 +85,7 @@ function hasLoadedVisionSkill(session: Session): boolean {
     if (event.type === 'user/message') {
       const source = event.data.source
       if (source.kind === 'skill-invocation'
-        && source.name === VISION_TOOLS_SKILL_NAME
+        && isBundledSkillName(source.name)
         && containsBundledSkillContent(event.data.content)) return true
       continue
     }
@@ -119,7 +134,7 @@ export class VisionToolExposure {
     this.activationTool = defineTool({
       name: VISION_TOOLKIT_ACTIVATE,
       description: `Activate the independent Vision Toolkit execution tools for this Agent: ${Object.values(VISION_TOOL_NAMES).join(', ')}. `
-        + `Loading the ${VISION_TOOLS_SKILL_NAME} Skill normally activates them automatically; call this once when the visual tools are still absent, then use them for image understanding, OCR, UI detection, and related tasks. `
+        + `Loading the ${VISION_SKILLS_NAME} Skill normally activates them automatically; call this once when the visual tools are still absent, then use them for image understanding, OCR, UI detection, and related tasks. `
         + 'It is safe to call before the Skill is loaded, and this activation tool disappears after success.',
       parameters: {},
       output: {

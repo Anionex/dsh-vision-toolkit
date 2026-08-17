@@ -16,7 +16,8 @@ index 8f42552..f2ee3f2 100644
 -  image yourself when a description you were given lacks a detail.
 ----
 -
- # vision-tools
+-# vision-tools
++# vision-skills
  
 -Five local CLIs that give a text-only agent eyes. They read one shared
 -vision config (`VISION_API_KEY` / `VISION_BASE_URL` / `VISION_MODEL` /
@@ -29,7 +30,7 @@ index 8f42552..f2ee3f2 100644
 +
 +The visual execution schemas are mounted only for the current Agent after this
 +Skill is loaded. A normal `skill` call activates them for the next model step.
-+If this content arrived through a direct `/vision-tools` invocation and the
++If this content arrived through a direct `/vision-skills` invocation and the
 +visual tools are still absent, call `vision_toolkit_activate` once. Do not call
 +that bootstrap when the visual tools are already present.
  
@@ -802,10 +803,10 @@ index 3261fcf..68025be 100644
     nodes, labels, groups, edges, directions, and edge labels.
  6. Generate the Mermaid, Graphviz, or requested structure from that inventory.
 diff --git a/references/restore-ui.md b/references/restore-ui.md
-index f9ec11a..de97a02 100644
+index f9ec11a..69627895161fc1b57c6241665255fdf86ae1c1e5 100644
 --- a/references/restore-ui.md
 +++ b/references/restore-ui.md
-@@ -28,16 +28,16 @@ typography, shadows, decorative details, and icon geometry.
+@@ -28,17 +28,18 @@
  1. Inspect the existing frontend stack, component library, icon set, source
     assets, and design tokens before writing code, but stop searching as soon as
     a usable local primitive is found.
@@ -824,12 +825,27 @@ index f9ec11a..de97a02 100644
     starting the next call. Normally one or two rounds are enough.
 -4. Do not use `trace`, foreground extraction, repeated color sampling, or
 -   iterative `pixel_diff` work in fast mode. Those are fidelity tools and will
+-   consume the delivery window.
 +4. Do not use `vision_trace`, foreground extraction, repeated color sampling,
-+   or iterative `vision_pixel_diff` work in fast mode. Those are fidelity tools and will
-    consume the delivery window.
++   iterative `vision_pixel_diff` work, or hand-written SVG in fast mode. Those
++   are fidelity tools and will consume the delivery window. Icons and decorative
++   marks stay library-based or screenshot-backed; never hand-write SVG code.
  
  ### Build the approximation
-@@ -57,7 +57,7 @@ typography, shadows, decorative details, and icon geometry.
+ 
+@@ -47,8 +48,9 @@
+    when zoomed in.
+ 2. Reuse the project's existing components and CSS tokens. If its frontend or
+    icon library contains a reasonably similar component or icon, use it
+-   directly instead of recreating the reference. Prefer an approximate library
+-   icon over cropping, tracing, or hand-drawing a new one.
++   directly instead of recreating the reference. Never hand-write SVG in fast
++   mode: use an approximate library icon, or extract the original pixels as a
++   screenshot-backed asset.
+ 3. Use nearby existing palette tokens or visually similar CSS values. Exact
+    sampled hex values, gradients, subtle borders, and shadow opacity are out of
+    scope unless one of them defines the whole composition.
+@@ -57,7 +59,7 @@
  
  ### Render once, fix once, deliver
  
@@ -838,7 +854,7 @@ index f9ec11a..de97a02 100644
     existing browser setup.
  2. Inspect the screenshot once. If there is an obvious structural failure such
     as a missing major region, broken wrapping, or a wildly wrong scale, make
-@@ -66,7 +66,7 @@ typography, shadows, decorative details, and icon geometry.
+@@ -66,7 +68,7 @@
     small color, icon, font, shadow, radius, or spacing differences.
  
  A practical time box is roughly 30 seconds for project inspection plus
@@ -847,7 +863,7 @@ index f9ec11a..de97a02 100644
  rendering, one correction, and screenshot delivery. Dependency installation or
  a project that does not already run may extend that target; do not compensate
  by silently switching back to a long precision loop.
-@@ -112,18 +112,19 @@ fonts, icons, images, and design tokens before writing replacements.
+@@ -112,18 +114,19 @@
  ### 2. Establish the coordinate system
  
  Record the reference image dimensions and the target viewport. Screenshots may
@@ -875,7 +891,7 @@ index f9ec11a..de97a02 100644
  
  Treat model boxes as approximate handles. Use them to organize the page, but
  do not mistake their final few pixels for measured boundaries.
-@@ -141,15 +142,11 @@ Use a padded crop only to inspect and center the target. Before foreground
+@@ -141,15 +144,11 @@
  extraction, tighten the final region to the visual's own ink; adjacent text or
  rules inside the region can become foreground components too.
  
@@ -896,7 +912,7 @@ index f9ec11a..de97a02 100644
  ```
  
  Inspect the transparent result before use. Confirm that the whole visual is
-@@ -162,8 +159,8 @@ sheet instead of checking them from filenames alone.
+@@ -162,8 +161,8 @@
  - Follow the project's existing framework and component patterns.
  - Build content, interaction, responsive layout, borders, shadows, and simple
    shapes natively.
@@ -907,7 +923,7 @@ index f9ec11a..de97a02 100644
  - Place extracted assets with explicit logical dimensions. Preserve their
    aspect ratio and avoid baking surrounding whitespace into the asset.
  - Match structure and proportions before tuning small spacing.
-@@ -172,10 +169,10 @@ sheet instead of checking them from filenames alone.
+@@ -172,10 +171,10 @@
  
  For an existing implementation, start here.
  
@@ -920,7 +936,7 @@ index f9ec11a..de97a02 100644
     spot or explain.
  3. Fix material discrepancies: missing or wrong content, incorrect hierarchy,
     broken wrapping, visibly wrong alignment or scale, wrong component state,
-@@ -185,7 +182,7 @@ For an existing implementation, start here.
+@@ -185,7 +184,7 @@
     rasterization, antialiasing, subpixel placement, or another imperceptible
     rendering detail.
  

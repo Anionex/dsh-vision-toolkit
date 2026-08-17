@@ -9,6 +9,10 @@ import { type ToolDefinition } from '@deepseek-ai/dsh-tools';
 import type { Context } from '@deepseek-ai/cordis';
 /** Small bootstrap tool retained only until the current Agent gains visual tools. */
 export declare const VISION_TOOLKIT_ACTIVATE = "vision_toolkit_activate";
+/** Skill name used by releases before the rename to vision-skills. */
+export declare const LEGACY_VISION_TOOLS_SKILL_NAME = "vision-tools";
+/** Unique pre-rename line in bundled instructions, kept for Session restore. */
+export declare const LEGACY_VISION_TOOLS_SKILL_MARKER = "If this content arrived through a direct `/vision-tools` invocation and the";
 /** Result returned by the one-shot activation transport. */
 export interface VisionToolkitActivationResult {
     activated: boolean;

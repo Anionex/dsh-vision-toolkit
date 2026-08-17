@@ -10,6 +10,7 @@
     "text-only-llm",
     "vision-language-model",
     "vision-tools",
+    "vision-skills",
     "computer-vision",
     "ocr",
     "ui-restoration",
