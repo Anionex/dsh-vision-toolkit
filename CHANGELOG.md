@@ -4,9 +4,13 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+## [0.1.25] - 2026-08-17
+
 ### Fixed
 
 - Added the documented `VISION_SSL_VERIFY` escape hatch for trusted self-signed or MITM-proxied vision endpoints, forwarded it through the isolated DSH runtime, and kept TLS certificate verification enabled by default.
+- Allowed `vision_toolkit_activate` to mount the visual tool schemas even when the model invokes the bootstrap before loading the `vision-tools` Skill, removing the activation deadlock while preserving Agent-scoped exposure.
+- Authorized the platform temporary directory for visual inputs and mapped model-generated `/tmp/...` paths to `%TEMP%` or `%TMP%` on Windows, while retaining realpath fencing and model-visible path guidance.
 
 ## [0.1.24] - 2026-08-17
 
@@ -282,7 +286,12 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 - Runtime teardown cancels in-flight operations before removing Agent-scoped tools, the activation bootstrap, and the Skill.
 - The Web client is published through the current nested `dsh.client` manifest and loader-compatible built artifact required by DSH snapshot0810.
 
-[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.20...HEAD
+[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.25...HEAD
+[0.1.25]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.24...v0.1.25
+[0.1.24]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.23...v0.1.24
+[0.1.23]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.22...v0.1.23
+[0.1.22]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.21...v0.1.22
+[0.1.21]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.20...v0.1.21
 [0.1.20]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.19...v0.1.20
 [0.1.19]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.18...v0.1.19
 [0.1.18]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.17...v0.1.18
