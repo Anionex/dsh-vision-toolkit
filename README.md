@@ -250,6 +250,8 @@ Existing clients that still send `api_key="free"` remain compatible.
 
 For higher quotas, private endpoints, or another model, change the provider in **Settings → Vision Toolkit** and store the API key as a DSH Credential. Settings stores the Credential reference and never reads the saved secret back into the browser.
 
+**Step-by-step Groq tutorial:** [Get a free Groq API key and use Qwen3.6-27B for image understanding](docs/groq-qwen3.6-vision.md). It includes screenshots for account/API-key setup, the exact Vision Toolkit settings, and working cURL and Python examples.
+
 You can also configure a Profile patch:
 
 ```yaml
