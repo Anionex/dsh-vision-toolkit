@@ -894,14 +894,21 @@ export class VisionToolkitRuntime {
       const candidate = join(root, entry)
       const info = await lstat(candidate).catch(() => undefined)
       if (info === undefined || !info.isFile() || info.size > this.config.maxImageBytes) continue
+      let probed: { width: number; height: number; format: string } | undefined
       try {
-        const probed = await this.adapter.probeImageSize(candidate, { signal: operation.signal })
-        if (probed.width * probed.height <= this.config.maxImagePixels) {
-          return { path: candidate, bytes: info.size, width: probed.width, height: probed.height, format: probed.format }
-        }
+        probed = await this.adapter.probeImageSize(candidate, { signal: operation.signal })
       } catch {
-        await rm(candidate, { force: true }).catch(() => {})
+        probed = undefined
       }
+      const extension = extname(candidate).toLowerCase()
+      if (
+        probed !== undefined
+        && FORMAT_BY_EXTENSION.get(extension) === probed.format
+        && probed.width * probed.height <= this.config.maxImagePixels
+      ) {
+        return { path: candidate, bytes: info.size, width: probed.width, height: probed.height, format: probed.format }
+      }
+      await rm(candidate, { force: true }).catch(() => {})
     }
     const staged = join(root, `.${prefix}-${randomUUID()}.partial`)
     let compressed: CompressedImageInfo
