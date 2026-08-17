@@ -4,6 +4,18 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+## [0.1.20] - 2026-08-17
+
+### Changed
+
+- Allocate Groq accounts through persistent active-request and cooldown state, preferring the least-active available account instead of hashing concurrent requests onto colliding keys.
+- Give semaphore queueing and tool execution separate timeout budgets, so waiting for a session slot no longer consumes the 15-second vision inference deadline.
+
+### Fixed
+
+- Cool down rate-limited, unauthorized, and transiently failing Groq accounts before retrying another account, reducing repeated collisions and timeout cascades during concurrent visual grounding.
+- Report queue time separately in runtime diagnostics and return an explicit queue-timeout message when the session concurrency gate itself is saturated.
+
 ## [0.1.19] - 2026-08-17
 
 ### Changed
@@ -236,7 +248,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 - Runtime teardown cancels in-flight operations before removing Agent-scoped tools, the activation bootstrap, and the Skill.
 - The Web client is published through the current nested `dsh.client` manifest and loader-compatible built artifact required by DSH snapshot0810.
 
-[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.19...HEAD
+[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.20...HEAD
+[0.1.20]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.19...v0.1.20
 [0.1.19]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.18...v0.1.19
 [0.1.18]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.17...v0.1.18
 [0.1.17]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.16...v0.1.17
