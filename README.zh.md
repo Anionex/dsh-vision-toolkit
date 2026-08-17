@@ -277,6 +277,52 @@ API Key:  https://agent-vision.anionex.me（自动填写）
 - 只有 `vision_html_screenshot` 需要 Chrome、Chromium 或 Edge。
 - 图片需为 PNG、JPEG、GIF 或 WebP，并位于会话工作区或明确允许的目录中。
 
+### 配置 Python 运行时
+
+打包的 `managed` 运行时会创建自己的隔离虚拟环境。`runtime.python` 指定的是创建或刷新该环境时使用的 Python 解释器，并不会把 managed 运行时替换成系统解释器的全局 site-packages。当自动发现失败、机器上有多个 Python，或你希望固定使用项目内解释器时，应设置这个选项；`runtime.mode: external` 也使用该覆盖值。
+
+要求 Python 3.11 或更高版本。不设置覆盖值时，插件在 macOS/Linux 上依次尝试 `python3`、`python`，在 Windows 上依次尝试 `python`、`py -3`、`python3`。手动配置的值会作为一个可执行文件名或路径传入，而不是作为带参数的 Shell 命令，因此 Windows 启动器应填写 `py`（不要填写 `py -3`）；需要固定版本时，请填写绝对路径。
+
+在 Profile patch 中配置：
+
+```yaml
+- id: vision-toolkit
+  config:
+    runtime:
+      # macOS/Linux 系统 Python
+      python: python3
+      # 或使用项目内虚拟环境：
+      # python: /absolute/path/to/project/.venv/bin/python
+      # Windows 虚拟环境（YAML 中也可以使用正斜杠）：
+      # python: C:/Users/you/project/.venv/Scripts/python.exe
+      # Windows 启动器；其默认 Python 必须是 3.11+：
+      # python: py
+```
+
+如果需要手动准备项目内环境，请在 Vision Toolkit 源码 checkout 中运行以下命令（或者把 `runtime/requirements.lock` 换成绝对路径）：
+
+```sh
+python3 --version                         # 必须是 3.11 或更高
+uv venv .venv --python 3.13
+uv pip install --python .venv/bin/python -r runtime/requirements.lock
+```
+
+Windows 请将 `uv pip --python` 的值换成 `.venv\\Scripts\\python.exe`。把 `runtime.python` 指向同一个解释器，保存 Profile patch 后重启 Web Profile。然后打开 **设置 → 视觉工具**：运行时面板应显示实际使用的解释器和 Python 版本；点击 **运行健康检查** 和 **测试视觉模型**，确认不再出现 Python 版本错误。最后可将一张 PNG/JPEG 放入会话工作区并调用 `vision_glance` 做冒烟测试。
+
+路径围栏默认允许读取会话工作区中的图片。如果模型或工作流把图片放在操作系统临时目录中，请用真实的绝对路径加入 `allowedDirs`：
+
+```yaml
+- id: vision-toolkit
+  config:
+    allowedDirs:
+      # macOS/Linux：通常是 /tmp（也可能是 $TMPDIR 的值）
+      - /tmp
+      # Windows：替换成 PowerShell `$env:TEMP` 打印出的实际路径
+      # - C:/Users/you/AppData/Local/Temp
+```
+
+`allowedDirs` 是输入目录白名单，不是 managed 运行时缓存目录。managed 运行时自己的文件位于 `$DSH_HOME/cache/dsh-vision-toolkit`，无需加入白名单。Profile patch 不会展开 `$env:TEMP` 或 `%TEMP%` 这类环境变量，因此请先把它们解析为绝对路径。只添加你信任的目录，并优先把临时图片放入会话工作区。
+
 <details>
 <summary><strong>安装、升级、禁用和卸载</strong></summary>
 
