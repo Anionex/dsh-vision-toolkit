@@ -22,7 +22,7 @@
 🚀 Paste an image and ask directly | Install with one command | Built-in free vision | Broad use cases
 
 <p align="center">
-  [Highlights](#highlights) | [Quick start](#quick-start-three-steps) | [Common workflows](#common-workflows) | [Toolbox](#toolbox) | [Configuration](#configuration-and-limits) | [Troubleshooting](#troubleshooting) | [Community](#development-and-community)
+  <a href="#highlights">Highlights</a> | <a href="#quick-start-three-steps">Quick start</a> | <a href="#common-workflows">Common workflows</a> | <a href="#toolbox">Toolbox</a> | <a href="#configuration-and-limits">Configuration</a> | <a href="#troubleshooting">Troubleshooting</a> | <a href="#development-and-community">Community</a>
 </p>
 
 🌐 **English** | [中文](README.zh.md)
