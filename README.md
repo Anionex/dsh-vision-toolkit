@@ -25,6 +25,10 @@
 
 </div>
 
+<p align="center">
+  [Highlights](#highlights) | [Quick start](#quick-start-three-steps) | [Common workflows](#common-workflows) | [Toolbox](#toolbox) | [Configuration](#configuration-and-limits) | [Troubleshooting](#troubleshooting) | [Community](#development-and-community)
+</p>
+
 If you use DeepSeek or another text-only model in DeepSeek Harness (DSH), you may have run into the same problems: the model cannot see a screenshot, generic descriptions miss the point, buttons have no usable coordinates, and a rebuilt page can look “close enough” without a way to measure the remaining difference.
 
 🏆 This project is the first comprehensive vision-tool plugin in the DeepSeek Harness ecosystem: it was initiated before internal beta and built during the beta with reference to [`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit).
