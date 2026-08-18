@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
@@ -69,7 +70,7 @@ class BlockingSubprocessService extends ProbeSubprocessService {
   aborted = false
 
   override spawn(spec: SubprocessSpawnSpec): SubprocessHandle {
-    if (!spec.argv.some(arg => arg.endsWith('/bin/glance'))) return super.spawn(spec)
+    if (!spec.argv.some(arg => arg.endsWith(join('bin', 'glance')))) return super.spawn(spec)
     this.announceStart?.()
     this.announceStart = undefined
     const read = (): SubprocessOutputRead => ({ text: '', nextOffset: 0, lossy: false })

@@ -609,7 +609,7 @@ describe.skipIf(!profileE2eAvailable)('dsh-vision-toolkit profile install (keyle
       try {
         const reenabled = await runDsh([
           '--profile', 'headless', '--patch', patch,
-          '/vision-skills\nconfirm the Vision Toolkit is available again',
+          '/vision-skills confirm the Vision Toolkit is available again',
         ], {
           DSH_HOME: home,
           DSH_TELEMETRY_DISABLED: '1',

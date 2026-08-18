@@ -391,7 +391,10 @@ describe('VisionToolkitRuntime', () => {
     expect(second).toEqual(first)
     expect(compress).toHaveBeenCalledTimes(1)
     const entries = await readdir(join(workspace, '.dsh-vision-toolkit', 'tmp', 'compressed-images'))
-    expect(entries.some(entry => !entry.startsWith('.'))).toBe(true)
+    const cacheEntry = entries.find(entry => !entry.startsWith('.'))
+    expect(cacheEntry).toBeDefined()
+    expect(cacheEntry).toMatch(/^v2-[0-9a-f]{16}-b\d+-p\d+-[0-9a-f]{16}-\d+x\d+\.(?:jpg|png|webp)$/u)
+    expect(cacheEntry?.length).toBeLessThan(120)
   })
 
   it('ignores and replaces tampered compressed-cache entries', async () => {
@@ -422,11 +425,14 @@ describe('VisionToolkitRuntime', () => {
     const options = { signal, workspace }
     await runtime.glance({ images: ['sample.png'] }, options)
     const cacheDir = join(workspace, '.dsh-vision-toolkit', 'tmp', 'compressed-images')
+    const v1Entry = `v1-${'a'.repeat(64)}-b1024-p1000000-${'b'.repeat(64)}-256x256.png`
     await writeFile(join(cacheDir, 'legacy-entry'), 'stale')
+    await writeFile(join(cacheDir, v1Entry), 'stale')
 
     await runtime.glance({ images: ['sample.png'] }, options)
     const entries = (await readdir(cacheDir)).filter(name => !name.startsWith('.'))
     expect(entries).not.toContain('legacy-entry')
+    expect(entries).not.toContain(v1Entry)
     expect(entries.length).toBeGreaterThan(0)
   })
 

@@ -228,8 +228,14 @@ async function bundledPythonFixtureArchive(): Promise<Buffer> {
   const root = await mkdtemp(join(tmpdir(), 'dsh-vt-python-fixture-'))
   roots.push(root)
   try {
-    await mkdir(join(root, 'python', 'bin'), { recursive: true })
-    await writeFile(join(root, 'python', 'bin', 'python3'), '#!/bin/sh\nexit 0\n', { mode: 0o755 })
+    const interpreterDir = process.platform === 'win32'
+      ? join(root, 'python')
+      : join(root, 'python', 'bin')
+    await mkdir(interpreterDir, { recursive: true })
+    const interpreter = process.platform === 'win32'
+      ? join(interpreterDir, 'python.exe')
+      : join(interpreterDir, 'python3')
+    await writeFile(interpreter, '#!/bin/sh\nexit 0\n', { mode: 0o755 })
     await mkdir(join(root, 'python', 'lib'), { recursive: true })
     await writeFile(join(root, 'python', 'lib', 'marker.txt'), 'fixture\n')
     const archive = join(root, 'python.tar.gz')
@@ -298,7 +304,7 @@ describe('bundled Python bootstrap', () => {
     const first = await acquireBundledPython(ctx, stateRoot, join(stateRoot, 'home'), manifest, requestMock)
     const target = pythonBootstrapTarget(process.platform, process.arch, false)
     expect(first.version).toBe('3.13.15')
-    expect(first.command.program).toContain(`python-bootstrap/3.13.15-${target}/`)
+    expect(first.command.program).toContain(join('python-bootstrap', `3.13.15-${target}`))
     expect(requestMock).toHaveBeenCalledTimes(1)
     expect(requestMock).toHaveBeenCalledWith(
       expect.stringContaining('python-build-standalone/releases/download/'),
@@ -333,7 +339,7 @@ describe('bundled Python bootstrap', () => {
     await mkdir(join(stateRoot, 'home'), { recursive: true })
     const resolved = await resolveBootstrapPython(ctx, undefined, join(stateRoot, 'home'), manifest, requestMock)
     expect(resolved.version).toBe('3.13.15')
-    expect(resolved.command.program).toContain('python-bootstrap/')
+    expect(resolved.command.program).toContain(join('python-bootstrap', '3.13.15-'))
     expect(requestMock).toHaveBeenCalledTimes(1)
   })
 

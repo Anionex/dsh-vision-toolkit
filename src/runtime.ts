@@ -56,7 +56,9 @@ const VISION_MODEL_TEST_IMAGE = fileURLToPath(new URL('../assets/vision-model-te
 const VISION_MODEL_TEST_PROMPT = 'This is an explicit service readiness test. Reply with one short sentence confirming that you received the image.'
 
 /** Bump when the Pillow compression ladder changes so stale cache entries are ignored. */
-const COMPRESSED_IMAGE_CACHE_VERSION = 'v1'
+const COMPRESSED_IMAGE_CACHE_VERSION = 'v2'
+/** Cache keys carry 64-bit digests so Windows paths stay below MAX_PATH; the full file sha256 is computed on read and compared against this prefix. */
+const COMPRESSED_IMAGE_CACHE_KEY_DIGEST_LENGTH = 16
 const COMPRESSED_IMAGE_CACHE_MAX_ENTRIES = 200
 const COMPRESSED_IMAGE_CACHE_MAX_BYTES = 512 * 1024 * 1024
 const COMPRESSED_IMAGE_CACHE_STALE_PARTIAL_MS = 60 * 60 * 1000
@@ -883,7 +885,7 @@ export class VisionToolkitRuntime {
   private async readCacheCandidate(
     root: string,
     name: string,
-    expectedOutDigest: string,
+    expectedOutDigestPrefix: string,
     maxBytes: number,
     maxPixels: number,
     operation: OperationContext,
@@ -909,7 +911,8 @@ export class VisionToolkitRuntime {
     } catch {
       return undefined
     }
-    if (bytes.length !== info.size || createHash('sha256').update(bytes).digest('hex') !== expectedOutDigest) return undefined
+    const digest = createHash('sha256').update(bytes).digest('hex')
+    if (bytes.length !== info.size || !digest.startsWith(expectedOutDigestPrefix)) return undefined
     let probed: { width: number; height: number; format: string } | undefined
     try {
       probed = await this.adapter.probeImageSize(real, { signal: operation.signal })
@@ -929,7 +932,7 @@ export class VisionToolkitRuntime {
 
   private cacheEntryOutDigest(entry: string, prefix: string): string | undefined {
     const tail = entry.slice(prefix.length + 1)
-    return /^[0-9a-f]{64}-/u.test(tail) ? tail.slice(0, 64) : undefined
+    return /^[0-9a-f]{16}-/u.test(tail) ? tail.slice(0, 16) : undefined
   }
 
   private async pruneCompressedCache(root: string): Promise<void> {
@@ -997,21 +1000,21 @@ export class VisionToolkitRuntime {
     if (bytes.length !== image.bytes) {
       throw new VisionToolkitError('input', `image changed while preparing the vision request: ${image.path}`)
     }
-    const digest = createHash('sha256').update(bytes).digest('hex')
+    const digest = createHash('sha256').update(bytes).digest('hex').slice(0, COMPRESSED_IMAGE_CACHE_KEY_DIGEST_LENGTH)
     const root = await this.compressedImageRoot(policy)
     await this.pruneCompressedCache(root)
     const prefix = `${COMPRESSED_IMAGE_CACHE_VERSION}-${digest}-b${this.config.maxImageBytes}-p${this.config.maxImagePixels}`
     for (const entry of await readdir(root)) {
       if (!entry.startsWith(`${prefix}-`) || entry.startsWith('.')) continue
-      const outDigest = this.cacheEntryOutDigest(entry, prefix)
-      if (outDigest === undefined) {
+      const outDigestPrefix = this.cacheEntryOutDigest(entry, prefix)
+      if (outDigestPrefix === undefined) {
         await rm(join(root, entry), { force: true }).catch(() => {})
         continue
       }
       const cached = await this.readCacheCandidate(
         root,
         entry,
-        outDigest,
+        outDigestPrefix,
         this.config.maxImageBytes,
         this.config.maxImagePixels,
         operation,
@@ -1037,7 +1040,7 @@ export class VisionToolkitRuntime {
     }
     const extension = compressed.format === 'jpeg' ? 'jpg' : compressed.format
     const stagedBytes = await readFile(staged, { signal: operation.signal })
-    const outDigest = createHash('sha256').update(stagedBytes).digest('hex')
+    const outDigest = createHash('sha256').update(stagedBytes).digest('hex').slice(0, COMPRESSED_IMAGE_CACHE_KEY_DIGEST_LENGTH)
     const finalName = `${prefix}-${outDigest}-${compressed.width}x${compressed.height}.${extension}`
     const finalPath = join(root, finalName)
     const existing = await this.readCacheCandidate(
