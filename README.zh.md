@@ -425,7 +425,7 @@ TSX_TSCONFIG_PATH=tsconfig.json pnpm dlx tsx scripts/ui-restoration-example.ts -
 </p>
 
 <p align="center">
-  我是 <a href="https://anionex.me/">anionex</a>，一位 AI 原生开发者，曾位列 GitHub 全球开发者趋势榜第 <strong>3</strong> 名，项目累计超过 16k stars。想了解我后续的工作，欢迎在 <a href="https://x.com/anion_ex">X</a> 或 <a href="https://github.com/Anionex">GitHub</a> 关注我。
+  我是 <a href="https://anionex.me/">anionex</a>，一位 AI 原生开发者，曾位列 GitHub 全球开发者趋势榜第 <strong>3</strong> 名，项目累计超过 16k stars。想了解我后续的工作，欢迎在 <a href="https://github.com/Anionex">GitHub</a> 关注我。
 </p>
 
 [`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit) 由 [Anionex](https://anionex.me/) 创建。本仓库维护它面向 DeepSeek Harness 的原生集成。

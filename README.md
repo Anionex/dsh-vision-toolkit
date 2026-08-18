@@ -424,7 +424,7 @@ TSX_TSCONFIG_PATH=tsconfig.json pnpm dlx tsx scripts/ui-restoration-example.ts -
 </p>
 
 <p align="center">
-  I'm <a href="https://anionex.me/">anionex</a>, an AI-native developer who once ranked <strong>No. 3</strong> on GitHub's global developer trending list, with more than 16k stars across my projects. If you would like to follow my future work, <a href="https://x.com/anion_ex">follow me on X</a> or <a href="https://github.com/Anionex">GitHub</a>.
+  I'm <a href="https://anionex.me/">anionex</a>, an AI-native developer who once ranked <strong>No. 3</strong> on GitHub's global developer trending list, with more than 16k stars across my projects. If you would like to follow my future work, <a href="https://github.com/Anionex">follow me on GitHub</a>.
 </p>
 
 [`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit) was created by [Anionex](https://anionex.me/). This repository maintains its native DeepSeek Harness integration.
