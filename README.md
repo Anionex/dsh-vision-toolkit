@@ -197,8 +197,6 @@ Most vision bridges for text-only models ask a multimodal model for a generic de
   <img src="assets/upstream/focus-hint-comparison-2.webp" width="49%" alt="Generic image descriptions compared with task-aware vision using a focus hint - part 2" />
 </p>
 
-*Generic descriptions compared with task-aware descriptions driven by a focus hint. Upstream demonstration captures; the DSH integration does not claim to have reproduced them.*
-
 **Architecture and image-input behavior**
 
 ```mermaid

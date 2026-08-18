@@ -197,8 +197,6 @@ dsh plugin --profile headless add @anionex/dsh-vision-toolkit
   <img src="assets/upstream/focus-hint-comparison-2.webp" width="49%" alt="通用图片描述与带 focus hint 的任务感知描述对比（二）" />
 </p>
 
-*通用描述与 focus hint 驱动的任务感知描述对比。以上为上游演示截图，本 DSH 集成不声称已复现。*
-
 **架构与图片输入行为**
 
 ```mermaid
