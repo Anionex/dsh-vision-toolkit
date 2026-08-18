@@ -43,6 +43,7 @@ If you use DeepSeek or another text-only model in DeepSeek Harness (DSH), you ma
 - **Built-in free vision.** The shared service works immediately after installation with a quota of **300 images per machine per day**.
 - **Vision guided by intent.** The agent extracts evidence for the task at hand, such as “Where is the error?” or “Where is the button?”, instead of returning a generic caption.
 - **A complete screenshot-to-verification loop.** Reference images, HTML screenshots, difference regions, and pixel comparison work together for UI restoration.
+- **A battle-tested visual-task methodology.** The bundled Skill teaches the agent when to inspect, which tool to choose, in what order to run it, and how to verify the result — the same method proven in real Codex + DeepSeek sessions upstream.
 
 [`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit) gives an agent more than image captions: it can read, locate, crop, trace, rebuild, and verify visual work. DSH Vision Toolkit is its native DeepSeek Harness integration, bringing that workflow into Web and Headless Profiles.
 
@@ -132,6 +133,29 @@ The repository includes a reproducible UI-restoration example: the agent renders
   <img src="examples/ui-restoration/assets/implementation.png" width="49%" alt="UI implementation after visual diagnosis and pixel comparison" />
 </p>
 
+### Fast UI restoration: an approximate first pass
+
+<p align="center">
+  <img src="assets/upstream/ui-fast-restore-reference.webp" width="49%" alt="Original YouMind homepage used as the fast UI restoration reference" />
+  <img src="assets/upstream/ui-fast-restore-result.webp" width="49%" alt="Approximate YouMind homepage produced with fast UI restoration mode" />
+</p>
+
+*Left: the original page. Right: a fast reconstruction that preserves the main layout, content, and visual hierarchy while allowing approximate colors and library icons. Fast mode targets a first screenshot in about three minutes.*
+
+### More real-world effects
+
+<p align="center">
+  <img src="assets/upstream/image-qa.webp" width="49%" alt="DeepSeek answering a UI style question with similar-style comparisons" />
+  <img src="assets/upstream/screenshot-debugging.webp" width="49%" alt="DeepSeek debugging mismatched UI fields from a screenshot" />
+</p>
+
+<p align="center">
+  <img src="assets/upstream/multi-round-qa.webp" width="49%" alt="Multi-round image Q&A with the optional glance CLI" />
+  <img src="assets/upstream/chess-grounding.webp" width="49%" alt="DeepSeek V4 playing chess by locating screen elements with glance/ground" />
+</p>
+
+*Upstream demonstration captures: a UI style question, screenshot debugging, multi-round image Q&A, and chess played by grounding screen elements. This DSH integration does not claim to have rerun or reproduced those results.*
+
 ## Quick start: three steps
 
 ### 1. Install
@@ -174,6 +198,18 @@ Rebuild the page from reference.png. After each pass, render it and run a pixel 
 | Recreate a page or component | Reference → implementation → HTML screenshot → pixel diff → iterate |
 | Extract brand visuals | Crop region → analyze dominant colors → extract foreground → export transparent PNG |
 
+## Use-case playbooks
+
+The bundled `vision-skills` Skill carries the complete upstream playbooks. They document when to use each workflow, the order in which to call tools, and how to verify the result:
+
+| Playbook | What the agent learns to do |
+|---|---|
+| [Read long screenshots, chat histories, and scrolling pages](assets/skill/references/long-screenshot-ocr.md) | Find low-content cut bands, OCR each chunk in order, preserve chat speakers/timestamps/quotes, merge only duplicated overlap, and surface risky boundaries for verification |
+| [Rebuild a UI from a screenshot or design](assets/skill/references/restore-ui.md) | Reuse project components and assets first, then combine code-native UI, extracted visuals, rendered screenshots, and visual comparison to align a page or component |
+| [Restore an icon, logo, illustration, or other graphic](assets/skill/references/restore-graphic.md) | Extract a transparent PNG from the source image, or rebuild an editable/scalable SVG when needed, then verify shape, color, and alpha edges |
+| [Turn a sketch, diagram, or whiteboard into structured code](assets/skill/references/restore-structure.md) | Recover nodes, labels, connections, and directions as editable Mermaid, Graphviz, or another structured representation |
+| [Operate a GUI from screenshots](assets/skill/references/gui.md) | Locate a control, perform one action, capture the screen again, and verify the resulting state before continuing |
+
 ## Toolbox
 
 The plugin provides 10 tools that can be called independently or composed into a workflow:
@@ -198,6 +234,17 @@ For a long HTML document, pass `fullPage=true`. The requested width and height r
 ## How it works
 
 The plugin keeps image understanding and deterministic local image processing in one Agent workflow. Expand the flow below for the implementation boundary.
+
+### Descriptions that keep the task in view
+
+Most vision bridges for text-only models ask a multimodal model for a generic description and hand it to the text model, adding a semantic layer where information is lost. Vision Toolkit instead recovers **why the agent wants to look at the image**: the user message or the model's stated reason becomes a focus hint passed to the vision model. The result is a task-aware description that emphasizes what matters for the current step — with fewer tokens, higher accuracy, and faster responses.
+
+<p align="center">
+  <img src="assets/upstream/focus-hint-comparison-1.webp" width="49%" alt="Generic image descriptions compared with task-aware vision using a focus hint - part 1" />
+  <img src="assets/upstream/focus-hint-comparison-2.webp" width="49%" alt="Generic image descriptions compared with task-aware vision using a focus hint - part 2" />
+</p>
+
+*Generic descriptions compared with task-aware descriptions driven by a focus hint. Upstream demonstration captures; the DSH integration does not claim to have reproduced them.*
 
 <details>
 <summary><strong>Architecture and image-input behavior</strong></summary>
@@ -278,6 +325,18 @@ OpenAI Chat Completions-compatible endpoints and Anthropic Messages are supporte
 
 For a trusted internal endpoint that uses a self-signed certificate or MITM proxy, start the DSH process with `VISION_SSL_VERIFY=0`. The plugin forwards that value to the isolated Python runtime; certificate verification remains enabled when the variable is unset or has any other value. The false values `false`, `off`, `no`, `none`, and `disabled` are also accepted, case-insensitively.
 
+### Modes and how to trigger them
+
+- **Vision protocol.** OpenAI Chat Completions by default (`provider.protocol: openai`); Anthropic Messages with `provider.protocol: anthropic`.
+- **Long-screenshot OCR content.** `vision_long_screenshot_ocr` uses verbatim OCR by default (`mode: "general"`); use `mode: "chat"` for chat transcripts so speakers, timestamps, and quotes are preserved as structured messages.
+- **Glance OCR.** Pass `ocr: true` to `vision_glance` to transcribe all visible text verbatim (mutually exclusive with a `query`).
+- **Trace geometry.** `vision_trace` fits spline curves by default; pass `polygon: true` for boxy diagrams and wireframes.
+- **Foreground extraction.** `vision_extract_foreground` targets color subjects by default (`mode: "color"`); use `mode: "dark"` for dark line art, gray/black logos, and similar ink.
+- **HTML screenshot.** `vision_html_screenshot` captures the requested viewport by default; pass `fullPage: true` to cover the complete document and report its CSS `pageHeight`.
+- **UI restoration.** Use **fast restore mode** when the user wants a quick, rough, prototype, or first-pass reconstruction (first screenshot in about three minutes); use the standard workflow for close, precise, production-ready alignment. See the [restore-ui playbook](assets/skill/references/restore-ui.md) for the trigger language and steps.
+- **Runtime.** `managed` is the default; use `runtime.mode: external` plus `runtime.agentVisionToolkitPath` for a clean pinned checkout — see [Python runtime configuration](docs/python-runtime.md).
+- **Pasted-image input.** `imageInputVariants.autoSwitch: true` (default) automatically switches a text-only route to its `(Vision Toolkit)` variant when you paste an image; set it to `false` to keep the path-only takeover instead.
+
 ### Requirements
 
 - A DeepSeek Harness Web or Headless Profile.
@@ -327,6 +386,12 @@ The updater revalidates the Profile before mutation, snapshots the original mani
 | First-time runtime setup fails | The standalone-Python download needs network and disk access. Check connectivity or package-cache access, or install Python 3.11+ / configure `runtime.python` in Settings, then retry the model test |
 | Chrome is not found | Install Chrome, Chromium, or Edge. Only HTML screenshot rendering is unavailable; the other tools still work |
 | An artifact cannot be previewed | Use **Open file** or the workspace path in the result. Preview URLs exist only while the Web route is available |
+
+## FAQ
+
+**Will adding a vision model significantly increase costs?**
+
+No. Each inspection sends only the necessary intent and the image to the multimodal model, and context does not accumulate across calls, so the added cost stays small. To reduce it further, a locally deployed small multimodal side model (for example the Gemma 4 or Qwen 3.5/3.6 series) can provide the vision capability.
 
 ## Development and community
 

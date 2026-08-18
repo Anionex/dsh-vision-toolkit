@@ -45,6 +45,7 @@
 - **内置免费视觉。** 安装后即可直接使用共享服务，每台机器每天有 **300 张图** 的免费额度。
 - **带着意图去看图。** Agent 不只生成通用描述，而是围绕“报错在哪里”“按钮在哪”等当前任务提取证据。
 - **从截图到可验证结果。** 参考图、HTML 截图、差异定位和像素对比组成一条完整 UI 还原闭环。
+- **久经实战的视觉任务方法论。** 随附 Skill 教 Agent 何时检查、选哪个工具、按什么顺序执行，以及如何验证结果——与上游在真实 Codex + DeepSeek 会话中验证过的方法一致。
 
 
 [`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit) 的视觉能力不只停留在图片描述：Agent 可以读取、定位、裁剪、描摹、还原和验证视觉内容。DSH Vision Toolkit 是这套工具箱面向 DeepSeek Harness 的原生接入，让它进入 Web 和 Headless Profile。
@@ -135,6 +136,29 @@ dsh plugin --profile web add @anionex/dsh-vision-toolkit
   <img src="examples/ui-restoration/assets/implementation.png" width="49%" alt="经过视觉定位和像素对比后的 UI 实现" />
 </p>
 
+### 快速 UI 还原：先出一版近似稿
+
+<p align="center">
+  <img src="assets/upstream/ui-fast-restore-reference.webp" width="49%" alt="快速 UI 还原参考图：YouMind 首页原图" />
+  <img src="assets/upstream/ui-fast-restore-result.webp" width="49%" alt="使用快速 UI 还原模式生成的近似首页" />
+</p>
+
+*左：原始页面；右：保留主要布局、内容和视觉层级的快速还原稿，允许颜色和图标库近似。快速模式的目标是约三分钟内产出首版截图。*
+
+### 更多真实效果
+
+<p align="center">
+  <img src="assets/upstream/image-qa.webp" width="49%" alt="DeepSeek 用相似风格对比回答 UI 风格问题" />
+  <img src="assets/upstream/screenshot-debugging.webp" width="49%" alt="DeepSeek 从截图排查字段名不一致问题" />
+</p>
+
+<p align="center">
+  <img src="assets/upstream/multi-round-qa.webp" width="49%" alt="使用 glance 进行多轮图片问答" />
+  <img src="assets/upstream/chess-grounding.webp" width="49%" alt="DeepSeek V4 通过 glance/ground 定位棋盘元素下棋" />
+</p>
+
+*以上为上游实测示例：UI 风格问答、截图排障、多轮图片问答，以及通过元素定位下棋。本 DSH 集成不声称已重跑或复现这些结果。*
+
 ## 快速开始：三步完成
 
 ### 1. 安装
@@ -177,6 +201,18 @@ dsh plugin --profile headless add @anionex/dsh-vision-toolkit
 | 复刻网页或组件 | 参考图 → 实现 → HTML 截图 → 像素对比 → 继续修正 |
 | 提取品牌视觉 | 裁剪区域 → 主色分析 → 前景提取 → 导出透明 PNG |
 
+## 使用场景手册
+
+随附的 `vision-skills` Skill 携带完整的上游 playbook。它们说明了每个工作流何时使用、按什么顺序调用工具，以及如何验证结果：
+
+| 手册 | Agent 学会做什么 |
+|---|---|
+| [读取长截图、聊天记录和滚动页面](assets/skill/references/long-screenshot-ocr.md) | 找到低内容切割带、按顺序 OCR 每个分块、保留聊天发言人/时间戳/引用、只合并重复的重叠部分，并标出有风险的边界供验证 |
+| [根据截图或设计重建 UI](assets/skill/references/restore-ui.md) | 优先复用项目组件和素材，再用代码原生 UI、提取的视觉素材、渲染截图和视觉对比来对齐页面或组件 |
+| [还原图标、Logo、插画或其他图形](assets/skill/references/restore-graphic.md) | 从源图像提取透明 PNG，或按需重建可编辑/可缩放 SVG，然后验证形状、颜色和 alpha 边缘 |
+| [把草图、示意图或白板转成结构化代码](assets/skill/references/restore-structure.md) | 把节点、标签、连接和方向恢复为可编辑的 Mermaid、Graphviz 或其他结构化表示 |
+| [通过截图操作 GUI](assets/skill/references/gui.md) | 定位控件、执行一个动作、再次截图，并先验证结果状态再继续 |
+
 ## 工具一览
 
 插件提供 10 个可以单独调用、也可以组合使用的视觉工具：
@@ -201,6 +237,17 @@ dsh plugin --profile headless add @anionex/dsh-vision-toolkit
 ## 工作原理
 
 插件把远程图片理解和可重复的本地图片处理放进同一套 Agent 工作流。展开下面的流程可以查看具体边界。
+
+### 让描述始终围绕当前任务
+
+多数文本模型视觉桥接的做法是让多模态模型生成一段通用描述，再把描述交给文本模型，这等于多了一层必然有损的语义转换。Vision Toolkit 反过来恢复 **Agent 为什么想看这张图**：把用户消息或模型给出的调用原因作为 focus hint（聚焦提示）传给视觉模型，得到的是围绕当前步骤的重点描述——更少 token、更准确、响应更快。
+
+<p align="center">
+  <img src="assets/upstream/focus-hint-comparison-1.webp" width="49%" alt="通用图片描述与带 focus hint 的任务感知描述对比（一）" />
+  <img src="assets/upstream/focus-hint-comparison-2.webp" width="49%" alt="通用图片描述与带 focus hint 的任务感知描述对比（二）" />
+</p>
+
+*通用描述与 focus hint 驱动的任务感知描述对比。以上为上游演示截图，本 DSH 集成不声称已复现。*
 
 <details>
 <summary><strong>架构与图片输入行为</strong></summary>
@@ -279,6 +326,18 @@ API Key:  https://agent-vision.anionex.me（自动填写）
 
 如果受信任的内部端点使用自签证书或 MITM 代理，可在启动 DSH 进程时设置 `VISION_SSL_VERIFY=0`。插件会把该值传入隔离的 Python 运行环境；未设置或使用其他值时仍默认校验证书。还支持大小写不敏感的假值 `false`、`off`、`no`、`none` 和 `disabled`。
 
+### 模式与触发方法
+
+- **视觉协议。** 默认使用 OpenAI Chat Completions（`provider.protocol: openai`）；改用 Anthropic Messages 时设置 `provider.protocol: anthropic`。
+- **长截图 OCR 内容模式。** `vision_long_screenshot_ocr` 默认逐字 OCR（`mode: "general"`）；聊天记录截图使用 `mode: "chat"`，会把发言人、时间戳和引用保留为结构化消息。
+- **Glance OCR 模式。** 给 `vision_glance` 传 `ocr: true` 逐字转写全部可见文字（与 `query` 互斥）。
+- **描摹几何模式。** `vision_trace` 默认拟合样条曲线；方正的示意图/线框图传 `polygon: true` 使用多边形模式。
+- **前景提取模式。** `vision_extract_foreground` 默认提取彩色主体（`mode: "color"`）；深色线条、灰/黑 Logo 等线稿传 `mode: "dark"`。
+- **HTML 截图模式。** `vision_html_screenshot` 默认按请求视口截图；传 `fullPage: true` 截取完整文档高度并返回 CSS `pageHeight`。
+- **UI 还原模式。** 用户要求快速、粗略、原型或首版还原时走 **快速还原模式**（约三分钟出首版）；要求接近、精确、可上线对齐时走标准流程。触发语与步骤见 [restore-ui 手册](assets/skill/references/restore-ui.md)。
+- **运行时模式。** 默认 `managed`；使用干净固定 checkout 时设置 `runtime.mode: external` 和 `runtime.agentVisionToolkitPath`，详见 [Python 运行时配置](docs/python-runtime.zh.md)。
+- **粘贴输入模式。** `imageInputVariants.autoSwitch: true`（默认）会在粘贴图片时把纯文本路由自动切换到 `(Vision Toolkit)` 变体；设为 `false` 则只保留路径接管。
+
 ### 运行要求
 
 - DeepSeek Harness Web 或 Headless Profile。
@@ -328,6 +387,12 @@ dsh plugin --profile web remove @anionex/dsh-vision-toolkit
 | 首次运行时准备失败 | 自动下载托管 Python 需要网络和磁盘权限；失败时检查网络或包缓存，也可以安装 Python 3.11+ 或在 Settings 中配置 `runtime.python`，然后重新测试 |
 | 找不到 Chrome | 安装 Chrome、Chromium 或 Edge；只有 HTML 截图不可用，其他工具不受影响 |
 | 产物无法预览 | 使用“打开文件”或结果中的工作区路径；预览 URL 只在 Web 路由可用时存在 |
+
+## FAQ
+
+**接入视觉模型会显著增加成本吗？**
+
+不会。每次检查只把必要的意图和图片发给多模态模型，调用之间不会累积上下文，因此额外成本很小。想进一步降低成本，可以用本地部署的小型多模态侧模型（例如 Gemma 4 或 Qwen 3.5/3.6 系列）提供视觉能力。
 
 ## 开发与社区
 
