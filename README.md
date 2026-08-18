@@ -1,8 +1,4 @@
 <p align="center">
-  [Highlights](#highlights) | [Quick start](#quick-start-three-steps) | [Common workflows](#common-workflows) | [Toolbox](#toolbox) | [Configuration](#configuration-and-limits) | [Troubleshooting](#troubleshooting) | [Community](#development-and-community)
-</p>
-
-<p align="center">
   <img src="assets/hero-v2.png" alt="DSH Vision Toolkit helps text-only DeepSeek Harness agents understand images and complete visual tasks" />
 </p>
 
@@ -24,6 +20,10 @@
 **A more powerful vision toolkit—give text-only models in DeepSeek Harness eyes: image Q&A, long-screenshot OCR, UI restoration, and GUI visual tasks in one toolkit and Skill.**
 
 🚀 Paste an image and ask directly | Install with one command | Built-in free vision | Broad use cases
+
+<p align="center">
+  [Highlights](#highlights) | [Quick start](#quick-start-three-steps) | [Common workflows](#common-workflows) | [Toolbox](#toolbox) | [Configuration](#configuration-and-limits) | [Troubleshooting](#troubleshooting) | [Community](#development-and-community)
+</p>
 
 🌐 **English** | [中文](README.zh.md)
 
