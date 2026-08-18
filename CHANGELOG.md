@@ -4,12 +4,15 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+## [0.1.32] - 2026-08-18
+
 ### Fixed
 
 - Fixed the compressed-image cache silently missing on Windows when cache file paths exceeded the 260-character `MAX_PATH` limit; cache keys now use shorter 64-bit digests and are versioned as `v2`, so old oversized entries are pruned automatically.
 - Made the portable package verification and the test suite Windows-compatible, including `npm.cmd` invocation, path-separator handling, Python bootstrap fixture layout, a profile E2E prompt that avoids newline-carrying argv, and restart-helper test skips where automatic restart is intentionally unavailable.
 - Routed Windows `pnpm` batch shims through `cmd.exe` so plugin updates work when the harness resolves `pnpm` to a `pnpm.CMD` path.
 - Added a Windows CI job that runs the portable-package build, tests, and verification on `windows-latest`.
+- Fixed an intermittent `NO_ADAPTER` failure on image-input variant routes (`vision-toolkit-<provider>`) after adapter re-registration, model switches, or hot reload: wrappers now survive transient registry gaps, are re-registered when the live registry drops them, and self-heal on a periodic sweep.
 
 ## [0.1.31] - 2026-08-18
 
@@ -345,7 +348,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 - Runtime teardown cancels in-flight operations before removing Agent-scoped tools, the activation bootstrap, and the Skill.
 - The Web client is published through the current nested `dsh.client` manifest and loader-compatible built artifact required by DSH snapshot0810.
 
-[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.31...HEAD
+[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.32...HEAD
+[0.1.32]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.31...v0.1.32
 [0.1.31]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.30...v0.1.31
 [0.1.30]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.29...v0.1.30
 [0.1.29]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.28...v0.1.29
