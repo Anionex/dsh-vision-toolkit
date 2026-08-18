@@ -405,14 +405,6 @@ The current release focuses on screenshot understanding, visual grounding, OCR, 
 
 ## Development and community
 
-```sh
-pnpm install --frozen-lockfile --trust-lockfile
-pnpm run verify:portable
-pnpm run build
-pnpm test
-TSX_TSCONFIG_PATH=tsconfig.json pnpm dlx tsx scripts/ui-restoration-example.ts --check
-```
-
 - Read [CONTRIBUTING.md](CONTRIBUTING.md) before contributing.
 - Use [GitHub Issues](https://github.com/Anionex/dsh-vision-toolkit/issues) for bugs, focused feature requests, and usage questions; see [SUPPORT.md](SUPPORT.md) for channel guidance.
 - Report vulnerabilities privately through [SECURITY.md](SECURITY.md).
@@ -423,9 +415,7 @@ TSX_TSCONFIG_PATH=tsconfig.json pnpm dlx tsx scripts/ui-restoration-example.ts -
   <img src="assets/community-group-qr.png" alt="QR code for the agent-vision-toolkit community group" width="240" />
 </p>
 
-<p align="center">
-  I'm <a href="https://anionex.me/">anionex</a>, an AI-native developer who once ranked <strong>No. 3</strong> on GitHub's global developer trending list, with more than 16k stars across my projects. If you would like to follow my future work, <a href="https://github.com/Anionex">follow me on GitHub</a>.
-</p>
+I'm <a href="https://anionex.me/">anionex</a>, an AI-native developer who once ranked <strong>No. 3</strong> on GitHub's global developer trending list, with more than 16k stars across my projects. If you would like to follow my future work, <a href="https://github.com/Anionex">follow me on GitHub</a>.
 
 [`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit) was created by [Anionex](https://anionex.me/). This repository maintains its native DeepSeek Harness integration.
 

@@ -406,14 +406,6 @@ dsh plugin --profile web remove @anionex/dsh-vision-toolkit
 
 ## 开发与社区
 
-```sh
-pnpm install --frozen-lockfile --trust-lockfile
-pnpm run verify:portable
-pnpm run build
-pnpm test
-TSX_TSCONFIG_PATH=tsconfig.json pnpm dlx tsx scripts/ui-restoration-example.ts --check
-```
-
 - 贡献前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
 - Bug、功能建议和使用问题请提交到 [GitHub Issues](https://github.com/Anionex/dsh-vision-toolkit/issues)；渠道说明见 [SUPPORT.md](SUPPORT.md)。
 - 安全漏洞请按 [SECURITY.md](SECURITY.md) 私下报告。
@@ -424,9 +416,7 @@ TSX_TSCONFIG_PATH=tsconfig.json pnpm dlx tsx scripts/ui-restoration-example.ts -
   <img src="assets/community-group-qr.png" alt="agent-vision-toolkit 项目交流群二维码" width="240" />
 </p>
 
-<p align="center">
-  我是 <a href="https://anionex.me/">anionex</a>，一位 AI 原生开发者，曾位列 GitHub 全球开发者趋势榜第 <strong>3</strong> 名，项目累计超过 16k stars。想了解我后续的工作，欢迎在 <a href="https://github.com/Anionex">GitHub</a> 关注我。
-</p>
+我是 <a href="https://anionex.me/">anionex</a>，一位 AI 原生开发者，曾位列 GitHub 全球开发者趋势榜第 <strong>3</strong> 名，项目累计超过 16k stars。想了解我后续的工作，欢迎在 <a href="https://github.com/Anionex">GitHub</a> 关注我。
 
 [`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit) 由 [Anionex](https://anionex.me/) 创建。本仓库维护它面向 DeepSeek Harness 的原生集成。
 
