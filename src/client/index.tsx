@@ -1538,7 +1538,10 @@ export function apply(ctx: ClientContext): void {
   const controller = new VisionSettingsController()
   ctx.effect(() => {
     const refreshSettings = (namespace: string): void => {
-      if (namespace === 'vision-toolkit') controller.refreshIfLoaded()
+      if (namespace === 'vision-toolkit') {
+        resetDisplayConfigCache()
+        controller.refreshIfLoaded()
+      }
     }
     const refreshCredential = (ref: string): void => {
       const current = controller.snapshot().snapshot

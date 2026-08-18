@@ -517,6 +517,35 @@ describe('Vision Toolkit client plugin', () => {
     expect(displayConfig).toHaveBeenCalledTimes(2)
   })
 
+  it('discards an in-flight display-config response after a Settings save', async () => {
+    let resolveFirstDisplay: ((value: Response) => void) | undefined
+    let displayRequests = 0
+    const displayConfig = vi.fn(() => {
+      displayRequests += 1
+      if (displayRequests === 1) {
+        return new Promise<Response>(resolve => { resolveFirstDisplay = resolve })
+      }
+      return Promise.resolve(jsonResponse({ ok: true, value: { hidden: true } }))
+    })
+    const fetchMock = vi.fn(async (input: unknown) => {
+      if (String(input).endsWith('/display-config')) return displayConfig()
+      return jsonResponse({ ok: true, value: settingsSnapshot() })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const controller = new VisionSettingsController()
+
+    const firstRead = readDisplayConfig()
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(displayRequests).toBe(1)
+
+    const saved = await controller.save(settingsSnapshot().settings.value, 1, undefined, true)
+    expect(saved).toBe(true)
+
+    resolveFirstDisplay?.(jsonResponse({ ok: true, value: { hidden: false } }))
+    await expect(firstRead).resolves.toEqual({ hidden: true })
+    expect(displayRequests).toBe(2)
+  })
+
   it('unlocks API key input when the built-in provider changes to a custom endpoint', async () => {
     const initial = settingsSnapshot()
     initial.settings.value.provider = {

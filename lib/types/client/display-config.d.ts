@@ -14,6 +14,10 @@ export declare const DISPLAY_CONFIG_ROUTE = "/_dsh/vision-toolkit/display-config
 export declare function readDisplayConfig(): Promise<{
     hidden: boolean;
 }>;
-/** Drop the cached flag (test seams and connection-reset handling). */
+/**
+ * Drop the cached flag and invalidate in-flight responses (test seams,
+ * Settings saves, and connection-reset handling). An older request that
+ * resolves afterwards must not repopulate the cache with a stale flag.
+ */
 export declare function resetDisplayConfigCache(): void;
 //# sourceMappingURL=display-config.d.ts.map

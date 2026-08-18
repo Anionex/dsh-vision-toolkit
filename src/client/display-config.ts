@@ -15,6 +15,7 @@ interface CachedDisplayConfig {
 }
 
 let cached: CachedDisplayConfig | undefined
+let cacheEpoch = 0
 
 /**
  * Resolve the current transparent-routing flag, failing closed to non-hidden
@@ -23,28 +24,38 @@ let cached: CachedDisplayConfig | undefined
  * @returns the display-mode flags observed from the host.
  */
 export async function readDisplayConfig(): Promise<{ hidden: boolean }> {
-  const now = Date.now()
-  if (cached !== undefined && now - cached.at < CONFIG_TTL_MS) {
-    return { hidden: cached.hidden }
-  }
-  try {
-    const response = await fetch(DISPLAY_CONFIG_ROUTE, { cache: 'no-store' })
-    if (!response.ok) throw new Error(`display-config ${response.status}`)
-    const body = await response.json() as { ok?: boolean; value?: { hidden?: unknown } }
-    if (body.ok !== true || typeof body.value?.hidden !== 'boolean') {
-      throw new Error('malformed display-config payload')
+  for (;;) {
+    const now = Date.now()
+    if (cached !== undefined && now - cached.at < CONFIG_TTL_MS) {
+      return { hidden: cached.hidden }
     }
-    cached = { hidden: body.value.hidden, at: now }
-    return { hidden: body.value.hidden }
-  } catch {
-    // Transparent routing is an enhancement: an unreachable config must never
-    // hide anything or change paste behavior.
-    cached = { hidden: false, at: now }
-    return { hidden: false }
+    const epoch = cacheEpoch
+    try {
+      const response = await fetch(DISPLAY_CONFIG_ROUTE, { cache: 'no-store' })
+      if (epoch !== cacheEpoch) continue
+      const body = await response.json() as { ok?: boolean; value?: { hidden?: unknown } }
+      if (epoch !== cacheEpoch) continue
+      if (body.ok !== true || typeof body.value?.hidden !== 'boolean') {
+        throw new Error('malformed display-config payload')
+      }
+      cached = { hidden: body.value.hidden, at: now }
+      return { hidden: body.value.hidden }
+    } catch {
+      if (epoch !== cacheEpoch) continue
+      // Transparent routing is an enhancement: an unreachable config must never
+      // hide anything or change paste behavior.
+      cached = { hidden: false, at: now }
+      return { hidden: false }
+    }
   }
 }
 
-/** Drop the cached flag (test seams and connection-reset handling). */
+/**
+ * Drop the cached flag and invalidate in-flight responses (test seams,
+ * Settings saves, and connection-reset handling). An older request that
+ * resolves afterwards must not repopulate the cache with a stale flag.
+ */
 export function resetDisplayConfigCache(): void {
   cached = undefined
+  cacheEpoch += 1
 }
