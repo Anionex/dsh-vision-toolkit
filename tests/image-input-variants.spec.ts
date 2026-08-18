@@ -857,22 +857,32 @@ describe('installImageInputVariants', () => {
   function harness(overrides: Record<string, unknown> = {}) {
     const registrations = new Map<string, () => void>()
     const listeners: Array<() => void> = []
+    const llmOverrides = (overrides.llm ?? {}) as Record<string, unknown>
+    const upstreamProviders = (llmOverrides.listProviders ?? (() => [])) as () => Array<{ id: string; name: string }>
+    const listProviders = vi.fn(() => [
+      ...upstreamProviders(),
+      ...[...registrations.keys()].map(id => ({ id, name: id })),
+    ])
+    const registerAdapter = vi.fn((providers: string[]) => {
+      const dispose = vi.fn(() => { for (const provider of providers) registrations.delete(provider) })
+      for (const provider of providers) registrations.set(provider, dispose)
+      return dispose
+    })
     const ctx = {
-      llm: {
-        listProviders: vi.fn(() => []),
-        listModels: vi.fn(async () => []),
-        registerAdapter: vi.fn((providers: string[]) => {
-          const dispose = vi.fn(() => { for (const provider of providers) registrations.delete(provider) })
-          for (const provider of providers) registrations.set(provider, dispose)
-          return dispose
-        }),
-      },
       logger: { warn: vi.fn() },
       on: vi.fn((event: string, listener: () => void) => { listeners.push(listener) }),
       get: (name: string) => name === 'llm' ? ctx.llm : undefined,
       ...overrides,
+      llm: {
+        ...llmOverrides,
+        listProviders,
+        registerAdapter,
+      },
     }
-    return { ctx: ctx as never, registrations, listeners, llm: ctx.llm }
+    return { ctx: ctx as never, registrations, listeners, llm: ctx.llm, rebuildRegistry }
+    function rebuildRegistry() {
+      for (const dispose of [...registrations.values()]) dispose()
+    }
   }
 
   const config = (overrides: Partial<ResolvedVisionToolkitConfig['imageInputVariants']> = {}): ResolvedVisionToolkitConfig =>
@@ -933,28 +943,171 @@ describe('installImageInputVariants', () => {
     expect(registrations.size).toBe(0)
   })
 
-  it('releases wrappers whose upstream route vanished and re-sweeps on topology changes', async () => {
-    let providers: Array<{ id: string; name: string }> = [{ id: 'deepseek-official', name: 'DeepSeek' }]
-    const { ctx, registrations, listeners } = harness({
+  it('releases wrappers whose upstream route stays absent past the grace period', async () => {
+    vi.useFakeTimers()
+    try {
+      let providers: Array<{ id: string; name: string }> = [{ id: 'deepseek-official', name: 'DeepSeek' }]
+      const { ctx, registrations, listeners } = harness({
+        llm: {
+          listProviders: vi.fn(() => providers),
+          listModels: vi.fn(async () => [
+            { provider: 'deepseek-official', id: 'plain', name: 'Plain', inputModalities: ['text'] },
+          ]),
+        },
+      })
+      const installer = installImageInputVariants(ctx, () => config(), () => undefined)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(registrations.has('vision-toolkit-deepseek-official')).toBe(true)
+      providers = []
+      expect(listeners).toHaveLength(1)
+      listeners[0]?.()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(registrations.has('vision-toolkit-deepseek-official')).toBe(true)
+      // The periodic self-heal sweep crosses the grace boundary and releases.
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(registrations.has('vision-toolkit-deepseek-official')).toBe(false)
+      installer.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps a wrapper through a transient registry gap and releases only after the grace period', async () => {
+    vi.useFakeTimers()
+    try {
+      let providers: Array<{ id: string; name: string }> = [{ id: 'deepseek-official', name: 'DeepSeek' }]
+      const { ctx, registrations, listeners } = harness({
+        llm: {
+          listProviders: vi.fn(() => providers),
+          listModels: vi.fn(async () => [
+            { provider: 'deepseek-official', id: 'plain', name: 'Plain', inputModalities: ['text'] },
+          ]),
+        },
+      })
+      const installer = installImageInputVariants(ctx, () => config(), () => undefined)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(registrations.has('vision-toolkit-deepseek-official')).toBe(true)
+
+      // A missing sweep arms the grace timer; the wrapper stays alive.
+      providers = []
+      listeners[0]?.()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(registrations.has('vision-toolkit-deepseek-official')).toBe(true)
+
+      // The upstream returns before the grace period expires: gap ignored.
+      providers = [{ id: 'deepseek-official', name: 'DeepSeek' }]
+      listeners[0]?.()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(registrations.has('vision-toolkit-deepseek-official')).toBe(true)
+
+      // A second gap still cannot release before the grace period.
+      providers = []
+      listeners[0]?.()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(registrations.has('vision-toolkit-deepseek-official')).toBe(true)
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(registrations.has('vision-toolkit-deepseek-official')).toBe(false)
+      installer.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('re-registers a wrapper dropped from the live registry behind our back', async () => {
+    const { ctx, registrations, rebuildRegistry } = harness({
       llm: {
-        listProviders: vi.fn(() => providers),
+        listProviders: vi.fn(() => [{ id: 'deepseek-official', name: 'DeepSeek' }]),
         listModels: vi.fn(async () => [
           { provider: 'deepseek-official', id: 'plain', name: 'Plain', inputModalities: ['text'] },
         ]),
-        registerAdapter: vi.fn((ids: string[]) => {
-          const dispose = vi.fn(() => { for (const id of ids) registrations.delete(id) })
-          for (const id of ids) registrations.set(id, dispose)
-          return dispose
+      },
+    })
+    const installer = installImageInputVariants(ctx, () => config(), () => undefined)
+    await vi.waitFor(() => { expect(registrations.has('vision-toolkit-deepseek-official')).toBe(true) })
+    // Simulate a host registry rebuild: the wrapper is gone from the live
+    // registry while the plugin still holds a handle for it.
+    rebuildRegistry()
+    expect(registrations.has('vision-toolkit-deepseek-official')).toBe(false)
+    installer.reconcile()
+    await vi.waitFor(() => { expect(registrations.has('vision-toolkit-deepseek-official')).toBe(true) })
+    installer.dispose()
+  })
+
+  it('re-registers a wrapper rebuilt during the model probe window', async () => {
+    let release: () => void = () => {}
+    const gate = new Promise<void>(resolve => { release = resolve })
+    let probes = 0
+    const { ctx, registrations, rebuildRegistry } = harness({
+      llm: {
+        listProviders: vi.fn(() => [{ id: 'deepseek-official', name: 'DeepSeek' }]),
+        listModels: vi.fn(async () => {
+          probes += 1
+          if (probes === 2) await gate
+          return [{ provider: 'deepseek-official', id: 'plain', name: 'Plain', inputModalities: ['text'] }]
         }),
       },
     })
     const installer = installImageInputVariants(ctx, () => config(), () => undefined)
     await vi.waitFor(() => { expect(registrations.has('vision-toolkit-deepseek-official')).toBe(true) })
-    providers = []
-    expect(listeners).toHaveLength(1)
-    listeners[0]?.()
-    await vi.waitFor(() => { expect(registrations.size).toBe(0) })
+    // The second sweep starts and blocks inside listModels.
+    installer.reconcile()
+    await vi.waitFor(() => { expect(probes).toBe(2) })
+    // The wrapper vanishes from the live registry while the probe is in flight,
+    // with no observable event (registry rebuild).
+    rebuildRegistry()
+    release()
+    // The in-flight sweep must notice the rebuild after the await and
+    // re-register instead of treating the stale snapshot as healthy.
+    await vi.waitFor(() => { expect(registrations.has('vision-toolkit-deepseek-official')).toBe(true) })
     installer.dispose()
+  })
+
+  it('does not resurrect a wrapper after dispose while a sweep is in flight', async () => {
+    let release: () => void = () => {}
+    const gate = new Promise<void>(resolve => { release = resolve })
+    let probes = 0
+    const { ctx, registrations } = harness({
+      llm: {
+        listProviders: vi.fn(() => [{ id: 'deepseek-official', name: 'DeepSeek' }]),
+        listModels: vi.fn(async () => {
+          probes += 1
+          if (probes === 2) await gate
+          return [{ provider: 'deepseek-official', id: 'plain', name: 'Plain', inputModalities: ['text'] }]
+        }),
+      },
+    })
+    const installer = installImageInputVariants(ctx, () => config(), () => undefined)
+    await vi.waitFor(() => { expect(registrations.has('vision-toolkit-deepseek-official')).toBe(true) })
+    installer.reconcile()
+    await vi.waitFor(() => { expect(probes).toBe(2) })
+    installer.dispose()
+    release()
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(registrations.size).toBe(0)
+  })
+
+  it('self-heals a dropped wrapper within the periodic sweep interval', async () => {
+    vi.useFakeTimers()
+    try {
+      const { ctx, registrations, rebuildRegistry } = harness({
+        llm: {
+          listProviders: vi.fn(() => [{ id: 'deepseek-official', name: 'DeepSeek' }]),
+          listModels: vi.fn(async () => [
+            { provider: 'deepseek-official', id: 'plain', name: 'Plain', inputModalities: ['text'] },
+          ]),
+        },
+      })
+      const installer = installImageInputVariants(ctx, () => config(), () => undefined)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(registrations.has('vision-toolkit-deepseek-official')).toBe(true)
+      rebuildRegistry()
+      expect(registrations.has('vision-toolkit-deepseek-official')).toBe(false)
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(registrations.has('vision-toolkit-deepseek-official')).toBe(true)
+      installer.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('releases wrappers when the route restriction narrows', async () => {
