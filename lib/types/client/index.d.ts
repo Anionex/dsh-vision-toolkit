@@ -59,6 +59,10 @@ declare const en: {
     readonly saveBeforeTesting: "Save service changes before testing the connection.";
     readonly advanced: "Advanced settings";
     readonly advancedHint: "Credential name, provider compatibility, output language, resource limits, runtime source, Python, and additional readable directories.";
+    readonly imageInput: "Image input";
+    readonly hiddenVariants: "Transparent variant routing";
+    readonly hiddenVariantsLabel: "Keep the original model names and enable images automatically";
+    readonly hiddenVariantsHint: "Text-only models keep one model-selector entry with the original name while the session runs on the image-capable variant. Pasted images, image history, and the built-in read_image tool keep working; disable to restore the explicit (Vision Toolkit) entries.";
     readonly pluginVersion: "Plugin";
     readonly upstreamVersion: "Upstream";
     readonly activeGeneration: "Runtime generation";
@@ -238,6 +242,12 @@ interface SettingsValue {
         python?: string;
     };
     allowedDirs?: string[];
+    imageInputVariants?: {
+        enabled?: boolean;
+        providers?: string[];
+        autoSwitch?: boolean;
+        hidden?: boolean;
+    };
 }
 type PluginUpdateUnavailableReason = 'profile-not-found' | 'not-direct-dependency' | 'unsupported-install-source' | 'profile-read-only' | 'pnpm-unavailable' | 'unsupported-platform' | 'restart-unmanaged' | 'restart-address-unavailable';
 interface PluginUpdateCapability {

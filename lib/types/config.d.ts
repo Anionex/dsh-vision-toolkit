@@ -68,6 +68,15 @@ export interface VisionToolkitConfig {
          * keeps the path-only takeover instead (default true).
          */
         autoSwitch?: boolean;
+        /**
+         * Transparent routing: variant routes keep the upstream provider and model
+         * display names, and the browser integration hides the upstream text-only
+         * entries that have a variant twin, so the model selector shows one entry
+         * per model and sessions stay on the image-capable variant without users
+         * seeing or switching a `(Vision Toolkit)` route. Off (default) keeps the
+         * explicit sibling entries and the current behavior.
+         */
+        hidden?: boolean;
     };
 }
 /** Configuration schema with the documented P0 defaults. */
@@ -97,6 +106,7 @@ export interface ResolvedVisionToolkitConfig {
         enabled: boolean;
         providers: string[];
         autoSwitch: boolean;
+        hidden: boolean;
     };
 }
 /**
