@@ -424,6 +424,10 @@ TSX_TSCONFIG_PATH=tsconfig.json pnpm dlx tsx scripts/ui-restoration-example.ts -
   <img src="assets/community-group-qr.png" alt="agent-vision-toolkit 项目交流群二维码" width="240" />
 </p>
 
+<p align="center">
+  当前仓库在 GitHub 全球开发者趋势榜中排名第 <strong>3</strong>。
+</p>
+
 [`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit) 由 [Anionex](https://anionex.me/) 创建。本仓库维护它面向 DeepSeek Harness 的原生集成。
 
 ## 许可证

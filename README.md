@@ -423,6 +423,10 @@ TSX_TSCONFIG_PATH=tsconfig.json pnpm dlx tsx scripts/ui-restoration-example.ts -
   <img src="assets/community-group-qr.png" alt="QR code for the agent-vision-toolkit community group" width="240" />
 </p>
 
+<p align="center">
+  This repository is currently ranked <strong>No. 3</strong> on GitHub's global developer trending list.
+</p>
+
 [`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit) was created by [Anionex](https://anionex.me/). This repository maintains its native DeepSeek Harness integration.
 
 ## License
