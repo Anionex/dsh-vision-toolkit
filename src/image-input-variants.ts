@@ -546,12 +546,16 @@ export class ImageInputVariantAdapter extends LlmAdapter {
     private readonly upstreamName: string,
     private readonly runtime: () => VisionToolkitRuntime | undefined,
     private readonly cache: EvidenceCache,
+    private readonly hidden: () => boolean = () => false,
   ) {
     super()
   }
 
   override providerInfo(provider: string): LlmProviderInfo {
-    return { id: provider, name: `${this.upstreamName}${VARIANT_SUFFIX}` }
+    return {
+      id: provider,
+      name: this.hidden() ? this.upstreamName : `${this.upstreamName}${VARIANT_SUFFIX}`,
+    }
   }
 
   override async listModels(provider: string): Promise<readonly LlmModelInfo[]> {
@@ -559,7 +563,7 @@ export class ImageInputVariantAdapter extends LlmAdapter {
     return models.filter(shouldWrapModel).map((model) => ({
       provider,
       id: model.id,
-      name: `${model.name}${VARIANT_SUFFIX}`,
+      name: this.hidden() ? model.name : `${model.name}${VARIANT_SUFFIX}`,
       inputModalities: ['text', 'image'],
       ...(model.description === undefined ? {} : { description: model.description }),
     }))
@@ -577,7 +581,7 @@ export class ImageInputVariantAdapter extends LlmAdapter {
     return {
       provider,
       id: model,
-      name: `${info.name}${VARIANT_SUFFIX}`,
+      name: this.hidden() ? info.name : `${info.name}${VARIANT_SUFFIX}`,
       inputModalities: ['text', 'image'],
       ...(info.description === undefined ? {} : { description: info.description }),
       // Capability and call-default metadata rides through unchanged: the
@@ -841,6 +845,10 @@ export function installImageInputVariants(
   getRuntime: () => VisionToolkitRuntime | undefined,
 ): { dispose: () => void; reconcile: () => void } {
   const registrations = new Map<string, () => void>()
+  // The host snapshots adapter provider metadata (including the group display
+  // name) at registration time, so a transparent-routing toggle must rebuild
+  // every wrapper for the new names to reach the model selector.
+  let lastHidden = false
   // Upstream ids observed missing and the timestamp of the first missing
   // observation. A wrapper is only released after its upstream stays absent
   // for the full grace period, so a transient registry gap (adapter
@@ -889,6 +897,10 @@ export function installImageInputVariants(
     if (disposed) return
     try {
       const variants = getConfig().imageInputVariants
+      if (variants.hidden !== lastHidden) {
+        lastHidden = variants.hidden
+        releaseAll()
+      }
       if (!variants.enabled) {
         releaseAll()
         return
@@ -964,6 +976,7 @@ export function installImageInputVariants(
               provider.name,
               getRuntime,
               new EvidenceCache(EVIDENCE_CACHE_LIMIT),
+              () => getConfig().imageInputVariants.hidden,
             ),
           )
           registrations.set(upstream, dispose)

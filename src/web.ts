@@ -46,6 +46,9 @@ import { sameOriginPost, sameOriginRequest } from './web-request.ts'
 /** Exact route used by the browser Settings page. */
 export const SETTINGS_ROUTE = '/_dsh/vision-toolkit/settings'
 
+/** Same-origin route used by the browser client to read display-mode flags. */
+export const DISPLAY_CONFIG_ROUTE = '/_dsh/vision-toolkit/display-config'
+
 /** Public Settings snapshot; credential values are deliberately impossible here. */
 export interface VisionToolkitSettingsSnapshot {
   schemaVersion: 1
@@ -505,12 +508,40 @@ export function createPastePolicyHandler(
 }
 
 /**
+ * Same-origin display-config handler: whether the browser client should run
+ * transparent routing (hide upstream text-only entries that have a variant
+ * twin and keep the original provider/model display names).
+ * @param getDisplayConfig - resolves the current display-mode flags.
+ * @returns the HTTP handler.
+ */
+export function createDisplayConfigHandler(
+  getDisplayConfig: () => { hidden: boolean },
+): (req: IncomingMessage, res: ServerResponse) => void {
+  return (req, res) => {
+    try {
+      if (req.method !== 'GET') {
+        requestError(res, 405, 'method-not-allowed', 'Use GET')
+        return
+      }
+      if (!sameOriginRequest(req)) {
+        requestError(res, 403, 'origin-rejected', 'The request must originate from this DSH Web application')
+        return
+      }
+      responseJson(res, 200, { ok: true, value: getDisplayConfig() })
+    } catch (error) {
+      requestError(res, 500, 'display-config-failed', publicMessage(error))
+    }
+  }
+}
+
+/**
  * Attach optional Web routes whenever a webServer service is present.
  * @param ctx - plugin context owning route effects.
  * @param backend - Settings handler.
  * @param artifacts - signed Artifact handler.
  * @param pastedImages - pasted-image workspace handler.
  * @param pastePolicy - paste-policy verdict resolver (sessionId, selection, modelLabel).
+ * @param getDisplayConfig - resolves display-mode flags for the browser client.
  */
 export function installVisionToolkitWeb(
   ctx: Context,
@@ -518,6 +549,7 @@ export function installVisionToolkitWeb(
   artifacts: ArtifactAccessController,
   pastedImages: PastedImageBackend,
   pastePolicy: (sessionId: string, selection?: PasteSelectionQuery, modelLabel?: string) => Promise<PasteVerdict>,
+  getDisplayConfig: () => { hidden: boolean },
 ): void {
   ctx.inject(['webServer'], (webCtx) => {
     webCtx.effect(() => {
@@ -543,7 +575,13 @@ export function installVisionToolkitWeb(
         path: PASTE_POLICY_ROUTE,
         handler: createPastePolicyHandler(pastePolicy),
       })
+      const disposeDisplayConfig = webCtx.webServer.register({
+        kind: 'exact',
+        path: DISPLAY_CONFIG_ROUTE,
+        handler: createDisplayConfigHandler(getDisplayConfig),
+      })
       return () => {
+        disposeDisplayConfig()
         disposePastePolicy()
         disposePasteImages()
         disposeSettings()

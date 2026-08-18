@@ -445,6 +445,35 @@ describe('ImageInputVariantAdapter', () => {
     expect(adapter.providerInfo('vision-toolkit-up')).toEqual({ id: 'vision-toolkit-up', name: `Upstream${VARIANT_SUFFIX}` })
   })
 
+  it('keeps upstream provider and model display names in transparent (hidden) mode', async () => {
+    const upstreamModels: LlmModelInfo[] = [
+      { provider: 'up', id: 'plain', name: 'Plain', inputModalities: ['text'] },
+    ]
+    const ctx = { llm: llmStub({ listModels: vi.fn(async () => upstreamModels) }) } as never
+    const hidden = vi.fn(() => true)
+    const adapter = new ImageInputVariantAdapter(
+      ctx,
+      ctx.llm,
+      'up',
+      'Upstream',
+      () => undefined,
+      new EvidenceCache(4),
+      hidden,
+    )
+    expect(adapter.providerInfo('vision-toolkit-up')).toEqual({ id: 'vision-toolkit-up', name: 'Upstream' })
+    const models = await adapter.listModels('vision-toolkit-up')
+    expect(models).toEqual([
+      {
+        provider: 'vision-toolkit-up',
+        id: 'plain',
+        name: 'Plain',
+        inputModalities: ['text', 'image'],
+      },
+    ])
+    const resolved = await adapter.resolveModel('vision-toolkit-up', 'plain')
+    expect(resolved).toMatchObject({ provider: 'vision-toolkit-up', id: 'plain', name: 'plain', inputModalities: ['text', 'image'] })
+  })
+
   it('rewrites image blocks on the wire and delegates to the upstream route', async () => {
     const glance = vi.fn(async () => glanceResult('wire description'))
     const attachments = { readImage: vi.fn(async () => ({ ref: attachment('a'), data: Uint8Array.of(1) })) }
@@ -939,6 +968,35 @@ describe('installImageInputVariants', () => {
     enabled = true
     installer.reconcile()
     await vi.waitFor(() => { expect(registrations.has('vision-toolkit-deepseek-official')).toBe(true) })
+    installer.dispose()
+    expect(registrations.size).toBe(0)
+  })
+
+  it('rebuilds wrappers when the transparent-routing flag changes', async () => {
+    const { ctx, registrations, llm } = harness({
+      llm: {
+        listProviders: vi.fn(() => [{ id: 'deepseek-official', name: 'DeepSeek' }]),
+        listModels: vi.fn(async () => [
+          { provider: 'deepseek-official', id: 'plain', name: 'Plain', inputModalities: ['text'] },
+        ]),
+        registerAdapter: vi.fn((providers: string[]) => {
+          const dispose = vi.fn(() => { for (const provider of providers) registrations.delete(provider) })
+          for (const provider of providers) registrations.set(provider, dispose)
+          return dispose
+        }),
+      },
+    })
+    let hidden = false
+    const installer = installImageInputVariants(ctx, () => config({ hidden }), () => undefined)
+    await vi.waitFor(() => { expect(registrations.has('vision-toolkit-deepseek-official')).toBe(true) })
+    const firstHandle = registrations.get('vision-toolkit-deepseek-official')
+
+    hidden = true
+    installer.reconcile()
+    await vi.waitFor(() => {
+      expect(registrations.has('vision-toolkit-deepseek-official')).toBe(true)
+      expect(registrations.get('vision-toolkit-deepseek-official')).not.toBe(firstHandle)
+    })
     installer.dispose()
     expect(registrations.size).toBe(0)
   })

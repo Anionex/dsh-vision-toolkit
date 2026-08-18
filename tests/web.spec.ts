@@ -9,6 +9,7 @@ import type { VisionToolkitRuntime, VisionToolkitHealthResult } from '../src/run
 import type { PreparedRuntimeGeneration, RuntimeManagerStatus } from '../src/runtime-manager.ts'
 import {
   VisionToolkitWebBackend,
+  createDisplayConfigHandler,
   createPastePolicyHandler,
   type WebPluginUpdater,
   type WebRuntimeManager,
@@ -496,5 +497,32 @@ describe('paste policy route', () => {
     const response = await fetch(`${base}/_dsh/vision-toolkit/paste-policy?sessionId=s1`, { headers: { Origin: base } })
     expect(response.status).toBe(500)
     expect(await response.json()).toMatchObject({ ok: false, error: { code: 'policy-failed' } })
+  })
+})
+
+describe('display-config route', () => {
+  it('answers the transparent-routing flag and refuses cross-origin or non-GET requests', async () => {
+    const getDisplayConfig = vi.fn(() => ({ hidden: true }))
+    const server = createServer((req, res) => { createDisplayConfigHandler(getDisplayConfig)(req, res) })
+    servers.push(server)
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(0, '127.0.0.1', () => { resolve() })
+    })
+    const address = server.address()
+    if (address === null || typeof address === 'string') throw new Error('server did not bind')
+    const base = `http://127.0.0.1:${address.port}`
+    const route = `${base}/_dsh/vision-toolkit/display-config`
+
+    const response = await fetch(route, { headers: { Origin: base } })
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ ok: true, value: { hidden: true } })
+    expect(getDisplayConfig).toHaveBeenCalledTimes(1)
+
+    const crossSite = await fetch(route, { headers: { Origin: 'https://attacker.example' } })
+    expect(crossSite.status).toBe(403)
+
+    const post = await fetch(route, { method: 'POST', headers: { Origin: base } })
+    expect(post.status).toBe(405)
   })
 })
