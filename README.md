@@ -142,20 +142,6 @@ The repository includes a reproducible UI-restoration example: the agent renders
 
 *Left: the original page. Right: a fast reconstruction that preserves the main layout, content, and visual hierarchy while allowing approximate colors and library icons. Fast mode targets a first screenshot in about three minutes.*
 
-### More real-world effects
-
-<p align="center">
-  <img src="assets/upstream/image-qa.webp" width="49%" alt="DeepSeek answering a UI style question with similar-style comparisons" />
-  <img src="assets/upstream/screenshot-debugging.webp" width="49%" alt="DeepSeek debugging mismatched UI fields from a screenshot" />
-</p>
-
-<p align="center">
-  <img src="assets/upstream/multi-round-qa.webp" width="49%" alt="Multi-round image Q&A with the optional glance CLI" />
-  <img src="assets/upstream/chess-grounding.webp" width="49%" alt="DeepSeek V4 playing chess by locating screen elements with glance/ground" />
-</p>
-
-*Upstream demonstration captures: a UI style question, screenshot debugging, multi-round image Q&A, and chess played by grounding screen elements. This DSH integration does not claim to have rerun or reproduced those results.*
-
 ## Quick start: three steps
 
 ### 1. Install

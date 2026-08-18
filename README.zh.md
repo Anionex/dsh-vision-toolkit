@@ -145,20 +145,6 @@ dsh plugin --profile web add @anionex/dsh-vision-toolkit
 
 *左：原始页面；右：保留主要布局、内容和视觉层级的快速还原稿，允许颜色和图标库近似。快速模式的目标是约三分钟内产出首版截图。*
 
-### 更多真实效果
-
-<p align="center">
-  <img src="assets/upstream/image-qa.webp" width="49%" alt="DeepSeek 用相似风格对比回答 UI 风格问题" />
-  <img src="assets/upstream/screenshot-debugging.webp" width="49%" alt="DeepSeek 从截图排查字段名不一致问题" />
-</p>
-
-<p align="center">
-  <img src="assets/upstream/multi-round-qa.webp" width="49%" alt="使用 glance 进行多轮图片问答" />
-  <img src="assets/upstream/chess-grounding.webp" width="49%" alt="DeepSeek V4 通过 glance/ground 定位棋盘元素下棋" />
-</p>
-
-*以上为上游实测示例：UI 风格问答、截图排障、多轮图片问答，以及通过元素定位下棋。本 DSH 集成不声称已重跑或复现这些结果。*
-
 ## 快速开始：三步完成
 
 ### 1. 安装

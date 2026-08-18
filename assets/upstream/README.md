@@ -10,10 +10,6 @@ The source files exist at the packaged runtime pin [`c27d1a300962b553c0884993c57
 | `infographic-result.webp` | `assets/infographic-restore-result.png` |
 | `ui-sketch.webp` | `assets/ui-restore-sketch.png` |
 | `ui-result.webp` | `assets/ui-restore-result.png` |
-| `image-qa.webp` | `assets/effect-1.jpg` |
-| `screenshot-debugging.webp` | `assets/effect-2.jpg` |
-| `multi-round-qa.webp` | `assets/effect-3.jpg` |
-| `chess-grounding.webp` | `assets/effect-4.jpg` |
 | `focus-hint-comparison-1.webp` | `assets/focus-hint-comparison-1.png` |
 | `focus-hint-comparison-2.webp` | `assets/focus-hint-comparison-2.png` |
 | `ui-fast-restore-reference.webp` | `assets/ui-fast-restore-reference.png` |
