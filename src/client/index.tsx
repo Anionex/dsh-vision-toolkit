@@ -21,6 +21,7 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { installPasteImages } from './paste-images.tsx'
 import { installModelVariantsHider } from './model-variants-hider.ts'
+import { resetDisplayConfigCache } from './display-config.ts'
 
 const NS = 'vision-toolkit'
 const SETTINGS_ROUTE = '/_dsh/vision-toolkit/settings'
@@ -1008,6 +1009,10 @@ export class VisionSettingsController {
     } catch (error) {
       this.set({ ...this.state, action: undefined, error: error instanceof Error ? error.message : String(error) })
       return false
+    } finally {
+      // The backend commits the generation before the response is readable, so
+      // the browser cache must not keep serving the previous hidden flag.
+      resetDisplayConfigCache()
     }
   }
 

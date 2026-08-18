@@ -61,6 +61,11 @@ function restoreHidden(): void {
  * variant provider name equals the upstream name (transparent mode).
  */
 export function tidyModelSelector(): void {
+  // The host re-renders selectors while sessions stay open; drop bookkeeping
+  // for entries that already left the DOM so the map cannot grow unboundedly.
+  for (const element of [...hiddenElements.keys()]) {
+    if (!element.isConnected) hiddenElements.delete(element)
+  }
   const groups = [...document.querySelectorAll<HTMLElement>('[role="menu"] [role="group"]')]
   const byProvider = new Map<string, HTMLElement[]>()
   for (const group of groups) {
@@ -95,12 +100,14 @@ export function tidyModelSelector(): void {
  * @returns the disposer that stops observation and restores hidden entries.
  */
 export function installModelVariantsHider(): () => void {
+  let disposed = false
   const tidySoon = (): void => {
     if (timer !== undefined) clearTimeout(timer)
     timer = setTimeout(() => {
       timer = undefined
       void (async () => {
         const { hidden } = await readDisplayConfig()
+        if (disposed) return
         if (!hidden) {
           if (active) {
             restoreHidden()
@@ -119,6 +126,7 @@ export function installModelVariantsHider(): () => void {
   tidySoon()
 
   return () => {
+    disposed = true
     observer?.disconnect()
     observer = undefined
     if (timer !== undefined) clearTimeout(timer)

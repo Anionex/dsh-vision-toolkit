@@ -102,4 +102,18 @@ describe('installModelVariantsHider', () => {
     expect(buttons('DeepSeek-V4-Flash')[1]!.style.display).toBe('')
     dispose()
   })
+
+  it('ignores a pending display-config response after dispose', async () => {
+    let resolveFetch: ((value: Response) => void) | undefined
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(resolve => { resolveFetch = resolve })))
+    document.body.innerHTML = menuHtml()
+
+    const dispose = installModelVariantsHider()
+    await new Promise(resolve => setTimeout(resolve, 60))
+    dispose()
+    resolveFetch?.(new Response(JSON.stringify({ ok: true, value: { hidden: true } }), { status: 200 }))
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    expect(buttons('DeepSeek-V4-Flash')[0]!.style.display).toBe('')
+  })
 })

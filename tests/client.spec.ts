@@ -5,10 +5,12 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ToolCallBlock } from '@deepseek-ai/dsh-client-runtime/client'
 import { apply, decodeVisionResult, inject, VisionSettingsController } from '../src/client/index.tsx'
+import { readDisplayConfig, resetDisplayConfigCache } from '../src/client/display-config.ts'
 
 afterEach(() => {
   cleanup()
   document.querySelectorAll('style[data-plugin-css="@anionex/dsh-vision-toolkit/client"]').forEach(element => { element.remove() })
+  resetDisplayConfigCache()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
@@ -494,6 +496,25 @@ describe('Vision Toolkit client plugin', () => {
     expect(keyInput.disabled).toBe(false)
     fireEvent.change(keyInput, { target: { value: 'unsaved-secret' } })
     expect(updateButton.disabled).toBe(true)
+  })
+
+  it('invalidates the display-config cache after a Settings save', async () => {
+    const displayConfig = vi.fn(async () => jsonResponse({ ok: true, value: { hidden: true } }))
+    const fetchMock = vi.fn(async (input: unknown) => {
+      if (String(input).endsWith('/display-config')) return displayConfig()
+      return jsonResponse({ ok: true, value: settingsSnapshot() })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const controller = new VisionSettingsController()
+
+    expect((await readDisplayConfig()).hidden).toBe(true)
+    expect(displayConfig).toHaveBeenCalledTimes(1)
+
+    const saved = await controller.save(settingsSnapshot().settings.value, 1, undefined, true)
+
+    expect(saved).toBe(true)
+    expect((await readDisplayConfig()).hidden).toBe(true)
+    expect(displayConfig).toHaveBeenCalledTimes(2)
   })
 
   it('unlocks API key input when the built-in provider changes to a custom endpoint', async () => {
