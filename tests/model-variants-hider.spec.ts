@@ -82,6 +82,30 @@ describe('tidyModelSelector', () => {
     tidyModelSelector()
     expect(buttons('DeepSeek-V4-Flash')[0]!.style.display).toBe('')
   })
+
+  it('restores upstream entries when variant twins switch to explicit names', () => {
+    document.body.innerHTML = menuHtml()
+    tidyModelSelector()
+    expect(buttons('DeepSeek-V4-Flash')[0]!.style.display).toBe('none')
+    expect(buttons('DeepSeek-V4-Pro')[0]!.style.display).toBe('none')
+
+    // Simulate the adapter rebuild after transparent routing is disabled:
+    // the variant twins keep the same DOM nodes but gain explicit suffixes.
+    const variantGroup = document.querySelector('[aria-labelledby=":r2:-vision-toolkit-deepseek-official"]') as HTMLElement
+    const variantTitle = variantGroup.querySelector(':scope > div') as HTMLElement
+    variantTitle.textContent = 'DeepSeek (Vision Toolkit)'
+    for (const button of variantGroup.querySelectorAll<HTMLElement>('[role="menuitemradio"]')) {
+      const span = button.querySelector('span')
+      if (span !== null) span.textContent = `${span.textContent}(Vision Toolkit)`
+      button.setAttribute('title', `${button.getAttribute('title')}(Vision Toolkit)`)
+    }
+    tidyModelSelector()
+
+    expect(buttons('DeepSeek-V4-Flash')[0]!.style.display).toBe('')
+    expect(buttons('DeepSeek-V4-Pro')[0]!.style.display).toBe('')
+    const upstream = document.querySelector('[aria-labelledby=":r2:-deepseek-official"]') as HTMLElement
+    expect(upstream.style.display).toBe('')
+  })
 })
 
 describe('installModelVariantsHider', () => {
@@ -125,5 +149,19 @@ describe('installModelVariantsHider', () => {
     await new Promise(resolve => setTimeout(resolve, 0))
 
     expect(buttons('DeepSeek-V4-Flash')[0]!.style.display).toBe('')
+  })
+
+  it('keeps the first integrator when installed twice', async () => {
+    document.body.innerHTML = ''
+    const disposeFirst = installModelVariantsHider()
+    const disposeSecond = installModelVariantsHider()
+
+    // A duplicate effect must not tear down the active integrator.
+    disposeSecond()
+    document.body.innerHTML = menuHtml()
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    expect(buttons('DeepSeek-V4-Flash')[0]!.style.display).toBe('none')
+    disposeFirst()
   })
 })

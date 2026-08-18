@@ -65,6 +65,7 @@ function restoreHidden(): void {
  * variant provider name equals the upstream name (transparent mode).
  */
 export function tidyModelSelector(): void {
+  if (document.querySelector('[role="menu"]') === null) return
   // The host re-renders selectors while sessions stay open; drop bookkeeping
   // for entries that already left the DOM so the map cannot grow unboundedly.
   for (const element of [...hiddenElements.keys()]) {
@@ -80,6 +81,7 @@ export function tidyModelSelector(): void {
     else entries.push(group)
   }
 
+  const shouldHide = new Set<HTMLElement>()
   for (const [provider, providerGroups] of byProvider) {
     if (!provider.startsWith(VARIANT_PROVIDER_PREFIX)) continue
     const upstream = provider.slice(VARIANT_PROVIDER_PREFIX.length)
@@ -87,15 +89,28 @@ export function tidyModelSelector(): void {
     if (twinNames.size === 0) continue
     for (const upstreamGroup of byProvider.get(upstream) ?? []) {
       const buttons = [...upstreamGroup.querySelectorAll<HTMLElement>('[role="menuitemradio"]')]
-      let visible = 0
+      const matched: HTMLElement[] = []
       for (const button of buttons) {
         const name = (button.title || (button.textContent ?? '')).trim()
-        if (twinNames.has(name)) hideElement(button)
-        else if (button.style.display !== 'none') visible += 1
+        if (twinNames.has(name)) matched.push(button)
       }
-      if (visible === 0) hideElement(upstreamGroup)
+      if (matched.length === 0) continue
+      for (const button of matched) shouldHide.add(button)
+      // Collapse the whole group only when every model has a variant twin;
+      // otherwise a partially matched group keeps its unmatched entries.
+      if (matched.length === buttons.length) shouldHide.add(upstreamGroup)
     }
   }
+
+  // Restore entries whose twin disappeared (e.g. transparent routing was
+  // disabled and the wrapper rebuilt with explicit `(Vision Toolkit)` names).
+  for (const [element, display] of [...hiddenElements]) {
+    if (!shouldHide.has(element)) {
+      element.style.display = display
+      hiddenElements.delete(element)
+    }
+  }
+  for (const element of shouldHide) hideElement(element)
 }
 
 /**
@@ -106,6 +121,11 @@ export function tidyModelSelector(): void {
  * @returns the disposer that stops observation and restores hidden entries.
  */
 export function installModelVariantsHider(): () => void {
+  if (observer !== undefined) {
+    // A previous install is still active; a duplicate effect must not tear
+    // down the integrator while its original owner still expects it.
+    return () => {}
+  }
   let disposed = false
   const tidySoon = (): void => {
     if (tidyQueued || disposed) return

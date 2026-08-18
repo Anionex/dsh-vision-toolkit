@@ -93,9 +93,10 @@ export declare class VisionToolkitWebBackend {
  */
 export declare function createPastePolicyHandler(resolve: (sessionId: string, selection?: PasteSelectionQuery, modelLabel?: string) => Promise<PasteVerdict>): (req: IncomingMessage, res: ServerResponse) => void;
 /**
- * Same-origin display-config handler: whether the browser client should run
- * transparent routing (hide upstream text-only entries that have a variant
- * twin and keep the original provider/model display names).
+ * Same-origin display-config handler: exposes whether transparent routing is
+ * active. The paste integration uses it to choose its notice text; the model
+ * selector hides upstream twins synchronously from DOM display names and does
+ * not depend on this route.
  * @param getDisplayConfig - resolves the current display-mode flags.
  * @returns the HTTP handler.
  */

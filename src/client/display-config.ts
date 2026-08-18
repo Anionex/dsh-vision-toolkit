@@ -1,7 +1,8 @@
 /**
- * Browser-side display-mode flags for transparent variant routing. The model
- * selector integrator and the paste integration share one short-lived cache
- * so they do not hammer the same-origin route on every DOM mutation or paste.
+ * Browser-side display-mode flags for transparent variant routing. The paste
+ * integration uses a short-lived cache so it does not hammer the same-origin
+ * route on every paste. The model selector itself decides purely from DOM
+ * display names and does not read this route.
  * @module dsh-vision-toolkit/display-config
  */
 
