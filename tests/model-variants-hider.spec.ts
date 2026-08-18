@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { resetDisplayConfigCache } from '../src/client/display-config.ts'
+import { afterEach, describe, expect, it } from 'vitest'
 import {
   installModelVariantsHider,
   tidyModelSelector,
@@ -28,15 +27,27 @@ function menuHtml(): string {
   `
 }
 
+function explicitMenuHtml(): string {
+  return `
+    <div role="menu">
+      <section role="group" aria-labelledby=":r2:-deepseek-official">
+        <div id=":r2:-deepseek-official" class="aTjPya_groupTitle">DeepSeek</div>
+        <button role="menuitemradio" title="DeepSeek-V4-Flash"><span>DeepSeek-V4-Flash</span></button>
+      </section>
+      <section role="group" aria-labelledby=":r2:-vision-toolkit-deepseek-official">
+        <div id=":r2:-vision-toolkit-deepseek-official" class="aTjPya_groupTitle">DeepSeek (Vision Toolkit)</div>
+        <button role="menuitemradio" title="DeepSeek-V4-Flash (Vision Toolkit)"><span>DeepSeek-V4-Flash (Vision Toolkit)</span></button>
+      </section>
+    </div>
+  `
+}
+
 function buttons(title: string): HTMLElement[] {
   return [...document.querySelectorAll<HTMLElement>(`[role="menuitemradio"][title="${title}"]`)]
 }
 
 afterEach(() => {
   document.body.innerHTML = ''
-  resetDisplayConfigCache()
-  vi.unstubAllGlobals()
-  vi.restoreAllMocks()
 })
 
 describe('tidyModelSelector', () => {
@@ -74,44 +85,43 @@ describe('tidyModelSelector', () => {
 })
 
 describe('installModelVariantsHider', () => {
-  it('hides twins only when transparent routing is enabled and restores on dispose', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => ({
-      ok: true,
-      json: async () => ({ ok: true, value: { hidden: true } }),
-    })))
+  it('hides twin entries immediately and restores them on dispose', () => {
     document.body.innerHTML = menuHtml()
 
     const dispose = installModelVariantsHider()
-    await new Promise(resolve => setTimeout(resolve, 150))
     expect(buttons('DeepSeek-V4-Flash')[0]!.style.display).toBe('none')
+    expect(buttons('DeepSeek-V4-Flash')[1]!.style.display).toBe('')
 
     dispose()
     expect(buttons('DeepSeek-V4-Flash')[0]!.style.display).toBe('')
   })
 
-  it('leaves the selector untouched when transparent routing is disabled', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => ({
-      ok: true,
-      json: async () => ({ ok: true, value: { hidden: false } }),
-    })))
-    document.body.innerHTML = menuHtml()
+  it('hides twin entries rendered after install before the next paint', async () => {
+    document.body.innerHTML = ''
 
     const dispose = installModelVariantsHider()
-    await new Promise(resolve => setTimeout(resolve, 150))
-    expect(buttons('DeepSeek-V4-Flash')[0]!.style.display).toBe('')
+    document.body.innerHTML = menuHtml()
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(buttons('DeepSeek-V4-Flash')[0]!.style.display).toBe('none')
     expect(buttons('DeepSeek-V4-Flash')[1]!.style.display).toBe('')
     dispose()
   })
 
-  it('ignores a pending display-config response after dispose', async () => {
-    let resolveFetch: ((value: Response) => void) | undefined
-    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(resolve => { resolveFetch = resolve })))
-    document.body.innerHTML = menuHtml()
+  it('keeps explicit variant entries untouched', () => {
+    document.body.innerHTML = explicitMenuHtml()
 
     const dispose = installModelVariantsHider()
-    await new Promise(resolve => setTimeout(resolve, 60))
+    expect(buttons('DeepSeek-V4-Flash')[0]!.style.display).toBe('')
+    expect(buttons('DeepSeek-V4-Flash (Vision Toolkit)')[0]!.style.display).toBe('')
     dispose()
-    resolveFetch?.(new Response(JSON.stringify({ ok: true, value: { hidden: true } }), { status: 200 }))
+  })
+
+  it('ignores a queued tidy after dispose', async () => {
+    document.body.innerHTML = menuHtml()
+    const dispose = installModelVariantsHider()
+    document.body.innerHTML = ''
+    dispose()
+    document.body.innerHTML = menuHtml()
     await new Promise(resolve => setTimeout(resolve, 0))
 
     expect(buttons('DeepSeek-V4-Flash')[0]!.style.display).toBe('')

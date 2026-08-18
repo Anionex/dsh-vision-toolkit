@@ -12,6 +12,13 @@
  * model. We key groups by that provider id (variant routes carry the
  * `vision-toolkit-` prefix) and hide every upstream entry whose display name
  * matches a variant twin, collapsing fully-hidden upstream groups.
+ *
+ * The hiding decision is purely DOM-local: transparent mode is exactly the
+ * case where a variant twin keeps the upstream display name, while explicit
+ * mode appends `(Vision Toolkit)` and therefore never matches. No display-config
+ * round-trip is needed before the selector can be tidied, so the first paint
+ * of an opened menu already shows the merged list instead of flashing the
+ * duplicate upstream group.
  * @module dsh-vision-toolkit/model-variants-hider
  */
 /**
@@ -23,9 +30,11 @@ export declare function tidyModelSelector(): void;
 /**
  * Install the transparent-routing integrator. It watches the document for
  * model-selector renderings and re-tidies them whenever the host re-renders.
+ * Tidy runs in a microtask (before the browser paints) and is coalesced across
+ * the render batch, so opening the selector never shows the upstream twins.
  * @returns the disposer that stops observation and restores hidden entries.
  */
 export declare function installModelVariantsHider(): () => void;
-/** Test seam: expose whether the integrator currently considers routing active. */
+/** Test seam: expose whether the integrator is currently installed. */
 export declare function isModelVariantsHiderActive(): boolean;
 //# sourceMappingURL=model-variants-hider.d.ts.map
