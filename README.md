@@ -63,6 +63,7 @@ dsh plugin --profile web add @anionex/dsh-vision-toolkit
 - [Toolbox](#toolbox)
 - [Configuration and limits](#configuration-and-limits)
 - [Troubleshooting](#troubleshooting)
+- [Sponsor](#sponsor)
 - [Development and community](#development-and-community)
 
 ## Recent updates
@@ -309,6 +310,22 @@ For advanced setups — overriding `runtime.python`, using `runtime.mode: extern
 **Will adding a vision model significantly increase costs?**
 
 No. Each inspection sends only the necessary intent and the image to the multimodal model, and context does not accumulate across calls, so the added cost stays small. To reduce it further, a locally deployed small multimodal side model (for example the Gemma 4 or Qwen 3.5/3.6 series) can provide the vision capability.
+
+## ❤️ Sponsor
+
+> Want to sponsor this project? See [FUNDING.md](FUNDING.md) for details.
+
+<details open>
+<summary>Click to collapse</summary>
+
+<table>
+<tr>
+<td width="220"><a href="https://aihubmix.com/?aff=5wj6sgx8"><img src="assets/logo_aihubmix.png" alt="AIHubMix" height="48"></a></td>
+<td>Thanks to <a href="https://aihubmix.com/?aff=5wj6sgx8">AIHubMix</a> for sponsoring this project! AIHubMix is a stable, high-concurrency AI model API gateway that connects Claude, GPT, Gemini, DeepSeek, and other mainstream models through a single API key, compatible with multiple protocols, with <b>free model options</b> available. Users in China can use it via the <a href="https://aihubmix.com/?aff=5wj6sgx8">China entry</a>.</td>
+</tr>
+</table>
+
+</details>
 
 ## Development and community
 
