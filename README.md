@@ -155,6 +155,8 @@ dsh plugin --profile desktop add @anionex/dsh-vision-toolkit
 
 Then restart DSH Desktop. The built-in plugin marketplace in DSH Desktop 2.0.1 has known installation issues; the terminal command above is the reliable path until a fixed Desktop release is available.
 
+For the full Desktop install, update, and troubleshooting walkthrough, see [Installing and updating in DSH Desktop](docs/dsh-desktop-install.md).
+
 ### 2. Restart and check it
 
 Restart a running Web Profile, then open **Settings → Vision Toolkit**. The free provider is already configured; run **Test vision model** to confirm it is reachable.
