@@ -1,5 +1,5 @@
 import { Context } from '@deepseek-ai/cordis'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ResolvedVisionToolkitConfig } from '../src/config.ts'
 import type { VisionToolkitRuntime } from '../src/runtime.ts'
 import { VisionToolkitRuntimeManager, type RuntimeGenerationFactory } from '../src/runtime-manager.ts'
@@ -51,6 +51,22 @@ describe('VisionToolkitRuntimeManager', () => {
     expect(manager.current()).toBe(first)
     expect(manager.status()).toMatchObject({ ready: true, generation: 1, lastError: 'fixture runtime unavailable' })
     expect(prepared).toEqual(['first', 'broken'])
+  })
+
+  it('treats transparent-routing visibility as display-only so toggling it does not rebuild the runtime', async () => {
+    const ctx = new Context()
+    contexts.push(ctx)
+    const factory = vi.fn(async (_ctx: Context, resolved: ResolvedVisionToolkitConfig) => fakeRuntime(resolved))
+    const manager = new VisionToolkitRuntimeManager(ctx, factory)
+    await manager.initialize(config('first'))
+    expect(factory).toHaveBeenCalledTimes(1)
+
+    const changed = await manager.reconfigure({ ...config('first'), imageInputVariants: { hidden: true } })
+
+    expect(changed).toBe(false)
+    expect(factory).toHaveBeenCalledTimes(1)
+    expect(manager.status()).toMatchObject({ ready: true, generation: 1 })
+    expect(manager.status().activeConfig?.imageInputVariants.hidden).toBe(true)
   })
 
   it('prevents a slower obsolete Settings prepare from overwriting a newer one', async () => {

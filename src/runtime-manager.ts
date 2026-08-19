@@ -39,7 +39,12 @@ async function defaultFactory(ctx: Context, config: ResolvedVisionToolkitConfig)
 }
 
 function fingerprint(config: ResolvedVisionToolkitConfig): string {
-  return JSON.stringify(config)
+  // Transparent routing is a display/policy flag: toggling it must not rebuild
+  // or re-verify the vision runtime, only reconcile the model-selector routes.
+  return JSON.stringify({
+    ...config,
+    imageInputVariants: { ...config.imageInputVariants, hidden: false },
+  })
 }
 
 function messageOf(error: unknown): string {
@@ -73,7 +78,9 @@ export class VisionToolkitRuntimeManager {
   async prepareCandidate(raw: VisionToolkitConfig): Promise<PreparedRuntimeGeneration> {
     const config = resolveConfig(raw)
     const resolvedFingerprint = fingerprint(config)
-    if (this.active?.fingerprint === resolvedFingerprint) return this.active
+    if (this.active?.fingerprint === resolvedFingerprint) {
+      return { ...this.active, config }
+    }
     const runtime = await this.factory(this.ctx, config)
     return { config, fingerprint: resolvedFingerprint, runtime }
   }
@@ -84,6 +91,7 @@ export class VisionToolkitRuntimeManager {
    */
   activateCandidate(candidate: PreparedRuntimeGeneration): void {
     if (this.active?.fingerprint === candidate.fingerprint) {
+      this.active = candidate
       this.lastError = undefined
       return
     }

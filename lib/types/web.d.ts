@@ -13,6 +13,8 @@ import { type PluginUpdateCapability, type PluginUpdateCheck, type PluginUpdateR
 import { VisionToolkitRuntimeManager, type PreparedRuntimeGeneration, type RuntimeManagerStatus } from './runtime-manager.ts';
 /** Exact route used by the browser Settings page. */
 export declare const SETTINGS_ROUTE = "/_dsh/vision-toolkit/settings";
+/** Same-origin route used by the browser client to read display-mode flags. */
+export declare const DISPLAY_CONFIG_ROUTE = "/_dsh/vision-toolkit/display-config";
 /** Public Settings snapshot; credential values are deliberately impossible here. */
 export interface VisionToolkitSettingsSnapshot {
     schemaVersion: 1;
@@ -91,12 +93,26 @@ export declare class VisionToolkitWebBackend {
  */
 export declare function createPastePolicyHandler(resolve: (sessionId: string, selection?: PasteSelectionQuery, modelLabel?: string) => Promise<PasteVerdict>): (req: IncomingMessage, res: ServerResponse) => void;
 /**
+ * Same-origin display-config handler: exposes whether transparent routing is
+ * active. The paste integration uses it to choose its notice text; the model
+ * selector hides upstream twins synchronously from DOM display names and does
+ * not depend on this route.
+ * @param getDisplayConfig - resolves the current display-mode flags.
+ * @returns the HTTP handler.
+ */
+export declare function createDisplayConfigHandler(getDisplayConfig: () => {
+    hidden: boolean;
+}): (req: IncomingMessage, res: ServerResponse) => void;
+/**
  * Attach optional Web routes whenever a webServer service is present.
  * @param ctx - plugin context owning route effects.
  * @param backend - Settings handler.
  * @param artifacts - signed Artifact handler.
  * @param pastedImages - pasted-image workspace handler.
  * @param pastePolicy - paste-policy verdict resolver (sessionId, selection, modelLabel).
+ * @param getDisplayConfig - resolves display-mode flags for the browser client.
  */
-export declare function installVisionToolkitWeb(ctx: Context, backend: VisionToolkitWebBackend, artifacts: ArtifactAccessController, pastedImages: PastedImageBackend, pastePolicy: (sessionId: string, selection?: PasteSelectionQuery, modelLabel?: string) => Promise<PasteVerdict>): void;
+export declare function installVisionToolkitWeb(ctx: Context, backend: VisionToolkitWebBackend, artifacts: ArtifactAccessController, pastedImages: PastedImageBackend, pastePolicy: (sessionId: string, selection?: PasteSelectionQuery, modelLabel?: string) => Promise<PasteVerdict>, getDisplayConfig: () => {
+    hidden: boolean;
+}): void;
 //# sourceMappingURL=web.d.ts.map

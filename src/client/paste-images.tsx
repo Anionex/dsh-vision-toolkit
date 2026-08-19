@@ -5,6 +5,7 @@ import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { InputTriggerSource } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import { readDisplayConfig } from './display-config.ts'
 
 const SOURCE = 'vision-toolkit-pasted-image'
 export const PASTE_IMAGES_ROUTE = '/_dsh/vision-toolkit/paste-images'
@@ -488,7 +489,10 @@ export class PasteImageController {
     const input = this.inputFor(sessionId)
     try {
       await this.switchModel(sessionId, route)
-      input.notify('info', `Switched to ${route.label || `${route.model} (Vision Toolkit)`}; pasted images now keep the native attachment flow`)
+      const { hidden } = await readDisplayConfig()
+      input.notify('info', hidden
+        ? 'Visual enhancement active: pasted images keep the native attachment flow'
+        : `Switched to ${route.label || `${route.model} (Vision Toolkit)`}; pasted images now keep the native attachment flow`)
     } catch (error) {
       input.notify('error', `Model switch failed; images will be sent as workspace paths: ${message(error)}`)
       this.takeoverPaste(sessionId, target, files, text)

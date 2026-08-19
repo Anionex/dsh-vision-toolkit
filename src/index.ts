@@ -114,6 +114,7 @@ export async function apply(ctx: Context, config: VisionToolkitConfig = {}): Pro
     artifacts,
     pastedImages,
     createPasteTakeoverResolver(ctx, () => resolveConfig(settings.get())),
+    () => ({ hidden: resolveConfig(settings.get()).imageInputVariants.hidden }),
   )
   disposers.push(variants.dispose)
   disposers.push(settings.watch(async (next) => {

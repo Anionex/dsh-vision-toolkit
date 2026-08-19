@@ -100,6 +100,15 @@ export interface VisionToolkitConfig {
      * keeps the path-only takeover instead (default true).
      */
     autoSwitch?: boolean
+    /**
+     * Transparent routing: variant routes keep the upstream provider and model
+     * display names, and the browser integration hides the upstream text-only
+     * entries that have a variant twin, so the model selector shows one entry
+     * per model and sessions stay on the image-capable variant without users
+     * seeing or switching a `(Vision Toolkit)` route. Off (default) keeps the
+     * explicit sibling entries and the current behavior.
+     */
+    hidden?: boolean
   }
 }
 
@@ -128,6 +137,7 @@ export const Config: Schema<VisionToolkitConfig> = z.object({
     enabled: z.boolean().default(true),
     providers: z.array(z.string()).default([]),
     autoSwitch: z.boolean().default(true),
+    hidden: z.boolean().default(false),
   }),
 })
 
@@ -156,6 +166,7 @@ export interface ResolvedVisionToolkitConfig {
     enabled: boolean
     providers: string[]
     autoSwitch: boolean
+    hidden: boolean
   }
 }
 
@@ -265,6 +276,7 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
       enabled: imageInputVariants.enabled ?? true,
       providers: variantProviders,
       autoSwitch: imageInputVariants.autoSwitch ?? true,
+      hidden: imageInputVariants.hidden ?? false,
     },
   }
 }
