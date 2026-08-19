@@ -30,6 +30,8 @@
 
 > **Original work:** The system and division of responsibilities behind these visual tools, together with the `vision-skills` Skill, were personally created and continuously refined by the author through long-term real-world use and repeated iteration.
 
+> If this project helps you or gives you some inspiration, feel free to star 🌟 & fork.
+
 ## Highlights
 
 - **Paste an image and ask directly.** In DSH Web, pasting an image switches the text-only model to its `(Vision Toolkit)` variant automatically — no manual path copying or model changes. Native thumbnails, session history, and workspace paths stay intact; Web can preview artifacts.
