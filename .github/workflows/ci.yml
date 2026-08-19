@@ -81,7 +81,7 @@ jobs:
       - name: Install the compatible DSH CLI for Profile acceptance
         run: |
           npm install --global --prefix "$RUNNER_TEMP/dsh-cli" \
-            @deepseek-ai/dsh@0.1.0-rc.6 \
+            @deepseek-ai/dsh@0.1.0-rc.8 \
             --registry=https://registry.npmjs.org
           echo "$RUNNER_TEMP/dsh-cli/bin" >> "$GITHUB_PATH"
 
@@ -152,7 +152,7 @@ jobs:
         shell: bash
         run: |
           npm install --global --prefix "$RUNNER_TEMP/dsh-cli" \
-            @deepseek-ai/dsh@0.1.0-rc.6 \
+            @deepseek-ai/dsh@0.1.0-rc.8 \
             --registry=https://registry.npmjs.org
           echo "$RUNNER_TEMP/dsh-cli" >> "$GITHUB_PATH"
 
