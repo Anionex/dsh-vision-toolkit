@@ -64,6 +64,7 @@ dsh plugin --profile web add @anionex/dsh-vision-toolkit
 - [Configuration and limits](#configuration-and-limits)
 - [Troubleshooting](#troubleshooting)
 - [Sponsor](#sponsor)
+- [Donation](#donation)
 - [Development and community](#development-and-community)
 
 ## Recent updates
@@ -326,6 +327,12 @@ No. Each inspection sends only the necessary intent and the image to the multimo
 </table>
 
 </details>
+
+## Donation
+
+Open source is not easy 🙏 If this project is valuable to you, you are welcome to buy the developer a coffee ☕️
+
+<img width="240" alt="WeChat reward code" src="assets/wechat-reward.png" />
 
 ## Development and community
 

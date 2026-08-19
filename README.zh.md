@@ -63,6 +63,7 @@ dsh plugin --profile web add @anionex/dsh-vision-toolkit
 - [配置与限制](#配置与限制)
 - [常见问题](#常见问题)
 - [赞助](#赞助)
+- [赞赏](#赞赏)
 - [开发与社区](#开发与社区)
 
 ## 最近更新
@@ -324,6 +325,12 @@ API Key:  https://agent-vision.anionex.me（自动填写）
 </table>
 
 </details>
+
+## 赞赏
+
+开源不易🙏如果本项目对你有价值，欢迎请开发者喝杯咖啡☕️
+
+<img width="240" alt="微信收款码" src="assets/wechat-reward.png" />
 
 ## 开发与社区
 
