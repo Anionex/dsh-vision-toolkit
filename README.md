@@ -313,7 +313,7 @@ No. Each inspection sends only the necessary intent and the image to the multimo
 
 ## ❤️ Sponsor
 
-> Want to sponsor this project? See [FUNDING.md](FUNDING.md) for details.
+> Want to sponsor this project? See [FUNDING.md](FUNDING.md) or email davidyang042@gmail.com.
 
 <details open>
 <summary>Click to collapse</summary>
@@ -325,7 +325,7 @@ No. Each inspection sends only the necessary intent and the image to the multimo
 </tr>
 <tr>
 <td width="220"><img src="assets/wechat-reward.png" alt="WeChat reward code" width="120"></td>
-<td>Open source is not easy 🙏 If this project is valuable to you, you are welcome to buy the developer a coffee ☕️ See <a href="https://github.com/Anionex/dsh-vision-toolkit/blob/main/FUNDING.md">FUNDING.md</a> or email davidyang042@gmail.com</td>
+<td>Open source is not easy 🙏 If this project is valuable to you, you are welcome to buy the developer a coffee ☕️</td>
 </tr>
 </table>
 

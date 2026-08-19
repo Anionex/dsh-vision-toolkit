@@ -311,7 +311,7 @@ API Key:  https://agent-vision.anionex.me（自动填写）
 
 ## ❤️ 赞助
 
-> 想赞助本项目？详见 [FUNDING.md](FUNDING.md)。
+> 想赞助本项目？详见 [FUNDING.md](FUNDING.md) 或发送邮件到 davidyang042@gmail.com。
 
 <details open>
 <summary>点击折叠</summary>
@@ -323,7 +323,7 @@ API Key:  https://agent-vision.anionex.me（自动填写）
 </tr>
 <tr>
 <td width="220"><img src="assets/wechat-reward.png" alt="微信收款码" width="120"></td>
-<td>开源不易🙏如果本项目对你有价值，欢迎请开发者喝杯咖啡☕️ 详见 <a href="https://github.com/Anionex/dsh-vision-toolkit/blob/main/FUNDING.md">FUNDING.md</a> 或发送邮件到 davidyang042@gmail.com</td>
+<td>开源不易🙏如果本项目对你有价值，欢迎请开发者喝杯咖啡☕️</td>
 </tr>
 </table>
 
