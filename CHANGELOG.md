@@ -4,6 +4,10 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+### Changed
+
+- Made the fast restore mode trigger more sensitive: a floating "快速还原为 HTML" / "快速生成" / "quick restore" control visible in the reference image now counts as a speed signal.
+
 ## [0.1.34] - 2026-08-19
 
 ### Changed

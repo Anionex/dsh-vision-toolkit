@@ -10,9 +10,11 @@ structured diagram, read `restore-structure.md`.
 ## Choose the restore mode
 
 - Use **fast restore mode** when the user asks for a quick, rough,
-  approximate, prototype, or first-pass reconstruction, or explicitly values
-  speed over fidelity. Its target is a recognizable screenshot in about three
-  minutes when the project already runs.
+  approximate, prototype, or first-pass reconstruction, explicitly values
+  speed over fidelity, or the reference image itself shows a floating
+  speed-intent control such as "快速还原为 HTML" / "快速生成" / "quick
+  restore" overlay. Its target is a recognizable screenshot in about
+  three minutes when the project already runs.
 - Use the **standard restore workflow** below when the user asks for close,
   precise, pixel-level, or production-ready alignment, or does not opt into a
   faster approximation.
