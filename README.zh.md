@@ -327,7 +327,7 @@ API Key:  https://agent-vision.anionex.me（自动填写）
 
 ## 赞赏
 
-开源不易🙏如果本项目对你有价值，欢迎请开发者喝杯咖啡☕️
+如果本项目对你有价值，欢迎请开发者喝杯咖啡☕️
 
 <img width="240" alt="微信收款码" src="assets/wechat-reward.png" />
 

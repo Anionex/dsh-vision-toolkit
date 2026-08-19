@@ -329,7 +329,7 @@ No. Each inspection sends only the necessary intent and the image to the multimo
 
 ## Donation
 
-Open source is not easy 🙏 If this project is valuable to you, you are welcome to buy the developer a coffee ☕️
+If this project is valuable to you, you are welcome to buy the developer a coffee ☕️
 
 <img width="240" alt="WeChat reward code" src="assets/wechat-reward.png" />
 
