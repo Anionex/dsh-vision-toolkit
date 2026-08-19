@@ -69,4 +69,12 @@ describe('adapted upstream vision-tools Skill renamed to vision-skills', () => {
     expect(restoreUi).toContain('Never hand-write SVG in fast')
     expect(restoreUi).not.toMatch(/Prefer an approximate library\s+icon over cropping, tracing, or hand-drawing a new one/u)
   })
+
+  it('treats a floating fast-restore control in the reference image as a speed signal', async () => {
+    const restoreUi = await readFile(join(VISION_SKILLS_RESOURCE_BASE, 'references', 'restore-ui.md'), 'utf8')
+    expect(restoreUi).toContain('快速还原为 HTML')
+    expect(restoreUi).toContain('floating')
+    expect(restoreUi).toContain('speed over fidelity')
+    expect(restoreUi).not.toContain('一键生成')
+  })
 })
