@@ -25,6 +25,22 @@
 
 </div>
 
+## ❤️ 赞助
+
+> 想赞助本项目？详见 [FUNDING.md](FUNDING.md) 或发送邮件到 davidyang042@gmail.com。
+
+<details open>
+<summary>点击折叠</summary>
+
+<table>
+<tr>
+<td width="220"><a href="https://aihubmix.com/?aff=5wj6sgx8"><img src="assets/logo_aihubmix.png" alt="AIHubMix" height="48"></a></td>
+<td>感谢 <a href="https://aihubmix.com/?aff=5wj6sgx8">AIHubMix</a> 赞助本项目！AIHubMix 是稳定、高并发的 AI 大模型 API 聚合平台，一个 API Key 即可接入 Claude、GPT、Gemini、DeepSeek 等主流模型，兼容多种协议，并提供<b>免费模型选择</b>。国内用户请通过<a href="https://aihubmix.com/?aff=5wj6sgx8">国内入口</a>使用。</td>
+</tr>
+</table>
+
+</details>
+
 🏆 本项目为deepseek harness生态首个综合性视觉工具插件：内测前已立项，并在内测期间参考本人的[`agent-vision-toolkit`](https://github.com/Anionex/agent-vision-toolkit)做出。
 
 > **原创声明：** 这套视觉工具的体系和划分方式，以及 `vision-skills` Skill，均由作者个人原创并持续打磨，相关工具、方法和工作流来自长期的真实使用与反复迭代。
@@ -54,6 +70,7 @@ dsh plugin --profile web add @anionex/dsh-vision-toolkit
 
 **目录**
 
+- [赞助](#赞助)
 - [亮点](#亮点)
 - [最近更新](#最近更新)
 - [适合谁用](#适合谁用)
@@ -62,7 +79,7 @@ dsh plugin --profile web add @anionex/dsh-vision-toolkit
 - [工具一览](#工具一览)
 - [配置与限制](#配置与限制)
 - [常见问题](#常见问题)
-- [赞助](#赞助)
+- [赞赏](#赞赏)
 - [开发与社区](#开发与社区)
 
 ## 最近更新
@@ -309,25 +326,11 @@ API Key:  https://agent-vision.anionex.me（自动填写）
 
 不会。每次检查只把必要的意图和图片发给多模态模型，调用之间不会累积上下文，因此额外成本很小。想进一步降低成本，可以用本地部署的小型多模态侧模型（例如 Gemma 4 或 Qwen 3.5/3.6 系列）提供视觉能力。
 
-## ❤️ 赞助
+## 赞赏
 
-> 想赞助本项目？详见 [FUNDING.md](FUNDING.md) 或发送邮件到 davidyang042@gmail.com。
+开源不易🙏如果本项目对你有价值，欢迎请开发者喝杯咖啡☕️
 
-<details open>
-<summary>点击折叠</summary>
-
-<table>
-<tr>
-<td width="220"><a href="https://aihubmix.com/?aff=5wj6sgx8"><img src="assets/logo_aihubmix.png" alt="AIHubMix" height="48"></a></td>
-<td>感谢 <a href="https://aihubmix.com/?aff=5wj6sgx8">AIHubMix</a> 赞助本项目！AIHubMix 是稳定、高并发的 AI 大模型 API 聚合平台，一个 API Key 即可接入 Claude、GPT、Gemini、DeepSeek 等主流模型，兼容多种协议，并提供<b>免费模型选择</b>。国内用户请通过<a href="https://aihubmix.com/?aff=5wj6sgx8">国内入口</a>使用。</td>
-</tr>
-<tr>
-<td width="220"><img src="assets/wechat-reward.png" alt="微信收款码" width="120"></td>
-<td>开源不易🙏如果本项目对你有价值，欢迎请开发者喝杯咖啡☕️</td>
-</tr>
-</table>
-
-</details>
+<img width="240" alt="微信收款码" src="assets/wechat-reward.png" />
 
 ## 开发与社区
 
