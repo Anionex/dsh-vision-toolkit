@@ -34,7 +34,7 @@
 
 - **Paste an image and ask directly.** In DSH Web, pasting an image switches the text-only model to its `(Vision Toolkit)` variant automatically — no manual path copying or model changes. Native thumbnails, session history, and workspace paths stay intact; Web can preview artifacts.
 - **One command to install.** The built-in free Gemini 3.7 Flash vision service is ready after installation, with no API key required.
-- **Built-in free vision quota.** The shared service works immediately after installation with a quota of **300 images per machine per day**.
+- **Built-in free vision quota.** The shared service works immediately after installation with a quota of **100 images per machine per day**.
 - **Not just a caption — the content that matters.** The model does not produce a generic description; it extracts evidence around the current task, such as “Where is the error?” or “Where is the button?”.
 - **A battle-tested visual-task methodology.** The bundled Skill tells the agent what to look at for different visual tasks, which tool to choose, how to proceed, and how to verify the result.
 
@@ -241,7 +241,7 @@ This is a shared zero-configuration entry point, not an unlimited private endpoi
 
 | Limit | Current value |
 | --- | --- |
-| Daily quota | 300 images per machine per day |
+| Daily quota | 100 images per machine per day |
 | Images per request | Up to 5 |
 | Image size | 4 MiB per image |
 | Decoded pixels | 20,000,000 per image |
@@ -283,6 +283,7 @@ For advanced setups — overriding `runtime.python`, using `runtime.mode: extern
 
 | Problem | What to do |
 | --- | --- |
+| The vision-model test fails with `Vision API returned an incompatible response structure` | The base URL usually needs a path prefix. Local OpenAI-compatible services such as LM Studio and Ollama should be entered as `http://127.0.0.1:1234/v1` (include `/v1`); the plugin appends `/chat/completions`, and a port-only address hits an unknown endpoint and returns this error |
 | Pasting an image still says the model does not support image input | Restart the Web Profile, refresh the page, and confirm the selected route has the `(Vision Toolkit)` suffix. You can also place the image in the session workspace and invoke `/vision-skills` |
 | The free service returns 429 | Wait for the `Retry-After` interval, or switch to your own endpoint when you need stable higher volume |
 | The image exceeds a size or pixel limit | Crop or resize it first; the error identifies whether bytes or decoded pixels caused the rejection |

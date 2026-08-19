@@ -33,7 +33,7 @@
   "vars": {
     "PUBLIC_API_KEY": "https://agent-vision.anionex.me",
     "LEGACY_PUBLIC_API_KEY": "free",
-    "DAILY_LIMIT": "300",
+    "DAILY_LIMIT": "100",
     "GLOBAL_DAILY_LIMIT": "1000000000",
     "MAX_IMAGE_BYTES": "4194304",
     "MAX_IMAGE_PIXELS": "20000000",
