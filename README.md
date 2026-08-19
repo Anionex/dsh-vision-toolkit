@@ -67,6 +67,7 @@ dsh plugin --profile web add @anionex/dsh-vision-toolkit
 
 ## Recent updates
 
+- **2026-08-19 · Transparent routing by default:** The model selector keeps one entry per model with the original name, and image input (paste, history, `read_image`) works without manually switching to a `(Vision Toolkit)` variant. Disable “Transparent variant routing” in advanced settings → image input to restore the explicit entries.
 - **2026-08-16 · Windows Python:** Added Microsoft Store Python support, fixing first-time isolated-runtime setup failures for affected Windows users.
 - **2026-08-17 · Free vision upgrade:** Switched the built-in no-key service to Gemini 3.7 Flash and fixed Qwen/Gemini bounding-box coordinate order.
 - **2026-08-16 · Better free vision:** Switched the built-in no-key service to Groq Qwen3.6, improving image understanding without adding setup steps.

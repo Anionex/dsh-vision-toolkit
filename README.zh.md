@@ -66,6 +66,7 @@ dsh plugin --profile web add @anionex/dsh-vision-toolkit
 
 ## 最近更新
 
+- **2026-08-19 · 透明变体路由默认开启：** 模型选择器默认只显示每个模型一项并保留原模型名，粘贴图片、历史图片和内置 `read_image` 工具都能直接使用，不再需要手动切换到 `(Vision Toolkit)` 变体；如需恢复显式条目，可在 设置 → 高级设置 → 图片输入 关闭“透明变体路由”。
 - **2026-08-16 · Windows Python：** 支持 Microsoft Store Python，解决 Windows 用户首次创建隔离环境失败的问题。
 - **2026-08-17 · 免费视觉升级：** 默认模型切换到 Gemini 3.7 Flash，并修复 Qwen/Gemini 检测框坐标顺序错位的问题。
 - **2026-08-16 · 免费视觉升级：** 默认模型切换到 Groq Qwen3.6，解决免 Key 方案看图效果不足的问题。

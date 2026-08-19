@@ -105,8 +105,8 @@ export interface VisionToolkitConfig {
      * display names, and the browser integration hides the upstream text-only
      * entries that have a variant twin, so the model selector shows one entry
      * per model and sessions stay on the image-capable variant without users
-     * seeing or switching a `(Vision Toolkit)` route. Off (default) keeps the
-     * explicit sibling entries and the current behavior.
+     * seeing or switching a `(Vision Toolkit)` route. On by default; disable
+     * to restore the explicit sibling entries.
      */
     hidden?: boolean
   }
@@ -137,7 +137,7 @@ export const Config: Schema<VisionToolkitConfig> = z.object({
     enabled: z.boolean().default(true),
     providers: z.array(z.string()).default([]),
     autoSwitch: z.boolean().default(true),
-    hidden: z.boolean().default(false),
+    hidden: z.boolean().default(true),
   }),
 })
 
@@ -276,7 +276,7 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
       enabled: imageInputVariants.enabled ?? true,
       providers: variantProviders,
       autoSwitch: imageInputVariants.autoSwitch ?? true,
-      hidden: imageInputVariants.hidden ?? false,
+      hidden: imageInputVariants.hidden ?? true,
     },
   }
 }
