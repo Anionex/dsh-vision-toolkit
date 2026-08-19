@@ -4,6 +4,12 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+## [0.1.34] - 2026-08-19
+
+### Changed
+
+- **Transparent variant routing is now on by default**: `imageInputVariants.hidden` defaults to `true`, so image-input variant routes keep the original provider and model display names and the model selector shows one entry per model out of the box. Users who prefer the explicit `(Vision Toolkit)` entries can disable the “透明变体路由” setting (advanced settings → image input) to restore the previous behavior.
+
 ## [0.1.33] - 2026-08-19
 
 ### Added
@@ -365,7 +371,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 - Runtime teardown cancels in-flight operations before removing Agent-scoped tools, the activation bootstrap, and the Skill.
 - The Web client is published through the current nested `dsh.client` manifest and loader-compatible built artifact required by DSH snapshot0810.
 
-[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.33...HEAD
+[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.34...HEAD
+[0.1.34]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.33...v0.1.34
 [0.1.33]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.32...v0.1.33
 [0.1.32]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.31...v0.1.32
 [0.1.31]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.30...v0.1.31
