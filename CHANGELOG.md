@@ -4,6 +4,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+## [0.1.35] - 2026-08-19
+
 ### Changed
 
 - Made the fast restore mode trigger more sensitive: a floating "快速还原为 HTML" / "快速生成" / "quick restore" control visible in the reference image now counts as a speed signal.
@@ -375,7 +377,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 - Runtime teardown cancels in-flight operations before removing Agent-scoped tools, the activation bootstrap, and the Skill.
 - The Web client is published through the current nested `dsh.client` manifest and loader-compatible built artifact required by DSH snapshot0810.
 
-[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.34...HEAD
+[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.35...HEAD
+[0.1.35]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.34...v0.1.35
 [0.1.34]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.33...v0.1.34
 [0.1.33]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.32...v0.1.33
 [0.1.32]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.31...v0.1.32
