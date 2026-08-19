@@ -28,7 +28,7 @@ describe('resolveConfig', () => {
     expect(config.runtime.mode).toBe('managed')
     expect(config.runtime.python).toBeUndefined()
     expect(config.allowedDirs).toEqual([])
-    expect(config.imageInputVariants).toEqual({ enabled: true, providers: [], autoSwitch: true, hidden: false })
+    expect(config.imageInputVariants).toEqual({ enabled: true, providers: [], autoSwitch: true, hidden: true })
   })
 
   it('normalizes image-input variant settings', () => {
@@ -38,8 +38,8 @@ describe('resolveConfig', () => {
         providers: [' deepseek-official ', '  ', 'glm'],
       },
     })
-    expect(config.imageInputVariants).toEqual({ enabled: false, providers: ['deepseek-official', 'glm'], autoSwitch: true, hidden: false })
-    expect(resolveConfig({ imageInputVariants: {} }).imageInputVariants).toEqual({ enabled: true, providers: [], autoSwitch: true, hidden: false })
+    expect(config.imageInputVariants).toEqual({ enabled: false, providers: ['deepseek-official', 'glm'], autoSwitch: true, hidden: true })
+    expect(resolveConfig({ imageInputVariants: {} }).imageInputVariants).toEqual({ enabled: true, providers: [], autoSwitch: true, hidden: true })
     expect(resolveConfig({ imageInputVariants: { hidden: true } }).imageInputVariants.hidden).toBe(true)
   })
 

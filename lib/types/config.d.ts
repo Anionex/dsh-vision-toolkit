@@ -73,8 +73,8 @@ export interface VisionToolkitConfig {
          * display names, and the browser integration hides the upstream text-only
          * entries that have a variant twin, so the model selector shows one entry
          * per model and sessions stay on the image-capable variant without users
-         * seeing or switching a `(Vision Toolkit)` route. Off (default) keeps the
-         * explicit sibling entries and the current behavior.
+         * seeing or switching a `(Vision Toolkit)` route. On by default; disable
+         * to restore the explicit sibling entries.
          */
         hidden?: boolean;
     };

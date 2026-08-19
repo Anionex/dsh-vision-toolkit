@@ -1109,7 +1109,7 @@ function draftOf(value: SettingsValue): Draft {
     toolkitPath: value.runtime?.agentVisionToolkitPath ?? '',
     python: value.runtime?.python ?? '',
     allowedDirs: (value.allowedDirs ?? []).join('\n'),
-    hiddenVariants: value.imageInputVariants?.hidden ?? false,
+    hiddenVariants: value.imageInputVariants?.hidden ?? true,
     variantEnabled: value.imageInputVariants?.enabled ?? true,
     variantProviders: (value.imageInputVariants?.providers ?? []).join('\n'),
     variantAutoSwitch: value.imageInputVariants?.autoSwitch ?? true,
