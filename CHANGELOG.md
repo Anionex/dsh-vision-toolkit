@@ -4,6 +4,17 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+## [0.1.37] - 2026-08-20
+
+### Added
+
+- Added a bilingual, screenshot-based AIHubMix guide covering signup through the Inferera entry, API key creation, free Gemini 3.7 Flash model selection, exact Vision Toolkit settings, and troubleshooting.
+
+### Changed
+
+- Replaced the Groq tutorial link in Vision Settings with the AIHubMix guide and select the matching English or Chinese page from the configured vision-output language.
+- Updated the English and Chinese READMEs to use the Inferera signup entry and feature the AIHubMix guide.
+
 ## [0.1.36] - 2026-08-20
 
 ### Added
@@ -383,7 +394,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 - Runtime teardown cancels in-flight operations before removing Agent-scoped tools, the activation bootstrap, and the Skill.
 - The Web client is published through the current nested `dsh.client` manifest and loader-compatible built artifact required by DSH snapshot0810.
 
-[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.36...HEAD
+[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.37...HEAD
+[0.1.37]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.36...v0.1.37
 [0.1.36]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.35...v0.1.36
 [0.1.35]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.34...v0.1.35
 [0.1.34]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.33...v0.1.34
