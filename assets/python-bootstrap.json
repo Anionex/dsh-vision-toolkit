@@ -2,6 +2,7 @@
   "schemaVersion": 1,
   "pythonVersion": "3.13.15",
   "buildTag": "20260814",
+  "mirrorBaseUrl": "https://dsh-vision-python-bootstrap-1317715800.cos.ap-guangzhou.myqcloud.com",
   "artifacts": {
     "darwin-arm64": {
       "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260814/cpython-3.13.15+20260814-aarch64-apple-darwin-install_only_stripped.tar.gz",

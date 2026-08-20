@@ -84,6 +84,7 @@ const BUNDLED_ROOT = join(PACKAGE_ROOT, 'vendor', 'agent-vision-toolkit')
 const MANIFEST_PATH = join(BUNDLED_ROOT, 'UPSTREAM_MANIFEST.json')
 const REQUIREMENTS_PATH = join(PACKAGE_ROOT, 'runtime', 'requirements.lock')
 const PREPARE_TIMEOUT_MS = 10 * 60 * 1000
+const PYPI_MIRROR_BASE_URL = 'https://mirrors.cloud.tencent.com/pypi/simple'
 const PROBE_TIMEOUT_MS = 30_000
 const LOCK_STALE_MS = 15 * 60 * 1000
 const LOCK_HEARTBEAT_MS = 5_000
@@ -155,6 +156,26 @@ async function runCollected(
   } finally {
     clearTimeout(timer)
   }
+}
+
+async function installDependenciesWithFallback(
+  ctx: Context,
+  argv: readonly string[],
+  stateRoot: string,
+  env: NodeJS.ProcessEnv,
+  label: string,
+): Promise<void> {
+  let lastResult: CommandResult | undefined
+  for (const indexUrl of [PYPI_MIRROR_BASE_URL, undefined]) {
+    const indexArgs = indexUrl === undefined ? [] : ['--index-url', indexUrl]
+    const result = await runCollected(ctx, [...argv, ...indexArgs], stateRoot, { timeoutMs: PREPARE_TIMEOUT_MS, env })
+    if (result.exitCode === 0 && !result.timedOut) return
+    lastResult = result
+  }
+  throw new VisionToolkitError(
+    'runtime',
+    `${label} failed to install managed runtime dependencies: ${(lastResult?.stderr ?? '').trim()}`,
+  )
 }
 
 async function readManifest(path = MANIFEST_PATH): Promise<UpstreamManifest> {
@@ -270,10 +291,14 @@ interface PythonBootstrapManifest {
   schemaVersion: 1
   pythonVersion: string
   buildTag: string
+  /** Optional domestic mirror base that replaces the GitHub download prefix. */
+  mirrorBaseUrl?: string
   artifacts: Record<string, PythonBootstrapArtifact>
 }
 
 const PYTHON_BOOTSTRAP_MANIFEST_PATH = join(PACKAGE_ROOT, 'assets', 'python-bootstrap.json')
+const GITHUB_PYTHON_DOWNLOAD_PREFIX = 'https://github.com/astral-sh/python-build-standalone/releases/download'
+const PYTHON_MIRROR_BASE_URL = 'https://dsh-vision-python-bootstrap-1317715800.cos.ap-guangzhou.myqcloud.com'
 const PYTHON_DOWNLOAD_TIMEOUT_MS = 10 * 60 * 1000
 const PYTHON_DOWNLOAD_ATTEMPTS = 3
 
@@ -294,6 +319,7 @@ async function readPythonBootstrapManifest(): Promise<PythonBootstrapManifest> {
     || !/^3\.\d+\.\d+$/u.test(manifest.pythonVersion)
     || typeof manifest.buildTag !== 'string'
     || !/^\d{8}$/u.test(manifest.buildTag)
+    || (manifest.mirrorBaseUrl !== undefined && manifest.mirrorBaseUrl !== PYTHON_MIRROR_BASE_URL)
     || typeof manifest.artifacts !== 'object'
     || manifest.artifacts === null
   ) {
@@ -304,7 +330,7 @@ async function readPythonBootstrapManifest(): Promise<PythonBootstrapManifest> {
       typeof artifact !== 'object'
       || artifact === null
       || typeof artifact.url !== 'string'
-      || !artifact.url.startsWith('https://github.com/astral-sh/python-build-standalone/releases/download/')
+      || !artifact.url.startsWith(`${GITHUB_PYTHON_DOWNLOAD_PREFIX}/`)
       || typeof artifact.sha256 !== 'string'
       || !/^[a-f0-9]{64}$/u.test(artifact.sha256)
       || !Number.isInteger(artifact.size)
@@ -351,6 +377,7 @@ const DOWNLOAD_HOSTS = new Set([
   'github.com',
   'objects.githubusercontent.com',
   'release-assets.githubusercontent.com',
+  'dsh-vision-python-bootstrap-1317715800.cos.ap-guangzhou.myqcloud.com',
 ])
 
 async function defaultDownloadRequest(url: string, signal: AbortSignal): Promise<DownloadResponse> {
@@ -359,7 +386,7 @@ async function defaultDownloadRequest(url: string, signal: AbortSignal): Promise
   try {
     for (let redirects = 0; ; redirects++) {
       const host = new URL(current).hostname
-      if (!DOWNLOAD_HOSTS.has(host)) throw new Error(`download redirected outside GitHub: ${host}`)
+      if (!DOWNLOAD_HOSTS.has(host)) throw new Error(`download redirected outside the allowlist: ${host}`)
       const response = await undiciRequest(current, {
         dispatcher,
         signal,
@@ -388,6 +415,7 @@ async function defaultDownloadRequest(url: string, signal: AbortSignal): Promise
 }
 
 async function downloadBundledPythonOnce(
+  url: string,
   artifact: PythonBootstrapArtifact,
   destination: string,
   requestImpl: DownloadRequest = defaultDownloadRequest,
@@ -395,7 +423,7 @@ async function downloadBundledPythonOnce(
   const signal = AbortSignal.timeout(PYTHON_DOWNLOAD_TIMEOUT_MS)
   let response: DownloadResponse
   try {
-    response = await requestImpl(artifact.url, signal)
+    response = await requestImpl(url, signal)
   } catch (error) {
     throw new Error(`download request failed: ${error instanceof Error ? error.message : String(error)}`)
   }
@@ -419,14 +447,22 @@ async function downloadBundledPythonOnce(
 }
 
 async function downloadBundledPython(
+  manifest: PythonBootstrapManifest,
   artifact: PythonBootstrapArtifact,
   destination: string,
   requestImpl: DownloadRequest,
 ): Promise<void> {
+  const sources = [
+    ...(manifest.mirrorBaseUrl === undefined
+      ? []
+      : [artifact.url.replace(GITHUB_PYTHON_DOWNLOAD_PREFIX, manifest.mirrorBaseUrl)]),
+    artifact.url,
+  ]
   let lastError: unknown
   for (let attempt = 0; attempt < PYTHON_DOWNLOAD_ATTEMPTS; attempt++) {
+    const source = sources[Math.min(attempt, sources.length - 1)] ?? artifact.url
     try {
-      await downloadBundledPythonOnce(artifact, destination, requestImpl)
+      await downloadBundledPythonOnce(source, artifact, destination, requestImpl)
       return
     } catch (error) {
       lastError = error
@@ -523,7 +559,7 @@ export async function acquireBundledPython(
       const extractDir = join(work, 'extract')
       await mkdir(extractDir, { recursive: true })
       try {
-        await downloadBundledPython(artifact, archive, requestImpl ?? defaultDownloadRequest)
+        await downloadBundledPython(manifest, artifact, archive, requestImpl ?? defaultDownloadRequest)
       } catch (error) {
         throw new VisionToolkitError(
           'runtime',
@@ -917,15 +953,13 @@ async function prepareManaged(
           if (create.exitCode !== 0 || create.timedOut) {
             throw new VisionToolkitError('runtime', `uv failed to create the managed runtime: ${create.stderr.trim()}`)
           }
-          const install = await runCollected(
+          await installDependenciesWithFallback(
             ctx,
             ['uv', 'pip', 'install', '--python', venvPython(staging), '--requirement', REQUIREMENTS_PATH],
             stateRoot,
-            { timeoutMs: PREPARE_TIMEOUT_MS, env: installEnv },
+            installEnv,
+            'uv',
           )
-          if (install.exitCode !== 0 || install.timedOut) {
-            throw new VisionToolkitError('runtime', `uv failed to install managed runtime dependencies: ${install.stderr.trim()}`)
-          }
           manager = 'uv'
           created = true
         }
@@ -956,15 +990,13 @@ async function prepareManaged(
       if (pipBootstrap.exitCode !== 0 || pipBootstrap.timedOut) {
         throw new VisionToolkitError('runtime', `Python failed to bootstrap pip in the managed runtime: ${pipBootstrap.stderr.trim()}`)
       }
-      const install = await runCollected(
+      await installDependenciesWithFallback(
         ctx,
         [venvPython(staging), '-m', 'pip', 'install', '--disable-pip-version-check', '--no-input', '-r', REQUIREMENTS_PATH],
         stateRoot,
-        { timeoutMs: PREPARE_TIMEOUT_MS, env: installEnv },
+        installEnv,
+        'pip',
       )
-      if (install.exitCode !== 0 || install.timedOut) {
-        throw new VisionToolkitError('runtime', `pip failed to install managed runtime dependencies: ${install.stderr.trim()}`)
-      }
     }
     const stagedPython: RuntimeCommand = { program: venvPython(staging), prefix: [], display: venvPython(staging) }
     const metadata = await pythonMetadata(ctx, stagedPython, cleanHome)

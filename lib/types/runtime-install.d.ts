@@ -50,6 +50,8 @@ interface PythonBootstrapManifest {
     schemaVersion: 1;
     pythonVersion: string;
     buildTag: string;
+    /** Optional domestic mirror base that replaces the GitHub download prefix. */
+    mirrorBaseUrl?: string;
     artifacts: Record<string, PythonBootstrapArtifact>;
 }
 /** Map Node platform/arch to the pinned artifact name, including musl Linux. */

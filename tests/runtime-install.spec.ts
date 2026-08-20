@@ -270,6 +270,7 @@ async function bundledPythonFixtureManifest(): Promise<{
       schemaVersion: 1,
       pythonVersion: '3.13.15',
       buildTag: '20260814',
+      mirrorBaseUrl: 'https://dsh-vision-python-bootstrap-1317715800.cos.ap-guangzhou.myqcloud.com',
       artifacts: {
         [target]: {
           url: 'https://github.com/astral-sh/python-build-standalone/releases/download/20260814/fixture.tar.gz',
@@ -307,7 +308,7 @@ describe('bundled Python bootstrap', () => {
     expect(first.command.program).toContain(join('python-bootstrap', `3.13.15-${target}`))
     expect(requestMock).toHaveBeenCalledTimes(1)
     expect(requestMock).toHaveBeenCalledWith(
-      expect.stringContaining('python-build-standalone/releases/download/'),
+      expect.stringContaining('dsh-vision-python-bootstrap-1317715800.cos.ap-guangzhou.myqcloud.com/20260814/fixture.tar.gz'),
       expect.any(AbortSignal),
     )
     const second = await acquireBundledPython(ctx, stateRoot, join(stateRoot, 'home'), manifest)
@@ -355,5 +356,34 @@ describe('bundled Python bootstrap', () => {
       message: expect.stringContaining('Python 3.11 or newer: python3'),
     })
     expect(requestMock).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the GitHub release when the domestic mirror is unreachable', async () => {
+    const { archive, manifest } = await bundledPythonFixtureManifest()
+    const requestMock = vi.fn()
+      .mockRejectedValueOnce(new Error('connect timeout'))
+      .mockResolvedValueOnce({
+        statusCode: 200,
+        headers: {},
+        body: Readable.from([archive]),
+        close: async () => {},
+      })
+    const ctx = new Context()
+    contexts.push(ctx)
+    const fiber = await ctx.plugin(BundledPythonSubprocessService)
+    const stateRoot = visionToolkitStateRoot()
+    await mkdir(join(stateRoot, 'home'), { recursive: true })
+    const acquired = await acquireBundledPython(ctx, stateRoot, join(stateRoot, 'home'), manifest, requestMock)
+    expect(acquired.version).toBe('3.13.15')
+    expect(requestMock).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('dsh-vision-python-bootstrap-1317715800.cos.ap-guangzhou.myqcloud.com/'),
+      expect.any(AbortSignal),
+    )
+    expect(requestMock).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('python-build-standalone/releases/download/'),
+      expect.any(AbortSignal),
+    )
   })
 })
