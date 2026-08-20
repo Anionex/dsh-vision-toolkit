@@ -69,12 +69,6 @@ export interface EvidencePersistence {
   write(key: EvidenceCacheKey, block: ContentBlock): Promise<void>
 }
 
-/** Description loader result; unsuccessful evidence is returned but never cached. */
-export interface EvidenceLoadResult {
-  readonly ok: boolean
-  readonly block: ContentBlock
-}
-
 function hash(value: string): string {
   return createHash('sha256').update(value).digest('hex')
 }
@@ -134,7 +128,7 @@ export function createEvidenceCacheKey(input: {
   })
 }
 
-/** Bounded promise cache; concurrent readers join one load and failures are evicted. */
+/** Bounded promise cache; concurrent readers join one load and rejected loads are evicted. */
 export class EvidenceCache {
   private readonly entries = new Map<string, Promise<ContentBlock>>()
 
@@ -143,8 +137,8 @@ export class EvidenceCache {
     private readonly persistence?: EvidencePersistence,
   ) {}
 
-  /** Read a memory/durable hit or compute and persist one successful description. */
-  read(key: string | EvidenceCacheKey, load: () => Promise<EvidenceLoadResult>): Promise<ContentBlock> {
+  /** Read a memory/durable hit or compute and persist one model-visible result. */
+  read(key: string | EvidenceCacheKey, load: () => Promise<ContentBlock>): Promise<ContentBlock> {
     const memoryKey = typeof key === 'string' ? key : key.digest
     const existing = this.entries.get(memoryKey)
     if (existing !== undefined) {
@@ -154,36 +148,31 @@ export class EvidenceCache {
       return existing
     }
 
-    const pending = (async (): Promise<EvidenceLoadResult> => {
+    const pending = (async (): Promise<ContentBlock> => {
       if (typeof key !== 'string' && this.persistence !== undefined) {
         try {
           const persisted = await this.persistence.read(key)
-          if (persisted !== undefined) return { ok: true, block: persisted }
+          if (persisted !== undefined) return persisted
         } catch {
           // Persistence is an optimization; a damaged/unavailable sidecar must
           // never block the model request from recomputing evidence.
         }
       }
 
-      const result = await load()
-      if (result.ok && typeof key !== 'string' && this.persistence !== undefined) {
+      const block = await load()
+      if (typeof key !== 'string' && this.persistence !== undefined) {
         try {
-          await this.persistence.write(key, result.block)
+          await this.persistence.write(key, block)
         } catch {
-          // Keep the successful process-local result even when durability fails.
+          // Keep the process-local result even when durability fails.
         }
       }
-      return result
+      return block
     })().then(
-      (result) => {
+      block => block,
+      (error: unknown) => {
         // Only evict our own entry: this promise may have been LRU-evicted and
         // the key re-populated by a newer read meanwhile.
-        if (!result.ok && this.entries.get(memoryKey) === pending) {
-          this.entries.delete(memoryKey)
-        }
-        return result.block
-      },
-      (error: unknown) => {
         if (this.entries.get(memoryKey) === pending) {
           this.entries.delete(memoryKey)
         }

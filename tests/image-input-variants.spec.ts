@@ -89,13 +89,13 @@ describe('image-input variant predicates', () => {
 })
 
 describe('EvidenceCache', () => {
-  it('caches a successful description and joins concurrent readers on one computation', async () => {
+  it('caches a model-visible result and joins concurrent readers on one computation', async () => {
     const cache = new EvidenceCache(4)
     let runs = 0
     const load = vi.fn(async () => {
       runs += 1
       await new Promise(resolve => setTimeout(resolve, 5))
-      return { ok: true as const, block: { type: 'text' as const, text: 'described' } }
+      return { type: 'text' as const, text: 'described' }
     })
     const [first, second] = await Promise.all([cache.read('a', load), cache.read('a', load)])
     expect(first).toEqual({ type: 'text', text: 'described' })
@@ -106,18 +106,29 @@ describe('EvidenceCache', () => {
     expect(runs).toBe(1)
   })
 
-  it('evicts failed reads so a fixed configuration gets a fresh chance', async () => {
+  it('keeps a degraded model-visible result stable', async () => {
     const cache = new EvidenceCache(4)
-    const load = vi.fn(async () => ({ ok: false as const, block: { type: 'text' as const, text: 'degraded' } }))
+    const load = vi.fn(async () => ({ type: 'text' as const, text: 'degraded' }))
     const first = await cache.read('a', load)
     expect(first).toEqual({ type: 'text', text: 'degraded' })
-    await cache.read('a', load)
+    expect(await cache.read('a', load)).toEqual(first)
+    expect(load).toHaveBeenCalledTimes(1)
+  })
+
+  it('evicts a rejected load that produced no model-visible result', async () => {
+    const cache = new EvidenceCache(4)
+    const load = vi.fn()
+      .mockRejectedValueOnce(new Error('no result'))
+      .mockResolvedValueOnce({ type: 'text' as const, text: 'recovered' })
+
+    await expect(cache.read('a', load)).rejects.toThrow('no result')
+    await expect(cache.read('a', load)).resolves.toEqual({ type: 'text', text: 'recovered' })
     expect(load).toHaveBeenCalledTimes(2)
   })
 
   it('evicts the least recently used entry beyond the limit', async () => {
     const cache = new EvidenceCache(2)
-    const load = vi.fn(async (key: string) => ({ ok: true as const, block: { type: 'text' as const, text: key } }))
+    const load = vi.fn(async (key: string) => ({ type: 'text' as const, text: key }))
     await cache.read('a', () => load('a'))
     await cache.read('b', () => load('b'))
     await cache.read('a', () => load('a'))
@@ -134,7 +145,7 @@ describe('EvidenceCache', () => {
     const load = vi.fn(async () => {
       await new Promise(resolve => setTimeout(resolve, 20))
       settled = true
-      return { ok: true as const, block: { type: 'text' as const, text: 'slow' } }
+      return { type: 'text' as const, text: 'slow' }
     })
     const controller = new AbortController()
     const waiting = abortableWait(cache.read('a', load), controller.signal)

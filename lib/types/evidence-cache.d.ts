@@ -31,11 +31,6 @@ export interface EvidencePersistence {
     read(key: EvidenceCacheKey): Promise<ContentBlock | undefined>;
     write(key: EvidenceCacheKey, block: ContentBlock): Promise<void>;
 }
-/** Description loader result; unsuccessful evidence is returned but never cached. */
-export interface EvidenceLoadResult {
-    readonly ok: boolean;
-    readonly block: ContentBlock;
-}
 /** Fingerprint every runtime setting that can change the generated description. */
 export declare function evidenceRuntimeFingerprint(config: ResolvedVisionToolkitConfig, credentialSha256?: string): string;
 /** Build a non-secret cache key from the Session, attachment, focus, and runtime contract. */
@@ -46,14 +41,14 @@ export declare function createEvidenceCacheKey(input: {
     prompt: string;
     runtimeHash: string;
 }): EvidenceCacheKey;
-/** Bounded promise cache; concurrent readers join one load and failures are evicted. */
+/** Bounded promise cache; concurrent readers join one load and rejected loads are evicted. */
 export declare class EvidenceCache {
     private readonly limit;
     private readonly persistence?;
     private readonly entries;
     constructor(limit: number, persistence?: EvidencePersistence | undefined);
-    /** Read a memory/durable hit or compute and persist one successful description. */
-    read(key: string | EvidenceCacheKey, load: () => Promise<EvidenceLoadResult>): Promise<ContentBlock>;
+    /** Read a memory/durable hit or compute and persist one model-visible result. */
+    read(key: string | EvidenceCacheKey, load: () => Promise<ContentBlock>): Promise<ContentBlock>;
     /** Drop process-local descriptions; durable rows stay versioned by their runtime fingerprint. */
     clear(): void;
 }

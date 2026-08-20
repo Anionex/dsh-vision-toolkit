@@ -329,14 +329,14 @@ function createLimiter(limit: number): <T>(task: () => Promise<T>, signal?: Abor
 
 /**
  * Read one image block into a Vision Toolkit description text block. Never
- * throws: failures degrade to an explanatory block with `ok: false`, so the
- * caller can decide what a failure means (the cache refuses to memoize it).
+ * throws: failures become model-visible explanatory blocks and are cached like
+ * successful descriptions so replayed history stays byte-identical.
  * @param ctx - plugin context; reads the optional `attachments` service.
  * @param runtime - the immutable runtime snapshot captured for this conversion.
  * @param block - the image block to describe.
  * @param query - the exact focus-hinted prompt sent to the vision model.
  * @param sessionId - the live Session identity, used to keep a model-visible copy.
- * @returns the outcome and its model-facing replacement block.
+ * @returns the model-facing replacement block.
  */
 async function readImageBlock(
   ctx: Context,
@@ -344,15 +344,15 @@ async function readImageBlock(
   block: ImageBlock,
   query: string,
   sessionId?: string,
-): Promise<{ ok: boolean; block: ContentBlock }> {
+): Promise<ContentBlock> {
   const attachments = ctx.get('attachments')
   const current = runtime()
   if (attachments === undefined) {
-    return { ok: false, block: { type: 'text', text: `${UNAVAILABLE_PREFIX}the DSH attachment service is not ready] The vision tool is temporarily unavailable; let the user know.` } }
+    return { type: 'text', text: `${UNAVAILABLE_PREFIX}the DSH attachment service is not ready] The vision tool is temporarily unavailable; let the user know.` }
   }
   const extension = MEDIA_EXTENSIONS[block.attachment.mediaType]
   if (extension === undefined) {
-    return { ok: false, block: { type: 'text', text: `${UNAVAILABLE_PREFIX}unsupported image media type ${block.attachment.mediaType}] The vision tool is temporarily unavailable; let the user know.` } }
+    return { type: 'text', text: `${UNAVAILABLE_PREFIX}unsupported image media type ${block.attachment.mediaType}] The vision tool is temporarily unavailable; let the user know.` }
   }
   let temporaryDirectory: string | undefined
   let pathEvidence = ''
@@ -366,10 +366,7 @@ async function readImageBlock(
     // can still use the path with a later visual-tool call if the bridge is
     // temporarily unavailable on this turn.
     if (current === undefined) {
-      return {
-        ok: false,
-        block: { type: 'text', text: `${pathEvidence}${pathEvidence === '' ? '' : '\n'}${UNAVAILABLE_PREFIX}the Vision Toolkit runtime is not ready] The vision tool is temporarily unavailable; let the user know.` },
-      }
+      return { type: 'text', text: `${pathEvidence}${pathEvidence === '' ? '' : '\n'}${UNAVAILABLE_PREFIX}the Vision Toolkit runtime is not ready] The vision tool is temporarily unavailable; let the user know.` }
     }
     // A fresh signal on purpose: the cached run must not die with its first
     // caller (their abort used to cancel every concurrent joiner); the runtime
@@ -380,14 +377,11 @@ async function readImageBlock(
     )
     const answer = result.answer.trim()
     if (answer.length === 0) throw new Error('the Vision Toolkit returned an empty description')
-    return { ok: true, block: { type: 'text', text: `${pathEvidence}${pathEvidence === '' ? '' : '\n'}${DESCRIPTION_PREFIX}${answer}` } }
+    return { type: 'text', text: `${pathEvidence}${pathEvidence === '' ? '' : '\n'}${DESCRIPTION_PREFIX}${answer}` }
   } catch (error) {
     return {
-      ok: false,
-      block: {
-        type: 'text',
-        text: `${pathEvidence}${pathEvidence === '' ? '' : '\n'}${UNAVAILABLE_PREFIX}${messageOf(error).slice(0, 300)}] The vision tool is temporarily unavailable; let the user know.`,
-      },
+      type: 'text',
+      text: `${pathEvidence}${pathEvidence === '' ? '' : '\n'}${UNAVAILABLE_PREFIX}${messageOf(error).slice(0, 300)}] The vision tool is temporarily unavailable; let the user know.`,
     }
   } finally {
     if (temporaryDirectory !== undefined) {
@@ -563,8 +557,9 @@ export class ImageInputVariantAdapter extends LlmAdapter {
       try {
         captured = await current.captureEvidenceRuntime()
       } catch (error) {
-        // Keep the established graceful-degradation path: the conversion will
-        // render this as unavailable evidence, and failed results are not cached.
+        // Keep the established graceful-degradation path. The unavailable block
+        // is cached under this fallback fingerprint so historical replay stays
+        // stable; a later successful credential capture produces a different key.
         captured = Object.freeze({
           evidenceFingerprint: current.evidenceFingerprint,
           glance: async () => { throw error },

@@ -241,13 +241,13 @@ describe('persistent image evidence cache', () => {
     store.dispose()
   })
 
-  it('does not persist failed descriptions and retries them after restart', async () => {
+  it('replays a degraded result after restart until the runtime fingerprint changes', async () => {
     const workspace = await tempRoot()
     const records = new Map<string, unknown>()
     const firstHarness = storageHarness({ records, workspace })
     const failedGlance = vi.fn(async () => { throw new Error('vision offline') })
     const firstStore = new SessionEvidenceStore(firstHarness.ctx)
-    await convertImagesToEvidence(
+    const first = await convertImagesToEvidence(
       firstHarness.ctx,
       () => runtimeStub(failedGlance),
       new EvidenceCache(4, firstStore),
@@ -256,13 +256,14 @@ describe('persistent image evidence cache', () => {
       firstHarness.sessionId,
       'a'.repeat(64),
     )
-    expect(records.size).toBe(0)
+    expect(JSON.stringify(first)).toContain('[vision unavailable: vision offline]')
+    expect(records.size).toBe(1)
     firstStore.dispose()
 
     const secondHarness = storageHarness({ records, workspace })
     const recoveredGlance = vi.fn(async () => glanceResult('recovered'))
     const secondStore = new SessionEvidenceStore(secondHarness.ctx)
-    await convertImagesToEvidence(
+    const second = await convertImagesToEvidence(
       secondHarness.ctx,
       () => runtimeStub(recoveredGlance),
       new EvidenceCache(4, secondStore),
@@ -271,9 +272,26 @@ describe('persistent image evidence cache', () => {
       secondHarness.sessionId,
       'a'.repeat(64),
     )
-    expect(recoveredGlance).toHaveBeenCalledTimes(1)
+    expect(recoveredGlance).not.toHaveBeenCalled()
     expect(records.size).toBe(1)
+    expect(secondHarness.attachments.readImage).not.toHaveBeenCalled()
+    expect(JSON.stringify(second)).toBe(JSON.stringify(first))
     secondStore.dispose()
+
+    const changedHarness = storageHarness({ records, workspace })
+    const changedStore = new SessionEvidenceStore(changedHarness.ctx)
+    await convertImagesToEvidence(
+      changedHarness.ctx,
+      () => runtimeStub(recoveredGlance),
+      new EvidenceCache(4, changedStore),
+      [imageMessage()],
+      undefined,
+      changedHarness.sessionId,
+      'b'.repeat(64),
+    )
+    expect(recoveredGlance).toHaveBeenCalledTimes(1)
+    expect(records.size).toBe(2)
+    changedStore.dispose()
   })
 
   it('coalesces concurrent Session flushes before writing sidecar records', async () => {
@@ -425,10 +443,7 @@ describe('persistent image evidence cache', () => {
     })
     harness.records.set(key.digest, '{not-json')
     const store = new SessionEvidenceStore(harness.ctx)
-    const load = vi.fn(async () => ({
-      ok: true,
-      block: { type: 'text' as const, text: '[vision model description] repaired' },
-    }))
+    const load = vi.fn(async () => ({ type: 'text' as const, text: '[vision model description] repaired' }))
 
     const result = await new EvidenceCache(4, store).read(key, load)
 
