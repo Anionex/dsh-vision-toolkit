@@ -508,6 +508,52 @@ describe('ImageInputVariantAdapter', () => {
     })
   })
 
+  it('binds one runtime instance to both the evidence fingerprint and vision read', async () => {
+    const firstGlance = vi.fn(async () => glanceResult('first runtime'))
+    const secondGlance = vi.fn(async () => glanceResult('second runtime'))
+    const first = {
+      ...runtimeStub(firstGlance),
+      evidenceFingerprint: 'a'.repeat(64),
+    } as VisionToolkitRuntime
+    const second = {
+      ...runtimeStub(secondGlance),
+      evidenceFingerprint: 'b'.repeat(64),
+    } as VisionToolkitRuntime
+    const getRuntime = vi.fn()
+      .mockReturnValueOnce(first)
+      .mockReturnValue(second)
+    const fallbackFingerprint = vi.fn(() => 'c'.repeat(64))
+    const attachments = { readImage: vi.fn(async () => ({ ref: attachment('a'), data: Uint8Array.of(1) })) }
+    const upstreamStream = vi.fn(async function* (): AsyncGenerator<StreamChunk> {
+      yield { type: 'finish', reason: { kind: 'stop' } }
+    })
+    const ctx = {
+      get: (name: string) => name === 'attachments' ? attachments : undefined,
+      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(), stream: upstreamStream },
+    } as never
+    const adapter = new ImageInputVariantAdapter(
+      ctx,
+      ctx.llm,
+      'up',
+      'Upstream',
+      getRuntime,
+      new EvidenceCache(4),
+      () => false,
+      fallbackFingerprint,
+    )
+
+    for await (const _chunk of adapter.stream({
+      provider: 'vision-toolkit-up',
+      model: 'plain',
+      messages: [message('m1', [imageBlock('a')])],
+    })) { /* drain */ }
+
+    expect(getRuntime).toHaveBeenCalledTimes(1)
+    expect(firstGlance).toHaveBeenCalledTimes(1)
+    expect(secondGlance).not.toHaveBeenCalled()
+    expect(fallbackFingerprint).not.toHaveBeenCalled()
+  })
+
   it('carries context, output caps, and reasoning metadata through resolveModel', async () => {
     const upstreamInfo = {
       provider: 'up', id: 'plain', name: 'Plain', inputModalities: ['text'],

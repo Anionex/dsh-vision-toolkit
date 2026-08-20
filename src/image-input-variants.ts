@@ -568,14 +568,15 @@ export class ImageInputVariantAdapter extends LlmAdapter {
       this.cache.clear()
       this.lastRuntime = current
     }
+    const runtimeHash = current?.evidenceFingerprint ?? this.runtimeHash()
     const messages = await convertImagesToEvidence(
       this.ctx,
-      this.runtime,
+      () => current,
       this.cache,
       options.messages,
       options.signal,
       options.sessionId === undefined ? undefined : String(options.sessionId),
-      this.runtimeHash(),
+      runtimeHash,
     )
     // Delegate through the host service under the upstream route: the variant
     // is a wire-only facade, and the upstream route owns retry and replay.
