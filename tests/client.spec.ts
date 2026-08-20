@@ -393,7 +393,7 @@ describe('Vision Toolkit client plugin', () => {
     })
   })
 
-  it('links the Groq tutorial and exposes a copyable manual update command', async () => {
+  it('links the AIHubMix tutorial and exposes a copyable manual update command', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ ok: true, value: settingsSnapshot() })))
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
@@ -407,8 +407,10 @@ describe('Vision Toolkit client plugin', () => {
       t: (key: string) => key,
     }))
 
-    const tutorial = await screen.findByRole('link', { name: 'groqTutorial' })
-    expect(tutorial.getAttribute('href')).toBe('https://github.com/Anionex/dsh-vision-toolkit/blob/main/docs/groq-qwen3.6-vision.zh.md')
+    const aihubmixTutorial = await screen.findByRole('link', { name: 'aihubmixTutorial' })
+    expect(aihubmixTutorial.getAttribute('href')).toBe('https://github.com/Anionex/dsh-vision-toolkit/blob/main/docs/aihubmix-gemini-vision.zh.md')
+    expect(aihubmixTutorial.getAttribute('target')).toBe('_blank')
+    expect(screen.queryByRole('link', { name: 'groqTutorial' })).toBeNull()
 
     const command = 'dsh plugin --profile web add @anionex/dsh-vision-toolkit@latest --registry=https://registry.npmjs.org/'
     const code = screen.getByText(command)
@@ -416,6 +418,25 @@ describe('Vision Toolkit client plugin', () => {
     fireEvent.click(screen.getByRole('button', { name: 'copy' }))
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(command))
     await screen.findByRole('button', { name: 'copied' })
+  })
+
+  it('selects the English AIHubMix tutorial for English output', async () => {
+    const snapshot = settingsSnapshot()
+    snapshot.settings.value.language = 'en'
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ ok: true, value: snapshot })))
+
+    const { ctx, registrations } = fakeClientContext()
+    apply(ctx as never)
+    const settings = registrations.find(entry => entry.options.name === 'settings.section')
+    if (settings === undefined) throw new Error('Settings component was not registered')
+    render(createElement(settings.component, {
+      controller: new VisionSettingsController(),
+      t: (key: string) => key,
+    }))
+
+    const aihubmixTutorial = await screen.findByRole('link', { name: 'aihubmixTutorial' })
+    expect(aihubmixTutorial.getAttribute('href')).toBe('https://github.com/Anionex/dsh-vision-toolkit/blob/main/docs/aihubmix-gemini-vision.md')
+    expect(screen.queryByRole('link', { name: 'groqTutorial' })).toBeNull()
   })
 
   it('reports a successful install and asks for a manual restart when self-restart is unavailable', async () => {

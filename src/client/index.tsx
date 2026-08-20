@@ -31,8 +31,8 @@ const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKi
 const BUILT_IN_FREE_VISION_BASE_URL = 'https://vision.anionex.me/v1'
 const BUILT_IN_FREE_VISION_CREDENTIAL = 'ANIONEX_FREE_VISION'
 const BUILT_IN_FREE_VISION_MODEL = 'gemini-3.7-flash'
-const GROQ_TUTORIAL_URL_EN = 'https://github.com/Anionex/dsh-vision-toolkit/blob/main/docs/groq-qwen3.6-vision.md'
-const GROQ_TUTORIAL_URL_ZH = 'https://github.com/Anionex/dsh-vision-toolkit/blob/main/docs/groq-qwen3.6-vision.zh.md'
+const AIHUBMIX_TUTORIAL_URL_EN = 'https://github.com/Anionex/dsh-vision-toolkit/blob/main/docs/aihubmix-gemini-vision.md'
+const AIHUBMIX_TUTORIAL_URL_ZH = 'https://github.com/Anionex/dsh-vision-toolkit/blob/main/docs/aihubmix-gemini-vision.zh.md'
 
 const en = {
   nav: 'Vision',
@@ -41,7 +41,7 @@ const en = {
   externalNotice: 'Remote tools send the selected image bytes to the configured external vision API. Local crop, trace, pixel diff, palette, foreground extraction, and HTML rendering do not upload images.',
   provider: 'Vision service',
   providerHint: 'Choose the API protocol, then provide the service address, model, and API key used by online vision features.',
-  groqTutorial: 'Want a free Groq key for Qwen3.6-27B vision? Follow the step-by-step tutorial →',
+  aihubmixTutorial: 'Need an AIHubMix key for free Gemini 3.7 Flash vision? Follow the signup guide →',
   baseUrl: 'Base URL',
   apiKey: 'API key',
   apiKeyPlaceholderMissing: 'Paste the API key',
@@ -229,7 +229,7 @@ const zh: Record<LocaleKey, string> = {
   externalNotice: '使用图像理解、目标定位、界面检测或文字识别等在线功能时，所选图片会发送到下方配置的视觉服务。图片裁剪、轮廓描摹、像素对比、主色提取、前景提取和网页截图均在本机完成，不会上传图片。',
   provider: '在线视觉服务',
   providerHint: '选择接口协议后，填写在线视觉功能使用的 API 地址、模型名称和 API 密钥。',
-  groqTutorial: '想免费申请 Groq Key 并用 Qwen3.6-27B 识图？看这篇图文教程 →',
+  aihubmixTutorial: '想申请 AIHubMix Key，并用免费 Gemini 3.7 Flash 识图？看这篇图文教程 →',
   baseUrl: 'API 地址',
   apiKey: 'API 密钥',
   apiKeyPlaceholderMissing: '粘贴 API 密钥',
@@ -1374,7 +1374,7 @@ function LoadedSettings({ controller, t }: SettingsInjected) {
   const updateHasUnsavedChanges = apiKey.length > 0 || settingsDraftChanged(draft, snapshot.settings.value, t)
   const manualUpdateProfile = updateCapability.profile ?? 'web'
   const manualUpdateCommand = `dsh plugin --profile ${manualUpdateProfile} add @anionex/dsh-vision-toolkit@latest --registry=https://registry.npmjs.org/`
-  const tutorialUrl = draft?.language === 'en' ? GROQ_TUTORIAL_URL_EN : GROQ_TUTORIAL_URL_ZH
+  const aihubmixTutorialUrl = draft?.language === 'en' ? AIHUBMIX_TUTORIAL_URL_EN : AIHUBMIX_TUTORIAL_URL_ZH
   const copyManualUpdate = (): void => {
     void navigator.clipboard?.writeText(manualUpdateCommand)
       .then(() => {
@@ -1401,7 +1401,7 @@ function LoadedSettings({ controller, t }: SettingsInjected) {
       {snapshot.runtime.lastError === undefined ? null : <div className="dvt-alert error"><strong>{runtimeErrorTitle}</strong><span>{snapshot.runtime.lastError}</span></div>}
 
       <section className="dvt-panel dvt-essential"><div className="dvt-panel-title"><div><h3>{t('provider')}</h3><p>{t('providerHint')}</p></div><span className={`dvt-badge ${snapshot.credential.configured ? 'ok' : 'error'}`}>{snapshot.credential.configured ? t('configured') : t('missing')}</span></div>
-        <p className="dvt-tutorial-link"><a href={tutorialUrl} target="_blank" rel="noreferrer">{t('groqTutorial')}</a></p>
+        <p className="dvt-tutorial-link"><a href={aihubmixTutorialUrl} target="_blank" rel="noreferrer">{t('aihubmixTutorial')}</a></p>
         <div className="dvt-form-grid">
           <Field label={t('protocol')}><select disabled={!snapshot.writable || busy} value={draft.protocol} onChange={(event) => { update('protocol', event.target.value as 'openai' | 'anthropic') }}><option value="openai">OpenAI Chat Completions</option><option value="anthropic">Anthropic Messages</option></select></Field>
           <Field label={t('baseUrl')}><Input disabled={!snapshot.writable || busy} value={draft.baseUrl} onChange={(event) => { update('baseUrl', event.target.value) }} /></Field>
