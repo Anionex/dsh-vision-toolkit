@@ -13,6 +13,8 @@ const MANIFEST_PATH = join(root, 'assets', 'python-bootstrap.json')
 const RELEASE_API = 'https://api.github.com/repos/astral-sh/python-build-standalone/releases/latest'
 const PYTHON_MAJOR_MINOR = '3.13'
 const ARTIFACT_SUFFIX = '-install_only_stripped.tar.gz'
+const GITHUB_DOWNLOAD_PREFIX = 'https://github.com/astral-sh/python-build-standalone/releases/download'
+const MIRROR_BASE_URL = 'https://dsh-vision-python-bootstrap-1317715800.cos.ap-guangzhou.myqcloud.com'
 
 const TARGETS = {
   'darwin-arm64': 'aarch64-apple-darwin',
@@ -53,12 +55,15 @@ function validateManifest(manifest) {
     return `pythonVersion must be a ${PYTHON_MAJOR_MINOR} release`
   }
   if (typeof manifest.buildTag !== 'string' || !/^\d{8}$/u.test(manifest.buildTag)) return 'buildTag must be YYYYMMDD'
+  if (manifest.mirrorBaseUrl !== undefined && manifest.mirrorBaseUrl !== MIRROR_BASE_URL) {
+    return `mirrorBaseUrl must be ${MIRROR_BASE_URL}`
+  }
   if (typeof manifest.artifacts !== 'object' || manifest.artifacts === null) return 'artifacts is missing'
   const targets = Object.keys(TARGETS)
   for (const target of targets) {
     const artifact = manifest.artifacts[target]
     if (artifact === undefined || typeof artifact !== 'object' || artifact === null) return `artifact missing: ${target}`
-    if (typeof artifact.url !== 'string' || !artifact.url.startsWith('https://github.com/astral-sh/python-build-standalone/releases/download/')) {
+    if (typeof artifact.url !== 'string' || !artifact.url.startsWith(`${GITHUB_DOWNLOAD_PREFIX}/`)) {
       return `artifact ${target} has an invalid url`
     }
     if (typeof artifact.sha256 !== 'string' || !/^[a-f0-9]{64}$/u.test(artifact.sha256)) return `artifact ${target} has an invalid sha256`
@@ -89,7 +94,7 @@ async function buildManifest(release) {
     if (!/^[a-f0-9]{64}$/u.test(digest ?? '')) throw new Error(`missing sha256 digest for ${name}`)
     if (!Number.isInteger(asset.size) || asset.size <= 0) throw new Error(`missing size for ${name}`)
     artifacts[target] = {
-      url: `https://github.com/astral-sh/python-build-standalone/releases/download/${tag}/${name}`,
+      url: `${GITHUB_DOWNLOAD_PREFIX}/${tag}/${name}`,
       sha256: digest,
       size: asset.size,
     }
@@ -98,6 +103,7 @@ async function buildManifest(release) {
     schemaVersion: 1,
     pythonVersion: (assets.find(asset => typeof asset?.name === 'string' && asset.name.startsWith(`cpython-${PYTHON_MAJOR_MINOR}.`))?.name ?? '').match(/^cpython-([0-9.]+)\+/u)?.[1],
     buildTag: tag,
+    mirrorBaseUrl: MIRROR_BASE_URL,
     artifacts,
   }
   const error = validateManifest(manifest)
