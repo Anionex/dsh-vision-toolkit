@@ -4,6 +4,14 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+## [0.1.38] - 2026-08-20
+
+### Fixed
+
+- Persisted the final model-visible image evidence across DSH Profile restarts, so historical images no longer consume vision quota again or change the main model's cached conversation prefix.
+- Preserved both successful descriptions and `[vision unavailable: ...]` results byte-for-byte; only requests that fail before producing any model-visible result are retried.
+- Bound persisted evidence to the Session lifecycle, attachment, focus prompt, credential, and output-affecting runtime settings to prevent replay across incompatible configurations.
+
 ## [0.1.37] - 2026-08-20
 
 ### Added
@@ -394,7 +402,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 - Runtime teardown cancels in-flight operations before removing Agent-scoped tools, the activation bootstrap, and the Skill.
 - The Web client is published through the current nested `dsh.client` manifest and loader-compatible built artifact required by DSH snapshot0810.
 
-[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.37...HEAD
+[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.38...HEAD
+[0.1.38]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.37...v0.1.38
 [0.1.37]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.36...v0.1.37
 [0.1.36]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.35...v0.1.36
 [0.1.35]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.34...v0.1.35
