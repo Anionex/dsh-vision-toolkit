@@ -50,8 +50,13 @@ function glanceResult(answer: string) {
   return { images: [], mode: 'describe' as const, answer, truncated: false }
 }
 
-function runtimeStub(glance: ReturnType<typeof vi.fn>) {
-  return { glance } as unknown as VisionToolkitRuntime
+function runtimeStub(glance: ReturnType<typeof vi.fn>, evidenceFingerprint = 'a'.repeat(64)) {
+  const captured = Object.freeze({ evidenceFingerprint, glance })
+  return {
+    glance,
+    evidenceFingerprint,
+    captureEvidenceRuntime: vi.fn(async () => captured),
+  } as unknown as VisionToolkitRuntime
 }
 
 describe('image-input variant predicates', () => {
@@ -511,18 +516,11 @@ describe('ImageInputVariantAdapter', () => {
   it('binds one runtime instance to both the evidence fingerprint and vision read', async () => {
     const firstGlance = vi.fn(async () => glanceResult('first runtime'))
     const secondGlance = vi.fn(async () => glanceResult('second runtime'))
-    const first = {
-      ...runtimeStub(firstGlance),
-      evidenceFingerprint: 'a'.repeat(64),
-    } as VisionToolkitRuntime
-    const second = {
-      ...runtimeStub(secondGlance),
-      evidenceFingerprint: 'b'.repeat(64),
-    } as VisionToolkitRuntime
+    const first = runtimeStub(firstGlance, 'a'.repeat(64))
+    const second = runtimeStub(secondGlance, 'b'.repeat(64))
     const getRuntime = vi.fn()
       .mockReturnValueOnce(first)
       .mockReturnValue(second)
-    const fallbackFingerprint = vi.fn(() => 'c'.repeat(64))
     const attachments = { readImage: vi.fn(async () => ({ ref: attachment('a'), data: Uint8Array.of(1) })) }
     const upstreamStream = vi.fn(async function* (): AsyncGenerator<StreamChunk> {
       yield { type: 'finish', reason: { kind: 'stop' } }
@@ -538,8 +536,6 @@ describe('ImageInputVariantAdapter', () => {
       'Upstream',
       getRuntime,
       new EvidenceCache(4),
-      () => false,
-      fallbackFingerprint,
     )
 
     for await (const _chunk of adapter.stream({
@@ -549,9 +545,59 @@ describe('ImageInputVariantAdapter', () => {
     })) { /* drain */ }
 
     expect(getRuntime).toHaveBeenCalledTimes(1)
+    expect(first.captureEvidenceRuntime).toHaveBeenCalledTimes(1)
+    expect(second.captureEvidenceRuntime).not.toHaveBeenCalled()
     expect(firstGlance).toHaveBeenCalledTimes(1)
     expect(secondGlance).not.toHaveBeenCalled()
-    expect(fallbackFingerprint).not.toHaveBeenCalled()
+  })
+
+  it('does not capture vision credentials for a text-only request', async () => {
+    const runtime = runtimeStub(vi.fn(async () => glanceResult('unused')))
+    const upstreamStream = vi.fn(async function* (): AsyncGenerator<StreamChunk> {
+      yield { type: 'finish', reason: { kind: 'stop' } }
+    })
+    const ctx = {
+      get: () => undefined,
+      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(), stream: upstreamStream },
+    } as never
+    const adapter = new ImageInputVariantAdapter(ctx, ctx.llm, 'up', 'Upstream', () => runtime, new EvidenceCache(4))
+
+    for await (const _chunk of adapter.stream({
+      provider: 'vision-toolkit-up',
+      model: 'plain',
+      messages: [message('m1', [{ type: 'text', text: 'plain' }])],
+    })) { /* drain */ }
+
+    expect(runtime.captureEvidenceRuntime).not.toHaveBeenCalled()
+  })
+
+  it('degrades a credential-capture failure through the normal unavailable evidence path', async () => {
+    const glance = vi.fn(async () => glanceResult('unused'))
+    const runtime = runtimeStub(glance)
+    vi.mocked(runtime.captureEvidenceRuntime).mockRejectedValueOnce(new Error('credential unavailable'))
+    const attachments = { readImage: vi.fn(async () => ({ ref: attachment('a'), data: Uint8Array.of(1) })) }
+    const delegated: GenerateOptions[] = []
+    const upstreamStream = vi.fn(async function* (options: GenerateOptions): AsyncGenerator<StreamChunk> {
+      delegated.push(options)
+      yield { type: 'finish', reason: { kind: 'stop' } }
+    })
+    const ctx = {
+      get: (name: string) => name === 'attachments' ? attachments : undefined,
+      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(), stream: upstreamStream },
+    } as never
+    const adapter = new ImageInputVariantAdapter(ctx, ctx.llm, 'up', 'Upstream', () => runtime, new EvidenceCache(4))
+
+    for await (const _chunk of adapter.stream({
+      provider: 'vision-toolkit-up',
+      model: 'plain',
+      messages: [message('m1', [imageBlock('a')])],
+    })) { /* drain */ }
+
+    expect(glance).not.toHaveBeenCalled()
+    expect(delegated[0]?.messages[0]?.content).toContainEqual({
+      type: 'text',
+      text: expect.stringContaining('credential unavailable'),
+    })
   })
 
   it('carries context, output caps, and reasoning metadata through resolveModel', async () => {
@@ -648,9 +694,36 @@ describe('ImageInputVariantAdapter', () => {
     expect(glance).toHaveBeenCalledTimes(1)
   })
 
-  it('clears the description cache when the runtime instance changes', async () => {
-    const first = runtimeStub(vi.fn(async () => glanceResult('first provider')))
-    const second = runtimeStub(vi.fn(async () => glanceResult('second provider')))
+  it('does not let individual adapters clear a shared process cache', async () => {
+    const glance = vi.fn(async () => glanceResult('shared provider'))
+    const runtime = runtimeStub(glance, 'a'.repeat(64))
+    const attachments = { readImage: vi.fn(async () => ({ ref: attachment('a'), data: Uint8Array.of(1) })) }
+    const upstreamStream = vi.fn(async function* (): AsyncGenerator<StreamChunk> {
+      yield { type: 'finish', reason: { kind: 'stop' } }
+    })
+    const ctx = {
+      get: (name: string) => name === 'attachments' ? attachments : undefined,
+      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(), stream: upstreamStream },
+    } as never
+    const cache = new EvidenceCache(4)
+    const firstAdapter = new ImageInputVariantAdapter(ctx, ctx.llm, 'up-a', 'A', () => runtime, cache)
+    const secondAdapter = new ImageInputVariantAdapter(ctx, ctx.llm, 'up-b', 'B', () => runtime, cache)
+    const options: GenerateOptions = {
+      provider: 'vision-toolkit-up',
+      model: 'plain',
+      messages: [message('m1', [imageBlock('a')])],
+    }
+
+    for await (const _chunk of firstAdapter.stream(options)) { /* drain */ }
+    for await (const _chunk of secondAdapter.stream(options)) { /* drain */ }
+    for await (const _chunk of firstAdapter.stream(options)) { /* drain */ }
+
+    expect(glance).toHaveBeenCalledTimes(1)
+  })
+
+  it('recomputes when the captured runtime fingerprint changes', async () => {
+    const first = runtimeStub(vi.fn(async () => glanceResult('first provider')), 'a'.repeat(64))
+    const second = runtimeStub(vi.fn(async () => glanceResult('second provider')), 'b'.repeat(64))
     const attachments = { readImage: vi.fn(async () => ({ ref: attachment('a'), data: Uint8Array.of(1) })) }
     const delegated: GenerateOptions[] = []
     const upstreamStream = vi.fn(async function* (options: GenerateOptions): AsyncGenerator<StreamChunk> {
@@ -673,7 +746,7 @@ describe('ImageInputVariantAdapter', () => {
     expect(first.glance).toHaveBeenCalledTimes(1)
     for await (const _chunk of adapter.stream(options)) { /* drain */ }
     expect(first.glance).toHaveBeenCalledTimes(1)
-    // A reconfigured runtime is a new instance: the stale description is gone.
+    // A different evidence fingerprint selects a new memory/durable key.
     current = second
     for await (const _chunk of adapter.stream(options)) { /* drain */ }
     expect(second.glance).toHaveBeenCalledTimes(1)

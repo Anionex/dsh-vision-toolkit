@@ -32,11 +32,10 @@ import type { ResolvedVisionToolkitConfig } from './config.ts'
 import {
   createEvidenceCacheKey,
   EvidenceCache,
-  evidenceRuntimeFingerprint,
   SessionEvidenceStore,
 } from './evidence-cache.ts'
 import { sessionPasteRoot, type PasteSelectionQuery, type PasteVerdict } from './paste-images.ts'
-import type { VisionToolkitRuntime } from './runtime.ts'
+import type { CapturedEvidenceRuntime, VisionToolkitRuntime } from './runtime.ts'
 
 export { EvidenceCache } from './evidence-cache.ts'
 
@@ -333,7 +332,7 @@ function createLimiter(limit: number): <T>(task: () => Promise<T>, signal?: Abor
  * throws: failures degrade to an explanatory block with `ok: false`, so the
  * caller can decide what a failure means (the cache refuses to memoize it).
  * @param ctx - plugin context; reads the optional `attachments` service.
- * @param runtime - the currently serving Vision Toolkit runtime, if ready.
+ * @param runtime - the immutable runtime snapshot captured for this conversion.
  * @param block - the image block to describe.
  * @param query - the exact focus-hinted prompt sent to the vision model.
  * @param sessionId - the live Session identity, used to keep a model-visible copy.
@@ -341,7 +340,7 @@ function createLimiter(limit: number): <T>(task: () => Promise<T>, signal?: Abor
  */
 async function readImageBlock(
   ctx: Context,
-  runtime: () => VisionToolkitRuntime | undefined,
+  runtime: () => CapturedEvidenceRuntime | undefined,
   block: ImageBlock,
   query: string,
   sessionId?: string,
@@ -402,8 +401,8 @@ async function readImageBlock(
  * The original messages are returned untouched when nothing carries an image;
  * converted messages are new objects, so the durable request stays immutable.
  * @param ctx - plugin context for the attachments service.
- * @param runtime - the currently serving runtime (lazily read per conversion).
- * @param cache - shared per-adapter description cache.
+ * @param runtime - the immutable runtime snapshot captured for this conversion.
+ * @param cache - shared process/durable description cache.
  * @param messages - the assembled request messages.
  * @param signal - the caller's cancellation for this conversion pass.
  * @param sessionId - the live Session identity, when available.
@@ -412,7 +411,7 @@ async function readImageBlock(
  */
 export async function convertImagesToEvidence(
   ctx: Context,
-  runtime: () => VisionToolkitRuntime | undefined,
+  runtime: () => CapturedEvidenceRuntime | undefined,
   cache: EvidenceCache,
   messages: readonly Message[],
   signal?: AbortSignal,
@@ -503,8 +502,6 @@ export async function convertImagesToEvidence(
  * retry policy, and replay handling still apply).
  */
 export class ImageInputVariantAdapter extends LlmAdapter {
-  private lastRuntime: VisionToolkitRuntime | undefined
-
   constructor(
     private readonly ctx: Context,
     private readonly llm: LlmService,
@@ -513,7 +510,6 @@ export class ImageInputVariantAdapter extends LlmAdapter {
     private readonly runtime: () => VisionToolkitRuntime | undefined,
     private readonly cache: EvidenceCache,
     private readonly hidden: () => boolean = () => false,
-    private readonly runtimeHash: () => string = () => 'process-only-runtime',
   ) {
     super()
   }
@@ -561,22 +557,28 @@ export class ImageInputVariantAdapter extends LlmAdapter {
   }
 
   override async *stream(options: GenerateOptions): AsyncGenerator<StreamChunk> {
-    // A reconfigured runtime is a NEW instance; descriptions read through the
-    // previous provider must not be replayed for the new one.
     const current = this.runtime()
-    if (current !== this.lastRuntime) {
-      this.cache.clear()
-      this.lastRuntime = current
+    let captured: CapturedEvidenceRuntime | undefined
+    if (current !== undefined && options.messages.some(message => contentHasImage(message.content))) {
+      try {
+        captured = await current.captureEvidenceRuntime()
+      } catch (error) {
+        // Keep the established graceful-degradation path: the conversion will
+        // render this as unavailable evidence, and failed results are not cached.
+        captured = Object.freeze({
+          evidenceFingerprint: current.evidenceFingerprint,
+          glance: async () => { throw error },
+        })
+      }
     }
-    const runtimeHash = current?.evidenceFingerprint ?? this.runtimeHash()
     const messages = await convertImagesToEvidence(
       this.ctx,
-      () => current,
+      () => captured,
       this.cache,
       options.messages,
       options.signal,
       options.sessionId === undefined ? undefined : String(options.sessionId),
-      runtimeHash,
+      captured?.evidenceFingerprint ?? 'process-only-runtime',
     )
     // Delegate through the host service under the upstream route: the variant
     // is a wire-only facade, and the upstream route owns retry and replay.
@@ -948,7 +950,6 @@ export function installImageInputVariants(
               getRuntime,
               evidenceCache,
               () => getConfig().imageInputVariants.hidden,
-              () => getRuntime()?.evidenceFingerprint ?? evidenceRuntimeFingerprint(getConfig()),
             ),
           )
           registrations.set(upstream, dispose)

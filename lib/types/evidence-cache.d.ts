@@ -37,7 +37,7 @@ export interface EvidenceLoadResult {
     readonly block: ContentBlock;
 }
 /** Fingerprint every runtime setting that can change the generated description. */
-export declare function evidenceRuntimeFingerprint(config: ResolvedVisionToolkitConfig): string;
+export declare function evidenceRuntimeFingerprint(config: ResolvedVisionToolkitConfig, credentialSha256?: string): string;
 /** Build a non-secret cache key from the Session, attachment, focus, and runtime contract. */
 export declare function createEvidenceCacheKey(input: {
     sessionId?: string;

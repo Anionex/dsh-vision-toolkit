@@ -80,12 +80,18 @@ function hash(value: string): string {
 }
 
 /** Fingerprint every runtime setting that can change the generated description. */
-export function evidenceRuntimeFingerprint(config: ResolvedVisionToolkitConfig): string {
+export function evidenceRuntimeFingerprint(
+  config: ResolvedVisionToolkitConfig,
+  credentialSha256?: string,
+): string {
   return hash(JSON.stringify({
     upstreamCommit: UPSTREAM_COMMIT,
     provider: {
       baseUrl: config.provider.baseUrl,
-      credential: String(config.provider.credential),
+      credential: {
+        ref: String(config.provider.credential),
+        sha256: credentialSha256 ?? null,
+      },
       model: config.provider.model,
       protocol: config.provider.protocol,
       anthropicThinking: config.provider.anthropicThinking,
