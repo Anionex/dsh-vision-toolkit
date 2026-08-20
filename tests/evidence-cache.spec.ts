@@ -460,6 +460,7 @@ describe('persistent image evidence cache', () => {
     const same = resolveConfig()
     const otherModel = resolveConfig({ provider: { model: 'another-vision-model' } })
     const otherLanguage = resolveConfig({ language: 'en' })
+    const otherTimeout = resolveConfig({ timeoutMs: baseline.timeoutMs + 1 })
     const firstCredential = 'a'.repeat(64)
     const secondCredential = 'b'.repeat(64)
 
@@ -467,6 +468,7 @@ describe('persistent image evidence cache', () => {
     expect(evidenceRuntimeFingerprint(same)).toBe(evidenceRuntimeFingerprint(baseline))
     expect(evidenceRuntimeFingerprint(otherModel)).not.toBe(evidenceRuntimeFingerprint(baseline))
     expect(evidenceRuntimeFingerprint(otherLanguage)).not.toBe(evidenceRuntimeFingerprint(baseline))
+    expect(evidenceRuntimeFingerprint(otherTimeout)).not.toBe(evidenceRuntimeFingerprint(baseline))
     expect(evidenceRuntimeFingerprint(baseline, firstCredential))
       .not.toBe(evidenceRuntimeFingerprint(baseline, secondCredential))
   })

@@ -92,6 +92,7 @@ export function evidenceRuntimeFingerprint(
       userAgent: config.provider.userAgent,
     },
     language: config.language,
+    timeoutMs: config.timeoutMs,
     maxImageBytes: config.maxImageBytes,
     maxImagePixels: config.maxImagePixels,
     runtime: config.runtime,
