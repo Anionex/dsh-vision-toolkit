@@ -96,6 +96,8 @@ describe('package layout contract', () => {
     expect(PACKAGE.peerDependencies).toHaveProperty('@deepseek-ai/dsh-agent')
     expect(PACKAGE.peerDependencies).toHaveProperty('@deepseek-ai/cordis')
     expect(PACKAGE.peerDependencies).toHaveProperty('@deepseek-ai/schemastery')
+    expect(PACKAGE.peerDependencies).toHaveProperty('@deepseek-ai/dsh-storage-domain')
+    expect(PACKAGE.dependencies).toHaveProperty('zod')
     expect(PACKAGE.peerDependencies).not.toHaveProperty('cordis')
     expect(PACKAGE.peerDependencies).not.toHaveProperty('schemastery')
     for (const section of [PACKAGE.dependencies ?? {}, PACKAGE.peerDependencies ?? {}, PACKAGE.devDependencies ?? {}]) {

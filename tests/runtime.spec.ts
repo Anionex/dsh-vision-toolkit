@@ -155,6 +155,43 @@ describe('VisionToolkitRuntime', () => {
     expect(result.images[0]?.bytes).toBeGreaterThan(0)
   })
 
+  it('pins one resolved credential to the evidence fingerprint and vision call', async () => {
+    const ctx = new Context()
+    contexts.push(ctx)
+    await ctx.plugin(LocalSubprocessService)
+    let credential = 'first-vision-key'
+    const resolve = vi.fn(async () => ({ value: credential, source: 'file' }))
+    ctx.provide('credentials', { resolve } as unknown as Credentials)
+    const config = resolveConfig({
+      provider: {
+        baseUrl: 'https://vision.example/v1',
+        credential: 'VISION_API_KEY',
+        model: 'fixture-model',
+      },
+      runtime: { mode: 'external', agentVisionToolkitPath: FIXTURE_UPSTREAM, python: 'python3' },
+    })
+    const adapter = new UpstreamAdapter(ctx, config, preparedFixture())
+    const runtime = new VisionToolkitRuntime(ctx, config, adapter)
+    const run = vi.spyOn(adapter, 'run')
+    const workspace = await tempWorkspace()
+
+    const captured = await runtime.captureEvidenceRuntime()
+    credential = 'second-vision-key'
+    await captured.glance({ images: ['sample.png'] }, { signal, workspace })
+
+    expect(resolve).toHaveBeenCalledTimes(1)
+    expect(run).toHaveBeenCalledWith(
+      'glance',
+      expect.any(Array),
+      expect.objectContaining({
+        env: expect.objectContaining({ VISION_API_KEY: 'first-vision-key' }),
+      }),
+    )
+    const next = await runtime.captureEvidenceRuntime()
+    expect(resolve).toHaveBeenCalledTimes(2)
+    expect(next.evidenceFingerprint).not.toBe(captured.evidenceFingerprint)
+  })
+
   it('glance answers a question, OCRs, and zooms into a region', async () => {
     const { runtime } = await setup()
     const workspace = await tempWorkspace()

@@ -333,6 +333,11 @@ export interface ToolCallOptions {
     /** Live Session object whose lifetime bounds the one-entry glance cache. */
     sessionScope?: object;
 }
+/** One immutable vision-service snapshot used to generate cache-keyed evidence. */
+export interface CapturedEvidenceRuntime {
+    readonly evidenceFingerprint: string;
+    glance(request: GlanceRequest, options: ToolCallOptions): Promise<GlanceResult>;
+}
 /** Parse a non-empty four-integer pixel box. */
 export declare function parseRegion(region: string): {
     x1: number;
@@ -350,6 +355,10 @@ export declare class VisionToolkitRuntime {
     constructor(ctx: Context, config: ResolvedVisionToolkitConfig, adapter?: UpstreamAdapter);
     /** Pinned and prepared upstream identity. */
     get upstreamVersion(): UpstreamVersionInfo;
+    /** Stable identity for persisted image descriptions produced by this runtime. */
+    get evidenceFingerprint(): string;
+    /** Capture the credential and provider identity used by one evidence conversion. */
+    captureEvidenceRuntime(): Promise<CapturedEvidenceRuntime>;
     private timeout;
     private operationError;
     private semaphore;
@@ -371,6 +380,7 @@ export declare class VisionToolkitRuntime {
     private annotateLocations;
     /** glance: describe, targeted QA, OCR, or multi-image comparison. */
     glance(request: GlanceRequest, options: ToolCallOptions): Promise<GlanceResult>;
+    private glanceWithEnv;
     private validateLocations;
     private locate;
     /** ground: locate one named target and return pixel boxes. */

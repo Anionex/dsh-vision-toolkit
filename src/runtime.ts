@@ -16,6 +16,7 @@ import { SaxesParser } from 'saxes'
 import { describeArtifact, type ArtifactDescriptor } from './artifacts.ts'
 import { isBuiltInFreeVisionProvider, type ResolvedVisionToolkitConfig } from './config.ts'
 import { BUILT_IN_FREE_VISION_KEY } from './defaults.ts'
+import { evidenceRuntimeFingerprint } from './evidence-cache.ts'
 import { VisionToolkitError } from './errors.ts'
 import {
   assertDistinctOutput,
@@ -480,6 +481,12 @@ export interface ToolCallOptions {
   sessionScope?: object
 }
 
+/** One immutable vision-service snapshot used to generate cache-keyed evidence. */
+export interface CapturedEvidenceRuntime {
+  readonly evidenceFingerprint: string
+  glance(request: GlanceRequest, options: ToolCallOptions): Promise<GlanceResult>
+}
+
 interface GlanceCacheEntry {
   key: string
   result: GlanceResult
@@ -696,6 +703,25 @@ export class VisionToolkitRuntime {
   /** Pinned and prepared upstream identity. */
   get upstreamVersion(): UpstreamVersionInfo {
     return this.adapter.versionInfo
+  }
+
+  /** Stable identity for persisted image descriptions produced by this runtime. */
+  get evidenceFingerprint(): string {
+    return evidenceRuntimeFingerprint(this.config, undefined, process.env.VISION_SSL_VERIFY?.trim())
+  }
+
+  /** Capture the credential and provider identity used by one evidence conversion. */
+  async captureEvidenceRuntime(): Promise<CapturedEvidenceRuntime> {
+    const env = await this.resolveVisionEnv()
+    const evidenceFingerprint = evidenceRuntimeFingerprint(
+      this.config,
+      createHash('sha256').update(env.VISION_API_KEY).digest('hex'),
+      env.VISION_SSL_VERIFY,
+    )
+    return Object.freeze({
+      evidenceFingerprint,
+      glance: (request: GlanceRequest, options: ToolCallOptions) => this.glanceWithEnv(request, options, env),
+    })
   }
 
   private timeout(options: ToolCallOptions): number {
@@ -1213,6 +1239,14 @@ export class VisionToolkitRuntime {
 
   /** glance: describe, targeted QA, OCR, or multi-image comparison. */
   async glance(request: GlanceRequest, options: ToolCallOptions): Promise<GlanceResult> {
+    return this.glanceWithEnv(request, options)
+  }
+
+  private async glanceWithEnv(
+    request: GlanceRequest,
+    options: ToolCallOptions,
+    capturedEnv?: UpstreamEnvironment,
+  ): Promise<GlanceResult> {
     return this.runOperation('vision_glance', options, async (operation) => {
       if (request.images.length === 0) throw new VisionToolkitError('input', 'glance requires at least one image')
       if (request.query !== undefined && request.ocr === true) {
@@ -1235,7 +1269,7 @@ export class VisionToolkitRuntime {
         this.accountImage(image, operation)
         images.push(image)
       }
-      const env = await this.resolveVisionEnv()
+      const env = capturedEnv ?? await this.resolveVisionEnv()
       const cacheKey = options.sessionScope === undefined
         ? undefined
         : await this.glanceCacheKey(request, images, env, operation.signal)

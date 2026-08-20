@@ -10,10 +10,12 @@
  */
 import type { Context } from '@deepseek-ai/cordis';
 import LlmService, { LlmAdapter } from '@deepseek-ai/dsh-llm';
-import type { ContentBlock, GenerateOptions, LlmModelInfo, LlmProviderInfo, LlmResolvedModelInfo, Message, StreamChunk } from '@deepseek-ai/dsh-llm';
+import type { GenerateOptions, LlmModelInfo, LlmProviderInfo, LlmResolvedModelInfo, Message, StreamChunk } from '@deepseek-ai/dsh-llm';
 import type { ResolvedVisionToolkitConfig } from './config.ts';
+import { EvidenceCache } from './evidence-cache.ts';
 import { type PasteSelectionQuery, type PasteVerdict } from './paste-images.ts';
-import type { VisionToolkitRuntime } from './runtime.ts';
+import type { CapturedEvidenceRuntime, VisionToolkitRuntime } from './runtime.ts';
+export { EvidenceCache } from './evidence-cache.ts';
 /** Provider-id prefix for the variant routes this plugin registers. */
 export declare const VARIANT_PROVIDER_PREFIX = "vision-toolkit-";
 /** Display suffix shared by variant provider names and variant model names. */
@@ -30,26 +32,6 @@ export declare function variantProviderId(upstream: string): string;
 export declare function shouldWrapModel(info: Pick<LlmModelInfo, 'inputModalities'>): boolean;
 /** Whether a content block list carries an image at any depth (tool-result nesting included). */
 export { contentHasImage } from '@deepseek-ai/dsh-llm';
-/** Bounded promise cache for one attachment's description; failed reads are not retained. */
-export declare class EvidenceCache {
-    private readonly limit;
-    private readonly entries;
-    constructor(limit: number);
-    /**
-     * Read one attachment-and-prompt key's entry or compute it. Concurrent readers join the in-flight
-     * computation; a settled failure is evicted so a fixed configuration gets a
-     * fresh chance.
-     * @param key - the attachment identity plus the exact focus prompt.
-     * @param load - computes the description; must resolve `{ ok, block }` and never reject.
-     * @returns the cached or computed block.
-     */
-    read(key: string, load: () => Promise<{
-        ok: boolean;
-        block: ContentBlock;
-    }>): Promise<ContentBlock>;
-    /** Drop every cached description (runtime reconfiguration invalidates provider-specific reads). */
-    clear(): void;
-}
 /**
  * Wait on a shared promise without inheriting its lifetime: the caller's
  * abort rejects this wait immediately, while the underlying read keeps
@@ -64,14 +46,15 @@ export declare function abortableWait<T>(promise: Promise<T>, signal: AbortSigna
  * The original messages are returned untouched when nothing carries an image;
  * converted messages are new objects, so the durable request stays immutable.
  * @param ctx - plugin context for the attachments service.
- * @param runtime - the currently serving runtime (lazily read per conversion).
- * @param cache - shared per-adapter description cache.
+ * @param runtime - the immutable runtime snapshot captured for this conversion.
+ * @param cache - shared process/durable description cache.
  * @param messages - the assembled request messages.
  * @param signal - the caller's cancellation for this conversion pass.
  * @param sessionId - the live Session identity, when available.
+ * @param runtimeHash - stable fingerprint of the vision provider and evidence runtime.
  * @returns the rewritten message list.
  */
-export declare function convertImagesToEvidence(ctx: Context, runtime: () => VisionToolkitRuntime | undefined, cache: EvidenceCache, messages: readonly Message[], signal?: AbortSignal, sessionId?: string): Promise<Message[]>;
+export declare function convertImagesToEvidence(ctx: Context, runtime: () => CapturedEvidenceRuntime | undefined, cache: EvidenceCache, messages: readonly Message[], signal?: AbortSignal, sessionId?: string, runtimeHash?: string): Promise<Message[]>;
 /**
  * The adapter behind one variant route: model metadata declares image input,
  * and every stream rewrites image blocks before delegating to the upstream
@@ -86,7 +69,6 @@ export declare class ImageInputVariantAdapter extends LlmAdapter {
     private readonly runtime;
     private readonly cache;
     private readonly hidden;
-    private lastRuntime;
     constructor(ctx: Context, llm: LlmService, upstream: string, upstreamName: string, runtime: () => VisionToolkitRuntime | undefined, cache: EvidenceCache, hidden?: () => boolean);
     providerInfo(provider: string): LlmProviderInfo;
     listModels(provider: string): Promise<readonly LlmModelInfo[]>;
