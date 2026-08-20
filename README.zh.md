@@ -63,8 +63,8 @@ dsh plugin --profile web add @anionex/dsh-vision-toolkit
 
 <table>
 <tr>
-<td width="220"><a href="https://aihubmix.com/?aff=5wj6sgx8"><img src="assets/logo_aihubmix.png" alt="AIHubMix" height="48"></a></td>
-<td>感谢 <a href="https://aihubmix.com/?aff=5wj6sgx8">AIHubMix</a> 赞助本项目！AIHubMix 是稳定、高并发的 AI 大模型 API 聚合平台，一个 API Key 即可接入 Claude、GPT、Gemini、DeepSeek 等主流模型，兼容多种协议，并提供<b>免费模型选择</b>。国内用户请通过<a href="https://inferera.com/?aff=5wj6sgx8">国内入口</a>使用，海外用户请通过<a href="https://aihubmix.com/?aff=5wj6sgx8">海外入口</a>使用。</td>
+<td width="220"><a href="https://inferera.com/?aff=5wj6sgx8"><img src="assets/logo_aihubmix.png" alt="AIHubMix" height="48"></a></td>
+<td>感谢 <a href="https://inferera.com/?aff=5wj6sgx8">AIHubMix</a> 赞助本项目！AIHubMix 是稳定、高并发的 AI 大模型 API 聚合平台，一个 API Key 即可接入 Claude、GPT、Gemini、DeepSeek 等主流模型，兼容多种协议，并提供<b>免费模型选择</b>。注册时请使用 <a href="https://inferera.com/?aff=5wj6sgx8">Inferera 入口</a>。</td>
 </tr>
 </table>
 
@@ -85,10 +85,10 @@ dsh plugin --profile web add @anionex/dsh-vision-toolkit
 
 ## 最近更新
 
+- **2026-08-20 · AIHubMix 申请教程：** 新增通过 Inferera 入口申请 API Key、使用免费 Gemini 3.7 Flash 视觉模型的图文教程，并在视觉工具设置中直接提供入口。
 - **2026-08-19 · 透明变体路由默认开启：** 模型选择器默认只显示每个模型一项并保留原模型名，粘贴图片、历史图片和内置 `read_image` 工具都能直接使用，不再需要手动切换到 `(Vision Toolkit)` 变体；如需恢复显式条目，可在 设置 → 高级设置 → 图片输入 关闭“透明变体路由”。
 - **2026-08-16 · Windows Python：** 支持 Microsoft Store Python，解决 Windows 用户首次创建隔离环境失败的问题。
 - **2026-08-17 · 免费视觉升级：** 默认模型切换到 Gemini 3.7 Flash，并修复 Qwen/Gemini 检测框坐标顺序错位的问题。
-- **2026-08-16 · 免费视觉升级：** 默认模型切换到 Groq Qwen3.6，解决免 Key 方案看图效果不足的问题。
 - **2026-08-16 · 图片粘贴：** 文本模型自动切换到 `(Vision Toolkit)` 变体并保留工作区路径，解决粘贴图片被拦截或后续无法复用的问题。
 - **2026-08-16 · 共享容量：** 扩大免费服务容量，减少高峰期出现 `429` 的情况。
 - **2026-08-16 · 真实模型测试：** Settings 新增完整图片请求测试，解决 `/models` 可访问却不能证明模型真的会看图的问题。
@@ -283,7 +283,7 @@ API Key:  https://agent-vision.anionex.me（自动填写）
 
 如果你需要更高额度、私有端点或其他模型，可以在 **设置 → 视觉工具** 中修改提供方，并把 API Key 保存为 DSH Credential。Settings 只保存 Credential 引用，不会回显密钥。
 
-**Groq 图文教程：** [免费获取 Groq API Key，并调用 Qwen3.6-27B 识图](docs/groq-qwen3.6-vision.zh.md)。教程包含账号与 API Key 获取截图、Vision Toolkit 的准确配置，以及可直接使用的 cURL 和 Python 示例。
+**AIHubMix 图文教程：** [申请 AIHubMix API Key，并用免费 Gemini 3.7 Flash 识图](docs/aihubmix-gemini-vision.zh.md)。教程包含账号与 API Key 获取截图、Vision Toolkit 的准确配置，以及可直接使用的 cURL 和 Python 示例。
 
 也可以在 Profile patch 中配置：
 

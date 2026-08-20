@@ -64,8 +64,8 @@ dsh plugin --profile web add @anionex/dsh-vision-toolkit
 
 <table>
 <tr>
-<td width="220"><a href="https://aihubmix.com/?aff=5wj6sgx8"><img src="assets/logo_aihubmix.png" alt="AIHubMix" height="48"></a></td>
-<td>Thanks to <a href="https://aihubmix.com/?aff=5wj6sgx8">AIHubMix</a> for sponsoring this project! AIHubMix is a stable, high-concurrency AI model API gateway that connects Claude, GPT, Gemini, DeepSeek, and other mainstream models through a single API key, compatible with multiple protocols, with <b>free model options</b> available. Users in China can use it via the <a href="https://inferera.com/?aff=5wj6sgx8">China entry</a>, and users abroad via the <a href="https://aihubmix.com/?aff=5wj6sgx8">Global entry</a>.</td>
+<td width="220"><a href="https://inferera.com/?aff=5wj6sgx8"><img src="assets/logo_aihubmix.png" alt="AIHubMix" height="48"></a></td>
+<td>Thanks to <a href="https://inferera.com/?aff=5wj6sgx8">AIHubMix</a> for sponsoring this project! AIHubMix is a stable, high-concurrency AI model API gateway that connects Claude, GPT, Gemini, DeepSeek, and other mainstream models through a single API key, compatible with multiple protocols, with <b>free model options</b> available. Use the <a href="https://inferera.com/?aff=5wj6sgx8">Inferera entry</a> to sign up.</td>
 </tr>
 </table>
 
@@ -86,10 +86,10 @@ dsh plugin --profile web add @anionex/dsh-vision-toolkit
 
 ## Recent updates
 
+- **2026-08-20 · AIHubMix setup guide:** Added a screenshot-based guide for getting an API key through the Inferera entry and using the free Gemini 3.7 Flash vision model; Settings now links directly to this guide.
 - **2026-08-19 · Transparent routing by default:** The model selector keeps one entry per model with the original name, and image input (paste, history, `read_image`) works without manually switching to a `(Vision Toolkit)` variant. Disable “Transparent variant routing” in advanced settings → image input to restore the explicit entries.
 - **2026-08-16 · Windows Python:** Added Microsoft Store Python support, fixing first-time isolated-runtime setup failures for affected Windows users.
 - **2026-08-17 · Free vision upgrade:** Switched the built-in no-key service to Gemini 3.7 Flash and fixed Qwen/Gemini bounding-box coordinate order.
-- **2026-08-16 · Better free vision:** Switched the built-in no-key service to Groq Qwen3.6, improving image understanding without adding setup steps.
 - **2026-08-16 · Image paste:** Text-only routes now switch to a `(Vision Toolkit)` variant and keep a workspace path, fixing blocked pastes and images that could not be reused later.
 - **2026-08-16 · More shared capacity:** Expanded the free service capacity to reduce peak-time `429` responses.
 - **2026-08-16 · Real model test:** Added a full image-request test in Settings, fixing the false confidence caused by a successful `/models` request to a model that still cannot process images.
@@ -285,7 +285,7 @@ Existing clients that still send `api_key="free"` remain compatible.
 
 For higher quotas, private endpoints, or another model, change the provider in **Settings → Vision Toolkit** and store the API key as a DSH Credential. Settings stores the Credential reference and never reads the saved secret back into the browser.
 
-**Step-by-step Groq tutorial:** [Get a free Groq API key and use Qwen3.6-27B for image understanding](docs/groq-qwen3.6-vision.md). It includes screenshots for account/API-key setup, the exact Vision Toolkit settings, and working cURL and Python examples.
+**Step-by-step AIHubMix tutorial:** [Get an AIHubMix API key and use free Gemini 3.7 Flash for vision](docs/aihubmix-gemini-vision.md). It includes screenshots for account/API-key setup, the exact Vision Toolkit settings, and working cURL and Python examples.
 
 You can also configure a Profile patch:
 

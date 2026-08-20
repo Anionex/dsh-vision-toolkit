@@ -12,9 +12,9 @@ This tutorial completes three tasks:
 
 ## 1. Open the signup entry and register
 
-Open the [AIHubMix signup entry](https://aihubmix.com/?aff=5wj6sgx8), then select **Sign up** in the upper-right corner or **Get API Key** on the page.
+Open the [Inferera signup entry](https://inferera.com/?aff=5wj6sgx8), which redirects to AIHubMix, then select **Sign up** in the upper-right corner or **Get API Key** on the page.
 
-This URL includes the project's referral parameter. You can instead open the [AIHubMix homepage](https://aihubmix.com/) directly if you prefer not to use a referral link.
+This URL includes the project's referral parameter. You can instead open [Inferera](https://inferera.com/) directly if you prefer not to use a referral link.
 
 <p align="center">
   <img src="assets/aihubmix-home.png" width="92%" alt="AIHubMix homepage and signup entry" />
@@ -222,7 +222,7 @@ uv run --with openai python recognize.py
 
 ## Official resources
 
-- [AIHubMix signup entry](https://aihubmix.com/?aff=5wj6sgx8)
+- [Inferera signup entry](https://inferera.com/?aff=5wj6sgx8)
 - [AIHubMix API Keys](https://console.aihubmix.com/token)
 - [AIHubMix documentation](https://docs.aihubmix.com/en)
 - [Gemini 3.7 Flash (free) model page](https://aihubmix.com/model/gemini-3.7-flash-free)
