@@ -285,7 +285,7 @@ Existing clients that still send `api_key="free"` remain compatible.
 
 For higher quotas, private endpoints, or another model, change the provider in **Settings → Vision Toolkit** and store the API key as a DSH Credential. Settings stores the Credential reference and never reads the saved secret back into the browser.
 
-**Step-by-step AIHubMix tutorial:** [Get an AIHubMix API key and use free Gemini 3.7 Flash for vision](docs/aihubmix-gemini-vision.md). It includes screenshots for account/API-key setup, the exact Vision Toolkit settings, and working cURL and Python examples.
+**Step-by-step AIHubMix tutorial:** [Get an AIHubMix API key and use free Gemini 3.7 Flash for vision](docs/aihubmix-gemini-vision.md). It includes screenshots for account/API-key setup, the exact Vision Toolkit settings, free-model selection, and troubleshooting.
 
 You can also configure a Profile patch:
 

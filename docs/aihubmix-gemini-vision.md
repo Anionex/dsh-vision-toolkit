@@ -6,7 +6,7 @@ This tutorial completes three tasks:
 
 1. Create an AIHubMix account.
 2. Create and safely store an AIHubMix API key.
-3. Use the free `gemini-3.7-flash-free` model for image analysis in DSH Vision Toolkit or regular code.
+3. Use the free `gemini-3.7-flash-free` model for image analysis in DSH Vision Toolkit.
 
 > As of August 20, 2026, the AIHubMix model page lists `gemini-3.7-flash-free` as a free trial model with image input. Free capacity is limited, may return `429`, and is not guaranteed for production workloads; use the paid `gemini-3.7-flash` route when reliability is required. Models, pricing, and availability can change, so check the [AIHubMix model page](https://aihubmix.com/model/gemini-3.7-flash-free) for current details.
 
@@ -52,26 +52,6 @@ Select **Create API key**, then:
 
 Do not place the complete key in a README, chat transcript, screenshot, Git commit, browser frontend, or public log. Delete and replace a key immediately if it becomes public.
 
-### Set the key in a terminal
-
-macOS / Linux:
-
-```sh
-export AIHUBMIX_API_KEY="sk_your_key_here"
-```
-
-Windows PowerShell for the current window:
-
-```powershell
-$env:AIHUBMIX_API_KEY = "sk_your_key_here"
-```
-
-Confirm that the variable exists without printing its value:
-
-```sh
-test -n "$AIHUBMIX_API_KEY" && echo "AIHUBMIX_API_KEY is set"
-```
-
 ## 3. Select the free vision model
 
 Use this exact model ID:
@@ -109,7 +89,7 @@ The free route is for trials and can return `429 Too Many Requests` when capacit
 Transcribe the error in this screenshot exactly, then explain the most likely cause and the repair steps.
 ```
 
-The same provider can be stored in a Profile patch. Keep the key value in DSH Credentials or an environment variable rather than YAML:
+The same provider can be stored in a Profile patch. Keep the key value in DSH Credentials rather than YAML:
 
 ```yaml
 - id: vision-toolkit
@@ -121,77 +101,7 @@ The same provider can be stored in a Profile patch. Keep the key value in DSH Cr
       credential: AIHUBMIX_API_KEY
 ```
 
-## 5. Analyze a remote image with cURL
-
-This request uses AIHubMix's OpenAI Chat Completions-compatible endpoint. Replace the example URL with your own public HTTPS image URL:
-
-```sh
-curl https://api.inferera.com/v1/chat/completions \
-  -H "Authorization: Bearer $AIHUBMIX_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "gemini-3.7-flash-free",
-    "messages": [{
-      "role": "user",
-      "content": [
-        {"type": "text", "text": "Describe the main content and transcribe all visible text."},
-        {"type": "image_url", "image_url": {
-          "url": "https://upload.wikimedia.org/wikipedia/commons/f/f2/LPU-v1-die.jpg"
-        }}
-      ]
-    }],
-    "temperature": 0.2,
-    "max_tokens": 1024
-  }'
-```
-
-The answer is returned in `choices[0].message.content`.
-
-## 6. Analyze a local image with Python
-
-This example reads a local image and converts it into a Base64 Data URL. Use `uv` to install the OpenAI SDK temporarily without modifying system Python:
-
-```python
-# recognize.py
-import base64
-import mimetypes
-import os
-from pathlib import Path
-
-from openai import OpenAI
-
-image_path = Path("screenshot.png")
-mime_type = mimetypes.guess_type(image_path.name)[0] or "image/png"
-image_base64 = base64.b64encode(image_path.read_bytes()).decode("ascii")
-data_url = f"data:{mime_type};base64,{image_base64}"
-
-client = OpenAI(
-    api_key=os.environ["AIHUBMIX_API_KEY"],
-    base_url="https://api.inferera.com/v1",
-)
-response = client.chat.completions.create(
-    model="gemini-3.7-flash-free",
-    messages=[{
-        "role": "user",
-        "content": [
-            {"type": "text", "text": "Run OCR first, then identify the most important anomaly."},
-            {"type": "image_url", "image_url": {"url": data_url}},
-        ],
-    }],
-    temperature=0.2,
-    max_tokens=1024,
-)
-
-print(response.choices[0].message.content)
-```
-
-Run it with:
-
-```sh
-uv run --with openai python recognize.py
-```
-
-## 7. Troubleshooting
+## 5. Troubleshooting
 
 ### `401` or `Unauthorized`
 

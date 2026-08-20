@@ -283,7 +283,7 @@ API Key:  https://agent-vision.anionex.me（自动填写）
 
 如果你需要更高额度、私有端点或其他模型，可以在 **设置 → 视觉工具** 中修改提供方，并把 API Key 保存为 DSH Credential。Settings 只保存 Credential 引用，不会回显密钥。
 
-**AIHubMix 图文教程：** [申请 AIHubMix API Key，并用免费 Gemini 3.7 Flash 识图](docs/aihubmix-gemini-vision.zh.md)。教程包含账号与 API Key 获取截图、Vision Toolkit 的准确配置，以及可直接使用的 cURL 和 Python 示例。
+**AIHubMix 图文教程：** [申请 AIHubMix API Key，并用免费 Gemini 3.7 Flash 识图](docs/aihubmix-gemini-vision.zh.md)。教程包含账号与 API Key 获取截图、Vision Toolkit 的准确配置、免费模型选择和常见问题排查。
 
 也可以在 Profile patch 中配置：
 

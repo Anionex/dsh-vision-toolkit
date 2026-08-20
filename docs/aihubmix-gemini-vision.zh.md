@@ -6,7 +6,7 @@
 
 1. 注册 AIHubMix 账号。
 2. 创建并安全保存一个 AIHubMix API Key。
-3. 在 DSH Vision Toolkit 或普通代码中调用免费的 `gemini-3.7-flash-free` 分析图片。
+3. 在 DSH Vision Toolkit 中使用免费的 `gemini-3.7-flash-free` 分析图片。
 
 > 截至 2026-08-20，AIHubMix 模型页把 `gemini-3.7-flash-free` 标为支持图像输入的免费试用模型。免费资源有限，可能返回 `429`，不保证生产环境稳定性；生产用途应切换到正式模型 `gemini-3.7-flash`。模型、价格和可用性可能调整，请以 [AIHubMix 模型页](https://aihubmix.com/model/gemini-3.7-flash-free) 为准。
 
@@ -52,26 +52,6 @@
 
 不要把完整 API Key 放进 README、聊天记录、截图、Git 提交、浏览器前端代码或公开日志。密钥泄露后应立即删除旧 Key 并重新创建。
 
-### 在终端中设置密钥
-
-macOS / Linux：
-
-```sh
-export AIHUBMIX_API_KEY="sk_your_key_here"
-```
-
-Windows PowerShell（只对当前窗口生效）：
-
-```powershell
-$env:AIHUBMIX_API_KEY = "sk_your_key_here"
-```
-
-确认变量已经存在，但不要打印完整密钥：
-
-```sh
-test -n "$AIHUBMIX_API_KEY" && echo "AIHUBMIX_API_KEY is set"
-```
-
 ## 3. 选择免费的视觉模型
 
 本教程使用准确模型 ID：
@@ -109,7 +89,7 @@ gemini-3.7-flash-free
 请先逐字抄出截图中的报错，再判断最可能的原因和修复步骤。
 ```
 
-也可以在 Profile patch 中保存相同配置。密钥值仍应由 DSH Credential 或环境变量提供，不要写入 YAML：
+也可以在 Profile patch 中保存相同配置。密钥值仍应保存在 DSH Credential 中，不要写入 YAML：
 
 ```yaml
 - id: vision-toolkit
@@ -121,82 +101,12 @@ gemini-3.7-flash-free
       credential: AIHUBMIX_API_KEY
 ```
 
-## 5. 用 cURL 直接识别网络图片
-
-下面的请求使用 AIHubMix 的 OpenAI Chat Completions 兼容接口。把示例图片 URL 换成你自己的公开 HTTPS 图片地址：
-
-```sh
-curl https://api.inferera.com/v1/chat/completions \
-  -H "Authorization: Bearer $AIHUBMIX_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "gemini-3.7-flash-free",
-    "messages": [{
-      "role": "user",
-      "content": [
-        {"type": "text", "text": "请描述图片中的主要内容，并逐字抄出可见文字。"},
-        {"type": "image_url", "image_url": {
-          "url": "https://upload.wikimedia.org/wikipedia/commons/f/f2/LPU-v1-die.jpg"
-        }}
-      ]
-    }],
-    "temperature": 0.2,
-    "max_tokens": 1024
-  }'
-```
-
-成功后，模型回答位于 `choices[0].message.content`。
-
-## 6. 用 Python 识别本地图片
-
-下面的例子读取本地图片并转换成 Base64 Data URL。使用 `uv` 临时安装 OpenAI SDK，不修改系统 Python：
-
-```python
-# recognize.py
-import base64
-import mimetypes
-import os
-from pathlib import Path
-
-from openai import OpenAI
-
-image_path = Path("screenshot.png")
-mime_type = mimetypes.guess_type(image_path.name)[0] or "image/png"
-image_base64 = base64.b64encode(image_path.read_bytes()).decode("ascii")
-data_url = f"data:{mime_type};base64,{image_base64}"
-
-client = OpenAI(
-    api_key=os.environ["AIHUBMIX_API_KEY"],
-    base_url="https://api.inferera.com/v1",
-)
-response = client.chat.completions.create(
-    model="gemini-3.7-flash-free",
-    messages=[{
-        "role": "user",
-        "content": [
-            {"type": "text", "text": "先做 OCR，再指出截图里最重要的异常。"},
-            {"type": "image_url", "image_url": {"url": data_url}},
-        ],
-    }],
-    temperature=0.2,
-    max_tokens=1024,
-)
-
-print(response.choices[0].message.content)
-```
-
-运行：
-
-```sh
-uv run --with openai python recognize.py
-```
-
-## 7. 常见问题
+## 5. 常见问题
 
 ### `401` 或 `Unauthorized`
 
 - 确认粘贴的是完整的 `sk-...` 密钥，而不是 Key 名称或被遮盖后的片段。
-- 环境变量中不要包含多余空格、换行或 `AIHUBMIX_API_KEY=` 前缀。
+- 粘贴的密钥值中不要包含多余空格、换行或 `AIHUBMIX_API_KEY=` 前缀。
 - 如果密钥曾经公开，删除旧 Key 并重新创建。
 
 ### `402`、余额不足或模型不可用
