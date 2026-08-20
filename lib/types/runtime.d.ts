@@ -350,6 +350,8 @@ export declare class VisionToolkitRuntime {
     constructor(ctx: Context, config: ResolvedVisionToolkitConfig, adapter?: UpstreamAdapter);
     /** Pinned and prepared upstream identity. */
     get upstreamVersion(): UpstreamVersionInfo;
+    /** Stable identity for persisted image descriptions produced by this runtime. */
+    get evidenceFingerprint(): string;
     private timeout;
     private operationError;
     private semaphore;

@@ -569,7 +569,8 @@ describe('ImageInputVariantAdapter', () => {
       llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(), stream: upstreamStream },
     } as never
     const cache = new EvidenceCache(4)
-    const adapter = new ImageInputVariantAdapter(ctx, ctx.llm, 'up', 'Upstream', () => runtimeStub(glance), cache)
+    const runtime = runtimeStub(glance)
+    const adapter = new ImageInputVariantAdapter(ctx, ctx.llm, 'up', 'Upstream', () => runtime, cache)
     const controller = new AbortController()
     const options: GenerateOptions = {
       provider: 'vision-toolkit-up',
@@ -593,9 +594,12 @@ describe('ImageInputVariantAdapter', () => {
     expect(outcome).toBeInstanceOf(Error)
     // The underlying read is not cancelled: it completes and lands in the cache.
     release()
-    const query = glance.mock.calls[0]?.[0]?.query
-    const cached = await cache.read(`\u0000a\u0000${query}`, async () => { throw new Error('must not recompute') })
-    expect(cached).toEqual({ type: 'text', text: '[vision model description] slow read' })
+    for await (const _chunk of adapter.stream({
+      provider: options.provider,
+      model: options.model,
+      messages: options.messages,
+    })) { /* drain */ }
+    expect(glance).toHaveBeenCalledTimes(1)
   })
 
   it('clears the description cache when the runtime instance changes', async () => {

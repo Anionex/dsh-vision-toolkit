@@ -29,8 +29,16 @@ import type {
 import type {} from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-attachment'
 import type { ResolvedVisionToolkitConfig } from './config.ts'
+import {
+  createEvidenceCacheKey,
+  EvidenceCache,
+  evidenceRuntimeFingerprint,
+  SessionEvidenceStore,
+} from './evidence-cache.ts'
 import { sessionPasteRoot, type PasteSelectionQuery, type PasteVerdict } from './paste-images.ts'
 import type { VisionToolkitRuntime } from './runtime.ts'
+
+export { EvidenceCache } from './evidence-cache.ts'
 
 /** Provider-id prefix for the variant routes this plugin registers. */
 export const VARIANT_PROVIDER_PREFIX = 'vision-toolkit-'
@@ -189,67 +197,10 @@ function assistantMessageText(message: Message): string {
     .join('\n\n')
 }
 
-function cacheKey(attachmentId: string, prompt: string, sessionId?: string): string {
-  return `${sessionId ?? ''}\u0000${attachmentId}\u0000${prompt}`
-}
-
 function contentHasText(blocks: readonly ContentBlock[], text: string): boolean {
   return blocks.some(block =>
     (block.type === 'text' && block.text === text)
     || (block.type === 'tool-result' && contentHasText(block.content, text)))
-}
-
-/** Bounded promise cache for one attachment's description; failed reads are not retained. */
-export class EvidenceCache {
-  private readonly entries = new Map<string, Promise<ContentBlock>>()
-
-  constructor(private readonly limit: number) {}
-
-  /**
-   * Read one attachment-and-prompt key's entry or compute it. Concurrent readers join the in-flight
-   * computation; a settled failure is evicted so a fixed configuration gets a
-   * fresh chance.
-   * @param key - the attachment identity plus the exact focus prompt.
-   * @param load - computes the description; must resolve `{ ok, block }` and never reject.
-   * @returns the cached or computed block.
-   */
-  read(key: string, load: () => Promise<{ ok: boolean; block: ContentBlock }>): Promise<ContentBlock> {
-    const existing = this.entries.get(key)
-    if (existing !== undefined) {
-      // Refresh recency: Map iteration order is insertion order.
-      this.entries.delete(key)
-      this.entries.set(key, existing)
-      return existing
-    }
-    const pending = load().then(
-      (result) => {
-        // Only evict our own entry: this promise may have been LRU-evicted and
-        // the key re-populated by a newer read meanwhile.
-        if (!result.ok && this.entries.get(key) === pending) {
-          this.entries.delete(key)
-        }
-        return result.block
-      },
-      (error: unknown) => {
-        if (this.entries.get(key) === pending) {
-          this.entries.delete(key)
-        }
-        throw error
-      },
-    )
-    this.entries.set(key, pending)
-    while (this.entries.size > this.limit) {
-      const oldest = this.entries.keys().next().value
-      if (oldest === undefined) break
-      this.entries.delete(oldest)
-    }
-    return pending
-  }
-
-  /** Drop every cached description (runtime reconfiguration invalidates provider-specific reads). */
-  clear(): void {
-    this.entries.clear()
-  }
 }
 
 /**
@@ -456,6 +407,7 @@ async function readImageBlock(
  * @param messages - the assembled request messages.
  * @param signal - the caller's cancellation for this conversion pass.
  * @param sessionId - the live Session identity, when available.
+ * @param runtimeHash - stable fingerprint of the vision provider and evidence runtime.
  * @returns the rewritten message list.
  */
 export async function convertImagesToEvidence(
@@ -465,7 +417,15 @@ export async function convertImagesToEvidence(
   messages: readonly Message[],
   signal?: AbortSignal,
   sessionId?: string,
+  runtimeHash = 'process-only-runtime',
 ): Promise<Message[]> {
+  const session = sessionId === undefined ? undefined : ctx.sessions.get(sessionId as never)
+  const sessionIdentity = session === undefined
+    ? undefined
+    : {
+        createdAt: session.header.createdAt,
+        ...(session.header.cwd === undefined ? {} : { cwd: session.header.cwd }),
+      }
   const plans: Array<{ message: Message; query?: string }> = []
   let lastUserText = ''
   let lastAssistantText = ''
@@ -507,7 +467,13 @@ export async function convertImagesToEvidence(
     if (query === undefined) return message
     const content = await convertBlocks(message.content, (block) => abortableWait(
       limit(
-        () => cache.read(cacheKey(String(block.attachment.attachmentId), query, sessionId), () =>
+        () => cache.read(createEvidenceCacheKey({
+          ...(sessionId === undefined ? {} : { sessionId }),
+          ...(sessionIdentity === undefined ? {} : { sessionIdentity }),
+          attachmentId: String(block.attachment.attachmentId),
+          prompt: query,
+          runtimeHash,
+        }), () =>
           readImageBlock(ctx, runtime, block, query, sessionId)),
         signal,
       ),
@@ -547,6 +513,7 @@ export class ImageInputVariantAdapter extends LlmAdapter {
     private readonly runtime: () => VisionToolkitRuntime | undefined,
     private readonly cache: EvidenceCache,
     private readonly hidden: () => boolean = () => false,
+    private readonly runtimeHash: () => string = () => 'process-only-runtime',
   ) {
     super()
   }
@@ -608,6 +575,7 @@ export class ImageInputVariantAdapter extends LlmAdapter {
       options.messages,
       options.signal,
       options.sessionId === undefined ? undefined : String(options.sessionId),
+      this.runtimeHash(),
     )
     // Delegate through the host service under the upstream route: the variant
     // is a wire-only facade, and the upstream route owns retry and replay.
@@ -844,6 +812,8 @@ export function installImageInputVariants(
   getConfig: () => ResolvedVisionToolkitConfig,
   getRuntime: () => VisionToolkitRuntime | undefined,
 ): { dispose: () => void; reconcile: () => void } {
+  const evidenceStore = new SessionEvidenceStore(ctx)
+  const evidenceCache = new EvidenceCache(EVIDENCE_CACHE_LIMIT, evidenceStore)
   const registrations = new Map<string, () => void>()
   // The host snapshots adapter provider metadata (including the group display
   // name) at registration time, so a transparent-routing toggle must rebuild
@@ -975,8 +945,9 @@ export function installImageInputVariants(
               upstream,
               provider.name,
               getRuntime,
-              new EvidenceCache(EVIDENCE_CACHE_LIMIT),
+              evidenceCache,
               () => getConfig().imageInputVariants.hidden,
+              () => getRuntime()?.evidenceFingerprint ?? evidenceRuntimeFingerprint(getConfig()),
             ),
           )
           registrations.set(upstream, dispose)
@@ -1007,6 +978,7 @@ export function installImageInputVariants(
       disposed = true
       clearInterval(timer)
       releaseAll()
+      evidenceStore.dispose()
     },
     reconcile: () => { sweep() },
   }

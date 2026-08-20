@@ -1,0 +1,419 @@
+/** Durable, Session-scoped cache for image descriptions used by model variants. */
+
+import { createHash } from 'node:crypto'
+import type { Context, Fiber } from '@deepseek-ai/cordis'
+import type { ContentBlock } from '@deepseek-ai/dsh-llm'
+import type { SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
+import { defineDomain, domainTable } from '@deepseek-ai/dsh-storage-domain'
+import type { KvTable } from '@deepseek-ai/dsh-storage-domain'
+import { z } from 'zod'
+import type { ResolvedVisionToolkitConfig } from './config.ts'
+import { UPSTREAM_COMMIT } from './version.ts'
+
+/** Bump only when the model-visible evidence contract changes incompatibly. */
+export const EVIDENCE_CONTRACT_VERSION = 1
+
+/** Persistent cache bounds keep the Profile storage proportional and predictable. */
+const DEFAULT_PERSISTED_ENTRY_LIMIT = 512
+const DEFAULT_PERSISTED_BYTE_LIMIT = 8 * 1024 * 1024
+const DEFAULT_PERSISTED_ENTRY_BYTE_LIMIT = 64 * 1024
+const MAX_SCHEMA_TEXT_CHARS = 256 * 1024
+const MAX_SCHEMA_RECORD_CHARS = 512 * 1024
+
+const hexDigestSchema = z.string().regex(/^[0-9a-f]{64}$/u)
+const sessionIdentitySchema = z.object({
+  createdAt: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  cwd: z.string().optional(),
+})
+const evidenceRecordSchema = z.object({
+  contractVersion: z.number().int().nonnegative(),
+  sessionId: z.string().min(1),
+  session: sessionIdentitySchema,
+  attachmentId: z.string().min(1),
+  promptHash: hexDigestSchema,
+  runtimeHash: hexDigestSchema,
+  text: z.string().min(1).max(MAX_SCHEMA_TEXT_CHARS),
+  storedAt: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+})
+
+type EvidenceRecord = z.infer<typeof evidenceRecordSchema>
+type EvidenceRecordKey = string & { readonly __evidenceRecordKey: unique symbol }
+
+/** Plugin-owned sidecar domain; the host backend handles atomicity and file safety. */
+export const evidenceCacheDomainSpec = defineDomain({
+  name: 'vision_toolkit_evidence',
+  version: 0,
+  tables: {
+    // Keep the durable boundary tolerant of one damaged cache payload: each
+    // record is parsed and validated independently below, so corruption causes
+    // a miss instead of preventing the entire optional domain from opening.
+    evidence: domainTable<EvidenceRecordKey, string>(z.string().max(MAX_SCHEMA_RECORD_CHARS)),
+  },
+})
+
+/** Stable metadata for one description lookup. Raw focus prompts are never persisted. */
+export interface EvidenceCacheKey {
+  readonly digest: string
+  readonly contractVersion: number
+  readonly sessionId?: string
+  readonly sessionCreatedAt?: number
+  readonly sessionCwd?: string
+  readonly attachmentId: string
+  readonly promptHash: string
+  readonly runtimeHash: string
+}
+
+/** Optional durable layer behind the process-local promise/LRU cache. */
+export interface EvidencePersistence {
+  read(key: EvidenceCacheKey): Promise<ContentBlock | undefined>
+  write(key: EvidenceCacheKey, block: ContentBlock): Promise<void>
+}
+
+/** Description loader result; unsuccessful evidence is returned but never cached. */
+export interface EvidenceLoadResult {
+  readonly ok: boolean
+  readonly block: ContentBlock
+}
+
+function hash(value: string): string {
+  return createHash('sha256').update(value).digest('hex')
+}
+
+/** Fingerprint every runtime setting that can change the generated description. */
+export function evidenceRuntimeFingerprint(config: ResolvedVisionToolkitConfig): string {
+  return hash(JSON.stringify({
+    upstreamCommit: UPSTREAM_COMMIT,
+    provider: {
+      baseUrl: config.provider.baseUrl,
+      credential: String(config.provider.credential),
+      model: config.provider.model,
+      protocol: config.provider.protocol,
+      anthropicThinking: config.provider.anthropicThinking,
+      userAgent: config.provider.userAgent,
+    },
+    language: config.language,
+    maxImageBytes: config.maxImageBytes,
+    maxImagePixels: config.maxImagePixels,
+    runtime: config.runtime,
+  }))
+}
+
+/** Build a non-secret cache key from the Session, attachment, focus, and runtime contract. */
+export function createEvidenceCacheKey(input: {
+  sessionId?: string
+  sessionIdentity?: SessionIdentity
+  attachmentId: string
+  prompt: string
+  runtimeHash: string
+}): EvidenceCacheKey {
+  const promptHash = hash(input.prompt)
+  const digest = hash(JSON.stringify([
+    EVIDENCE_CONTRACT_VERSION,
+    input.sessionId ?? '',
+    input.sessionIdentity?.createdAt ?? '',
+    input.sessionIdentity?.cwd ?? '',
+    input.attachmentId,
+    promptHash,
+    input.runtimeHash,
+  ]))
+  return Object.freeze({
+    digest,
+    contractVersion: EVIDENCE_CONTRACT_VERSION,
+    ...(input.sessionId === undefined ? {} : { sessionId: input.sessionId }),
+    ...(input.sessionIdentity === undefined ? {} : { sessionCreatedAt: input.sessionIdentity.createdAt }),
+    ...(input.sessionIdentity?.cwd === undefined ? {} : { sessionCwd: input.sessionIdentity.cwd }),
+    attachmentId: input.attachmentId,
+    promptHash,
+    runtimeHash: input.runtimeHash,
+  })
+}
+
+/** Bounded promise cache; concurrent readers join one load and failures are evicted. */
+export class EvidenceCache {
+  private readonly entries = new Map<string, Promise<ContentBlock>>()
+
+  constructor(
+    private readonly limit: number,
+    private readonly persistence?: EvidencePersistence,
+  ) {}
+
+  /** Read a memory/durable hit or compute and persist one successful description. */
+  read(key: string | EvidenceCacheKey, load: () => Promise<EvidenceLoadResult>): Promise<ContentBlock> {
+    const memoryKey = typeof key === 'string' ? key : key.digest
+    const existing = this.entries.get(memoryKey)
+    if (existing !== undefined) {
+      // Refresh recency: Map iteration order is insertion order.
+      this.entries.delete(memoryKey)
+      this.entries.set(memoryKey, existing)
+      return existing
+    }
+
+    const pending = (async (): Promise<EvidenceLoadResult> => {
+      if (typeof key !== 'string' && this.persistence !== undefined) {
+        try {
+          const persisted = await this.persistence.read(key)
+          if (persisted !== undefined) return { ok: true, block: persisted }
+        } catch {
+          // Persistence is an optimization; a damaged/unavailable sidecar must
+          // never block the model request from recomputing evidence.
+        }
+      }
+
+      const result = await load()
+      if (result.ok && typeof key !== 'string' && this.persistence !== undefined) {
+        try {
+          await this.persistence.write(key, result.block)
+        } catch {
+          // Keep the successful process-local result even when durability fails.
+        }
+      }
+      return result
+    })().then(
+      (result) => {
+        // Only evict our own entry: this promise may have been LRU-evicted and
+        // the key re-populated by a newer read meanwhile.
+        if (!result.ok && this.entries.get(memoryKey) === pending) {
+          this.entries.delete(memoryKey)
+        }
+        return result.block
+      },
+      (error: unknown) => {
+        if (this.entries.get(memoryKey) === pending) {
+          this.entries.delete(memoryKey)
+        }
+        throw error
+      },
+    )
+
+    this.entries.set(memoryKey, pending)
+    while (this.entries.size > this.limit) {
+      const oldest = this.entries.keys().next().value
+      if (oldest === undefined) break
+      this.entries.delete(oldest)
+    }
+    return pending
+  }
+
+  /** Drop process-local descriptions; durable rows stay versioned by their runtime fingerprint. */
+  clear(): void {
+    this.entries.clear()
+  }
+}
+
+interface StorageBinding {
+  table: KvTable<EvidenceRecordKey, string>
+}
+
+interface SessionIdentity {
+  createdAt: number
+  cwd?: string
+}
+
+export interface SessionEvidenceStoreOptions {
+  maxEntries?: number
+  maxBytes?: number
+  maxEntryBytes?: number
+  now?: () => number
+}
+
+function identityOf(header: SessionHeader): SessionIdentity {
+  return Object.freeze({
+    createdAt: header.createdAt,
+    ...(header.cwd === undefined ? {} : { cwd: header.cwd }),
+  })
+}
+
+function sameIdentity(record: EvidenceRecord, header: SessionHeader): boolean {
+  return record.session.createdAt === header.createdAt && record.session.cwd === header.cwd
+}
+
+function matchesKey(record: EvidenceRecord, key: EvidenceCacheKey): boolean {
+  return record.contractVersion === key.contractVersion
+    && record.sessionId === key.sessionId
+    && record.attachmentId === key.attachmentId
+    && record.promptHash === key.promptHash
+    && record.runtimeHash === key.runtimeHash
+}
+
+function byteLength(text: string): number {
+  return Buffer.byteLength(text, 'utf8')
+}
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function parseRecord(value: string): EvidenceRecord | undefined {
+  try {
+    const parsed: unknown = JSON.parse(value)
+    const result = evidenceRecordSchema.safeParse(parsed)
+    return result.success ? result.data : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** Official DSH storage-domain sidecar used to survive Profile restarts. */
+export class SessionEvidenceStore implements EvidencePersistence {
+  private storage: StorageBinding | undefined
+  private storageFiber: (Fiber & PromiseLike<Fiber>) | undefined
+  private storageReady: Promise<void> | undefined
+  private mutationTail: Promise<void> = Promise.resolve()
+  private readonly flushes = new Map<string, Promise<boolean>>()
+  private warned = false
+  private readonly maxEntries: number
+  private readonly maxBytes: number
+  private readonly maxEntryBytes: number
+  private readonly now: () => number
+
+  constructor(
+    private readonly ctx: Context,
+    options: SessionEvidenceStoreOptions = {},
+  ) {
+    this.maxEntries = options.maxEntries ?? DEFAULT_PERSISTED_ENTRY_LIMIT
+    this.maxBytes = options.maxBytes ?? DEFAULT_PERSISTED_BYTE_LIMIT
+    this.maxEntryBytes = options.maxEntryBytes ?? DEFAULT_PERSISTED_ENTRY_BYTE_LIMIT
+    this.now = options.now ?? Date.now
+
+    if (typeof ctx.inject !== 'function') return
+    this.storageFiber = ctx.inject(['storageDomain'], async (storageCtx: Context) => {
+      const domain = await storageCtx.storageDomain.open(evidenceCacheDomainSpec)
+      const binding: StorageBinding = { table: domain.table('evidence') }
+      try {
+        await this.enqueueMutation(async () => { await this.prune(binding.table) })
+        this.storage = binding
+      } catch (error) {
+        await domain.close()
+        throw error
+      }
+      return async () => {
+        if (this.storage === binding) this.storage = undefined
+        await this.mutationTail
+        await domain.close()
+      }
+    })
+    this.storageReady = Promise.resolve(this.storageFiber).then(
+      () => undefined,
+      (error: unknown) => { this.warnOnce(error) },
+    )
+  }
+
+  /** Release the optional storage binding with the owning variant lifecycle. */
+  dispose(): void {
+    const fiber = this.storageFiber
+    this.storageFiber = undefined
+    this.storageReady = undefined
+    if (fiber !== undefined) void fiber.dispose().catch(error => { this.warnOnce(error) })
+  }
+
+  async read(key: EvidenceCacheKey): Promise<ContentBlock | undefined> {
+    const session = this.sessionFor(key)
+    if (session === undefined) return undefined
+    const binding = await this.prepareStorage()
+    if (binding === undefined) return undefined
+    const stored = binding.table.get(key.digest as EvidenceRecordKey)
+    const record = stored === undefined ? undefined : parseRecord(stored)
+    if (record === undefined || !matchesKey(record, key) || !sameIdentity(record, session.header)) {
+      return undefined
+    }
+    if (byteLength(record.text) > this.maxEntryBytes) return undefined
+    return { type: 'text', text: record.text }
+  }
+
+  async write(key: EvidenceCacheKey, block: ContentBlock): Promise<void> {
+    if (block.type !== 'text' || block.text.length === 0 || byteLength(block.text) > this.maxEntryBytes) return
+    const session = this.sessionFor(key)
+    if (session === undefined) return
+    const binding = await this.prepareStorage()
+    if (binding === undefined) return
+
+    try {
+      const participated = await this.flushSession(session)
+      if (!participated) return
+      const record: EvidenceRecord = Object.freeze({
+        contractVersion: key.contractVersion,
+        sessionId: key.sessionId as string,
+        session: identityOf(session.header),
+        attachmentId: key.attachmentId,
+        promptHash: key.promptHash,
+        runtimeHash: key.runtimeHash,
+        text: block.text,
+        storedAt: this.now(),
+      })
+      await this.enqueueMutation(async () => {
+        await binding.table.put(key.digest as EvidenceRecordKey, JSON.stringify(record))
+        await this.prune(binding.table)
+      })
+    } catch (error) {
+      this.warnOnce(error)
+    }
+  }
+
+  private sessionFor(key: EvidenceCacheKey): ReturnType<Context['sessions']['get']> {
+    if (key.sessionId === undefined) return undefined
+    const session = this.ctx.sessions.get(key.sessionId as SessionId)
+    if (session === undefined) return undefined
+    if (key.sessionCreatedAt !== undefined
+      && (session.header.createdAt !== key.sessionCreatedAt || session.header.cwd !== key.sessionCwd)) {
+      return undefined
+    }
+    return session
+  }
+
+  private async prepareStorage(): Promise<StorageBinding | undefined> {
+    if (this.storage !== undefined) return this.storage
+    if (this.ctx.get('storageDomain') === undefined) return undefined
+    await this.storageReady
+    return this.storage
+  }
+
+  private enqueueMutation(operation: () => Promise<void>): Promise<void> {
+    const result = this.mutationTail.then(operation)
+    this.mutationTail = result.then(() => undefined, () => undefined)
+    return result
+  }
+
+  private flushSession(session: NonNullable<ReturnType<Context['sessions']['get']>>): Promise<boolean> {
+    const key = `${session.id}\u0000${session.header.createdAt}\u0000${session.header.cwd ?? ''}`
+    const existing = this.flushes.get(key)
+    if (existing !== undefined) return existing
+    const pending = this.ctx.sessions.flush(session).finally(() => {
+      if (this.flushes.get(key) === pending) this.flushes.delete(key)
+    })
+    this.flushes.set(key, pending)
+    return pending
+  }
+
+  private async prune(table: KvTable<EvidenceRecordKey, string>): Promise<void> {
+    const records = [...table.entries()].map(([key, stored]) => {
+      const record = parseRecord(stored)
+      return {
+        key,
+        bytes: byteLength(stored),
+        storedAt: record?.storedAt ?? -1,
+        valid: record !== undefined && byteLength(record.text) <= this.maxEntryBytes,
+      }
+    })
+    let totalBytes = records.reduce((sum, record) => sum + record.bytes, 0)
+    let totalEntries = records.length
+    records.sort((left, right) => Number(left.valid) - Number(right.valid)
+      || left.storedAt - right.storedAt
+      || left.key.localeCompare(right.key))
+    for (const record of records) {
+      if (record.valid && totalEntries <= this.maxEntries && totalBytes <= this.maxBytes) break
+      if (await table.delete(record.key)) {
+        totalEntries -= 1
+        totalBytes -= record.bytes
+      }
+    }
+  }
+
+  private warnOnce(error: unknown): void {
+    if (this.warned) return
+    this.warned = true
+    this.ctx.logger?.warn(
+      'dsh-vision-toolkit: persistent image evidence cache is unavailable; using the process cache only. %s',
+      messageOf(error).slice(0, 500),
+    )
+  }
+}

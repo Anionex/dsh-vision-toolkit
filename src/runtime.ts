@@ -16,6 +16,7 @@ import { SaxesParser } from 'saxes'
 import { describeArtifact, type ArtifactDescriptor } from './artifacts.ts'
 import { isBuiltInFreeVisionProvider, type ResolvedVisionToolkitConfig } from './config.ts'
 import { BUILT_IN_FREE_VISION_KEY } from './defaults.ts'
+import { evidenceRuntimeFingerprint } from './evidence-cache.ts'
 import { VisionToolkitError } from './errors.ts'
 import {
   assertDistinctOutput,
@@ -696,6 +697,11 @@ export class VisionToolkitRuntime {
   /** Pinned and prepared upstream identity. */
   get upstreamVersion(): UpstreamVersionInfo {
     return this.adapter.versionInfo
+  }
+
+  /** Stable identity for persisted image descriptions produced by this runtime. */
+  get evidenceFingerprint(): string {
+    return evidenceRuntimeFingerprint(this.config)
   }
 
   private timeout(options: ToolCallOptions): number {
