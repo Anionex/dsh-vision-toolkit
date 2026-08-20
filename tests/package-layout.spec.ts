@@ -87,9 +87,26 @@ describe('package layout contract', () => {
 
   it('pins the dependency install scripts allowed in standalone CI', async () => {
     const workspace = await readFile(join(ROOT, 'pnpm-workspace.yaml'), 'utf8')
-    expect(workspace).toContain("'@deepseek-ai/dsh-subprocess-local@0.1.0-rc.6': true")
-    expect(workspace).toContain("'node-pty@1.1.0': true")
+    expect(workspace).toContain("'@deepseek-ai/dsh-subprocess-local@0.1.0-rc.8': true")
+    expect(workspace).toContain("'node-pty@1.2.0-beta.15': true")
+    expect(workspace).toContain("'koffi@3.1.5': true")
     expect(workspace).not.toMatch(/^\s{2}(?:'@deepseek-ai\/dsh-subprocess-local'|node-pty):/mu)
+  })
+
+  it('keeps the lockfile and release-age exclusions on the rc.8 DSH line', async () => {
+    const lockfile = await readFile(join(ROOT, 'pnpm-lock.yaml'), 'utf8')
+    const workspace = await readFile(join(ROOT, 'pnpm-workspace.yaml'), 'utf8')
+    const rc8LockKeys = [...lockfile.matchAll(/'(@deepseek-ai\/dsh-[^']+@0\.1\.0-rc\.8)'/gu)]
+      .map((match) => match[1])
+
+    expect(lockfile).not.toMatch(/'@deepseek-ai\/dsh-[^']+@0\.1\.0-rc\.6'/u)
+    expect(rc8LockKeys.length).toBeGreaterThan(0)
+    for (const key of rc8LockKeys) {
+      expect(workspace, key).toContain(`- '${key}'`)
+    }
+    for (const name of ['@deepseek-ai/dsh-scope', '@deepseek-ai/dsh-subprocess-local', '@deepseek-ai/dsh-system-prompt', '@deepseek-ai/dsh-tool-skill']) {
+      expect(PACKAGE.devDependencies?.[name], name).toBe('0.1.0-rc.8')
+    }
   })
 
   it('keeps every dependency specifier portable', () => {
@@ -108,7 +125,7 @@ describe('package layout contract', () => {
   it('targets the published DSH prerelease line without retired package names', () => {
     const peers = PACKAGE.peerDependencies ?? {}
     for (const [name, spec] of Object.entries(peers)) {
-      if (name.startsWith('@deepseek-ai/dsh-')) expect(spec, name).toBe('^0.1.0-rc.6')
+      if (name.startsWith('@deepseek-ai/dsh-')) expect(spec, name).toBe('^0.1.0-rc.8')
     }
     expect(peers).toHaveProperty('@deepseek-ai/dsh-client-ui-input-trigger')
     expect(peers).not.toHaveProperty('@deepseek-ai/dsh-client-ui-slash')
