@@ -469,6 +469,8 @@ describe('persistent image evidence cache', () => {
     expect(evidenceRuntimeFingerprint(otherModel)).not.toBe(evidenceRuntimeFingerprint(baseline))
     expect(evidenceRuntimeFingerprint(otherLanguage)).not.toBe(evidenceRuntimeFingerprint(baseline))
     expect(evidenceRuntimeFingerprint(otherTimeout)).not.toBe(evidenceRuntimeFingerprint(baseline))
+    expect(evidenceRuntimeFingerprint(baseline, firstCredential, 'off'))
+      .not.toBe(evidenceRuntimeFingerprint(baseline, firstCredential, 'on'))
     expect(evidenceRuntimeFingerprint(baseline, firstCredential))
       .not.toBe(evidenceRuntimeFingerprint(baseline, secondCredential))
   })

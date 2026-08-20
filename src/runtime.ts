@@ -707,7 +707,7 @@ export class VisionToolkitRuntime {
 
   /** Stable identity for persisted image descriptions produced by this runtime. */
   get evidenceFingerprint(): string {
-    return evidenceRuntimeFingerprint(this.config)
+    return evidenceRuntimeFingerprint(this.config, undefined, process.env.VISION_SSL_VERIFY?.trim())
   }
 
   /** Capture the credential and provider identity used by one evidence conversion. */
@@ -716,6 +716,7 @@ export class VisionToolkitRuntime {
     const evidenceFingerprint = evidenceRuntimeFingerprint(
       this.config,
       createHash('sha256').update(env.VISION_API_KEY).digest('hex'),
+      env.VISION_SSL_VERIFY,
     )
     return Object.freeze({
       evidenceFingerprint,

@@ -77,6 +77,7 @@ function hash(value: string): string {
 export function evidenceRuntimeFingerprint(
   config: ResolvedVisionToolkitConfig,
   credentialSha256?: string,
+  sslVerify?: string,
 ): string {
   return hash(JSON.stringify({
     upstreamCommit: UPSTREAM_COMMIT,
@@ -89,6 +90,7 @@ export function evidenceRuntimeFingerprint(
       model: config.provider.model,
       protocol: config.provider.protocol,
       anthropicThinking: config.provider.anthropicThinking,
+      sslVerify: sslVerify ?? null,
       userAgent: config.provider.userAgent,
     },
     language: config.language,
