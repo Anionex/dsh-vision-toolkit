@@ -95,6 +95,7 @@ export function evidenceRuntimeFingerprint(
     },
     language: config.language,
     timeoutMs: config.timeoutMs,
+    concurrency: config.concurrency,
     maxImageBytes: config.maxImageBytes,
     maxImagePixels: config.maxImagePixels,
     runtime: config.runtime,
