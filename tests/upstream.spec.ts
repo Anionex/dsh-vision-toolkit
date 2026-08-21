@@ -87,15 +87,28 @@ describe('parseLocationOutput', () => {
       '1. top-left navigation button x1: 1, y1: 2, x2: 30, y2: 40',
       '3. left 1 Massive Pretraining card | • 32T+ tokens',
       '---',
+      '1. Fast setup',
       'x1: 50, y1: 60, x2: 300, y2: 400',
     ].join('\n'))
     expect(elements).toEqual([
       { label: 'navigation button', box: { x1: 1, y1: 2, x2: 30, y2: 40 } },
       {
-        label: '1 Massive Pretraining card | • 32T+ tokens ---',
+        label: '1 Massive Pretraining card | • 32T+ tokens --- 1. Fast setup',
         box: { x1: 50, y1: 60, x2: 300, y2: 400 },
       },
     ])
+  })
+
+  it('uses the final coordinate suffix when visible label text contains coordinates', () => {
+    expect(parseLocationOutput([
+      '1. left code sample',
+      'x1: 1, y1: 2, x2: 3, y2: 4',
+      'continued output',
+      'x1: 50, y1: 60, x2: 300, y2: 400',
+    ].join('\n'))).toEqual([{
+      label: 'code sample x1: 1, y1: 2, x2: 3, y2: 4 continued output',
+      box: { x1: 50, y1: 60, x2: 300, y2: 400 },
+    }])
   })
 
   it('returns an empty list for empty or no-elements output', () => {

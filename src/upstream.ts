@@ -188,6 +188,7 @@ const POSITION_WORDS = new Set([
   'top-left', 'top', 'top-right', 'left', 'center', 'right',
   'bottom-left', 'bottom', 'bottom-right',
 ])
+const NUMBERED_LOCATION_PREFIX = /^\d+\.\s+(?:top-left|top|top-right|left|center|right|bottom-left|bottom|bottom-right)(?:\s+|$)/
 
 /** Parse one numbered upstream location line (`N. position label x1: ..., ...`). */
 export function parseLocationLine(line: string): LocatedElement | undefined {
@@ -214,23 +215,24 @@ export function parseLocationOutput(stdout: string): LocatedElement[] {
   const elements: LocatedElement[] = []
   const unknown: string[] = []
   let pending: string[] | undefined
+
+  const finishPending = (): void => {
+    if (pending === undefined) return
+    const record = pending.join(' ')
+    const parsed = parseLocationLine(record)
+    if (parsed === undefined) unknown.push(record)
+    else elements.push(parsed)
+    pending = undefined
+  }
+
   for (const line of stdout.split(/\r?\n/)) {
     const trimmed = line.trim()
     if (trimmed.length === 0) continue
 
     if (pending !== undefined) {
-      if (/^\d+\.\s+\S/.test(trimmed)) {
-        unknown.push(pending.join(' '))
-        pending = undefined
-      } else {
+      if (NUMBERED_LOCATION_PREFIX.test(trimmed)) finishPending()
+      else {
         pending.push(trimmed)
-        if (BOX_SUFFIX.test(trimmed)) {
-          const record = pending.join(' ')
-          const parsed = parseLocationLine(record)
-          if (parsed === undefined) unknown.push(record)
-          else elements.push(parsed)
-          pending = undefined
-        }
         continue
       }
     }
@@ -240,15 +242,16 @@ export function parseLocationOutput(stdout: string): LocatedElement[] {
     const parsed = parseLocationLine(line)
     if (parsed !== undefined) {
       elements.push(parsed)
-    } else if (/^\d+\.\s+\S/.test(trimmed)) {
+    } else if (NUMBERED_LOCATION_PREFIX.test(trimmed)) {
       // Vision labels can contain escaped newlines. The Python CLI expands
-      // them while printing, so rebuild the numbered record through its box.
+      // them while printing, so rebuild the numbered record through the next
+      // definite record boundary or end of output.
       pending = [trimmed]
     } else {
       unknown.push(trimmed)
     }
   }
-  if (pending !== undefined) unknown.push(pending.join(' '))
+  finishPending()
   if (unknown.length > 0) {
     throw new VisionToolkitError('output', `location output contains unrecognized lines: ${unknown.slice(0, 2).join(' | ')}`)
   }
