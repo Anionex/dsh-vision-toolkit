@@ -73,6 +73,8 @@ function configuredUpstreams(env: ProviderEnv, boxOrder: BoxOrder = 'yxyx'): Vis
 
 interface KeyLease {
   slot: number
+  /** Reaper generation at acquire time; stale releases are scoped to this so they cannot touch a re-leased slot. */
+  generation: number
 }
 
 /** Cross-isolate key allocator backed by the Worker's existing D1 database. */
@@ -84,7 +86,7 @@ export class VisionUpstreamScheduler {
     const now = Date.now()
     await this.database.prepare(`
       UPDATE groq_key_state
-      SET active_requests = 0, lease_expires_at = 0, updated_at = ?1
+      SET active_requests = 0, lease_expires_at = 0, reap_generation = reap_generation + 1, updated_at = ?1
       WHERE active_requests > 0 AND lease_expires_at <= ?1
     `).bind(now).run()
     const slotParameters = slots.map((_, index) => `?${index + 3}`).join(', ')
@@ -102,12 +104,12 @@ export class VisionUpstreamScheduler {
         ORDER BY active_requests ASC, last_selected_at ASC, key_slot ASC
         LIMIT 1
       )
-      RETURNING key_slot
-    `).bind(now, now + KEY_LEASE_MS, ...slots).first<{ key_slot: number }>()
-    return lease === null ? undefined : { slot: lease.key_slot }
+      RETURNING key_slot, reap_generation
+    `).bind(now, now + KEY_LEASE_MS, ...slots).first<{ key_slot: number; reap_generation: number }>()
+    return lease === null ? undefined : { generation: lease.reap_generation, slot: lease.key_slot }
   }
 
-  async release(slot: number, cooldownMs = 0): Promise<void> {
+  async release(slot: number, generation: number, cooldownMs = 0): Promise<void> {
     const now = Date.now()
     await this.database.prepare(`
       UPDATE groq_key_state
@@ -116,8 +118,8 @@ export class VisionUpstreamScheduler {
         cooldown_until = MAX(cooldown_until, ?2),
         lease_expires_at = CASE WHEN active_requests <= 1 THEN 0 ELSE lease_expires_at END,
         updated_at = ?1
-      WHERE key_slot = ?3
-    `).bind(now, now + cooldownMs, slot).run()
+      WHERE key_slot = ?3 AND reap_generation = ?4
+    `).bind(now, now + cooldownMs, slot, generation).run()
   }
 
   async retryAfterSeconds(slots: number[]): Promise<string | undefined> {
@@ -160,11 +162,12 @@ function cooldownForStatus(status: number, retryAfter: string | null): number {
 async function releaseLease(
   scheduler: VisionUpstreamScheduler,
   slot: number,
+  generation: number,
   requestId: string,
   cooldownMs = 0,
 ): Promise<void> {
   try {
-    await scheduler.release(slot, cooldownMs)
+    await scheduler.release(slot, generation, cooldownMs)
   } catch (error) {
     console.error(JSON.stringify({
       error: error instanceof Error ? error.message : String(error),
@@ -256,7 +259,7 @@ export async function runVisionCompletion(
     }
     const upstream = upstreamBySlot.get(lease.slot)
     if (upstream === undefined) {
-      await releaseLease(scheduler, lease.slot, requestId, TRANSIENT_COOLDOWN_MS)
+      await releaseLease(scheduler, lease.slot, lease.generation, requestId, TRANSIENT_COOLDOWN_MS)
       continue
     }
     let response: Response
@@ -274,13 +277,13 @@ export async function runVisionCompletion(
         method: 'POST',
       })
     } catch {
-      await releaseLease(scheduler, lease.slot, requestId, TRANSIENT_COOLDOWN_MS)
+      await releaseLease(scheduler, lease.slot, lease.generation, requestId, TRANSIENT_COOLDOWN_MS)
       if (attempt + 1 < upstreams.length) continue
       throw new VisionProviderError('Vision provider is temporarily unavailable', 502, 'upstream_error')
     }
 
     if (response.ok) {
-      await releaseLease(scheduler, lease.slot, requestId)
+      await releaseLease(scheduler, lease.slot, lease.generation, requestId)
       let payload: unknown
       try {
         payload = await response.json()
@@ -299,7 +302,7 @@ export async function runVisionCompletion(
     const cooldownMs = cooldownForStatus(response.status, retryAfter)
     lastRetryAfter = retryAfter
       ?? (response.status === 429 ? String(Math.ceil(cooldownMs / 1000)) : lastRetryAfter)
-    await releaseLease(scheduler, lease.slot, requestId, cooldownMs)
+    await releaseLease(scheduler, lease.slot, lease.generation, requestId, cooldownMs)
     console.warn(JSON.stringify({
       attempt: attempt + 1,
       cooldownMs,
