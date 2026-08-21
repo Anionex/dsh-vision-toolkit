@@ -158,7 +158,7 @@ export interface CompressedImageInfo {
 }
 /** Parse one numbered upstream location line (`N. position label x1: ..., ...`). */
 export declare function parseLocationLine(line: string): LocatedElement | undefined;
-/** Parse ground/detect stdout; non-empty unknown records are an output contract failure. */
+/** Parse ground/detect stdout; non-empty unknown lines are an output contract failure. */
 export declare function parseLocationOutput(stdout: string): LocatedElement[];
 /** Parse the crop CLI's `wrote <path> (WxH)` line and clamp note. */
 export declare function parseCropOutput(stdout: string, stderr: string): CropOutput;

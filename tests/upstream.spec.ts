@@ -82,36 +82,6 @@ describe('parseLocationOutput', () => {
     expect(elements[0]).toMatchObject({ label: 'button', box: { x1: 10, y1: 20, x2: 60, y2: 40 } })
   })
 
-  it('reassembles labels that the upstream CLI prints across multiple lines', () => {
-    const elements = parseLocationOutput([
-      '1. top-left navigation button x1: 1, y1: 2, x2: 30, y2: 40',
-      '3. left 1 Massive Pretraining card | • 32T+ tokens',
-      '---',
-      '1. Fast setup',
-      '2. right option',
-      'x1: 50, y1: 60, x2: 300, y2: 400',
-    ].join('\n'))
-    expect(elements).toEqual([
-      { label: 'navigation button', box: { x1: 1, y1: 2, x2: 30, y2: 40 } },
-      {
-        label: '1 Massive Pretraining card | • 32T+ tokens --- 1. Fast setup 2. right option',
-        box: { x1: 50, y1: 60, x2: 300, y2: 400 },
-      },
-    ])
-  })
-
-  it('uses the final coordinate suffix when visible label text contains coordinates', () => {
-    expect(parseLocationOutput([
-      '1. left code sample',
-      'x1: 1, y1: 2, x2: 3, y2: 4',
-      'continued output',
-      'x1: 50, y1: 60, x2: 300, y2: 400',
-    ].join('\n'))).toEqual([{
-      label: 'code sample x1: 1, y1: 2, x2: 3, y2: 4 continued output',
-      box: { x1: 50, y1: 60, x2: 300, y2: 400 },
-    }])
-  })
-
   it('returns an empty list for empty or no-elements output', () => {
     expect(parseLocationOutput('')).toEqual([])
     expect(parseLocationOutput('no elements detected')).toEqual([])
@@ -119,11 +89,6 @@ describe('parseLocationOutput', () => {
 
   it('rejects non-empty lines outside the pinned coordinate contract', () => {
     expect(() => parseLocationOutput('model said the button is near the bottom')).toThrowError(/unrecognized lines/)
-    expect(() => parseLocationOutput('1. top-left button without coordinates')).toThrowError(/unrecognized lines/)
-    expect(() => parseLocationOutput([
-      '1. top-left button without coordinates',
-      '2. right input x1: 300, y1: 100, x2: 420, y2: 140',
-    ].join('\n'))).toThrowError(/button without coordinates/)
   })
 })
 

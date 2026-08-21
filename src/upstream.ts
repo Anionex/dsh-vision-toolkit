@@ -188,7 +188,6 @@ const POSITION_WORDS = new Set([
   'top-left', 'top', 'top-right', 'left', 'center', 'right',
   'bottom-left', 'bottom', 'bottom-right',
 ])
-const NUMBERED_LOCATION_PREFIX = /^\d+\.\s+(?:top-left|top|top-right|left|center|right|bottom-left|bottom|bottom-right)(?:\s+|$)/
 
 /** Parse one numbered upstream location line (`N. position label x1: ..., ...`). */
 export function parseLocationLine(line: string): LocatedElement | undefined {
@@ -210,50 +209,17 @@ export function parseLocationLine(line: string): LocatedElement | undefined {
   return { ...(label.length > 0 ? { label } : {}), box }
 }
 
-/** Parse ground/detect stdout; non-empty unknown records are an output contract failure. */
+/** Parse ground/detect stdout; non-empty unknown lines are an output contract failure. */
 export function parseLocationOutput(stdout: string): LocatedElement[] {
   const elements: LocatedElement[] = []
   const unknown: string[] = []
-  let pending: string[] | undefined
-
-  const finishPending = (): void => {
-    if (pending === undefined) return
-    const record = pending.join(' ')
-    const parsed = parseLocationLine(record)
-    if (parsed === undefined) unknown.push(record)
-    else elements.push(parsed)
-    pending = undefined
-  }
-
   for (const line of stdout.split(/\r?\n/)) {
     const trimmed = line.trim()
-    if (trimmed.length === 0) continue
-
-    if (pending !== undefined) {
-      const pendingHasTerminalBox = BOX_SUFFIX.test(pending[pending.length - 1] ?? '')
-      const currentIsCompleteRecord = parseLocationLine(line) !== undefined
-      if (NUMBERED_LOCATION_PREFIX.test(trimmed) && (pendingHasTerminalBox || currentIsCompleteRecord)) finishPending()
-      else {
-        pending.push(trimmed)
-        continue
-      }
-    }
-
-    if (trimmed === 'no elements detected') continue
-
+    if (trimmed.length === 0 || trimmed === 'no elements detected') continue
     const parsed = parseLocationLine(line)
-    if (parsed !== undefined) {
-      elements.push(parsed)
-    } else if (NUMBERED_LOCATION_PREFIX.test(trimmed)) {
-      // Vision labels can contain escaped newlines. The Python CLI expands
-      // them while printing, so rebuild the numbered record through the next
-      // definite record boundary or end of output.
-      pending = [trimmed]
-    } else {
-      unknown.push(trimmed)
-    }
+    if (parsed === undefined) unknown.push(trimmed)
+    else elements.push(parsed)
   }
-  finishPending()
   if (unknown.length > 0) {
     throw new VisionToolkitError('output', `location output contains unrecognized lines: ${unknown.slice(0, 2).join(' | ')}`)
   }
@@ -575,9 +541,19 @@ const VISION_MODEL_GUARD = [
   '        requested=prompt or vision_client.DEFAULT_PROMPT',
   '        return original_describe(image_url,f"{policy}\\n\\n{requested}",*args,**kwargs)',
   '    vision_client.describe_image=guarded_describe',
+  '    ground_module=None',
+  '    original_parse_matches=None',
+  '    if Path(script).name in {"ground","detect"} and importlib.util.find_spec("ground") is not None:',
+  '        import ground as ground_module',
+  '        original_parse_matches=ground_module.parse_matches',
+  '        def normalized_parse_matches(*args,**kwargs):',
+  '            matches=original_parse_matches(*args,**kwargs)',
+  '            return [ground_module.Match(" ".join(str(match.label).split()),match.bbox) for match in matches]',
+  '        ground_module.parse_matches=normalized_parse_matches',
   '    try:',
   '        runpy.run_path(script,run_name="__main__")',
   '    finally:',
+  '        if ground_module is not None: ground_module.parse_matches=original_parse_matches',
   '        vision_client.describe_image=original_describe',
 ].join('\n')
 
