@@ -209,17 +209,46 @@ export function parseLocationLine(line: string): LocatedElement | undefined {
   return { ...(label.length > 0 ? { label } : {}), box }
 }
 
-/** Parse ground/detect stdout; non-empty unknown lines are an output contract failure. */
+/** Parse ground/detect stdout; non-empty unknown records are an output contract failure. */
 export function parseLocationOutput(stdout: string): LocatedElement[] {
   const elements: LocatedElement[] = []
   const unknown: string[] = []
+  let pending: string[] | undefined
   for (const line of stdout.split(/\r?\n/)) {
     const trimmed = line.trim()
-    if (trimmed.length === 0 || trimmed === 'no elements detected') continue
+    if (trimmed.length === 0) continue
+
+    if (pending !== undefined) {
+      if (/^\d+\.\s+\S/.test(trimmed)) {
+        unknown.push(pending.join(' '))
+        pending = undefined
+      } else {
+        pending.push(trimmed)
+        if (BOX_SUFFIX.test(trimmed)) {
+          const record = pending.join(' ')
+          const parsed = parseLocationLine(record)
+          if (parsed === undefined) unknown.push(record)
+          else elements.push(parsed)
+          pending = undefined
+        }
+        continue
+      }
+    }
+
+    if (trimmed === 'no elements detected') continue
+
     const parsed = parseLocationLine(line)
-    if (parsed === undefined) unknown.push(trimmed)
-    else elements.push(parsed)
+    if (parsed !== undefined) {
+      elements.push(parsed)
+    } else if (/^\d+\.\s+\S/.test(trimmed)) {
+      // Vision labels can contain escaped newlines. The Python CLI expands
+      // them while printing, so rebuild the numbered record through its box.
+      pending = [trimmed]
+    } else {
+      unknown.push(trimmed)
+    }
   }
+  if (pending !== undefined) unknown.push(pending.join(' '))
   if (unknown.length > 0) {
     throw new VisionToolkitError('output', `location output contains unrecognized lines: ${unknown.slice(0, 2).join(' | ')}`)
   }
