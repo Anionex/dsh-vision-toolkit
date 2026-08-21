@@ -56,8 +56,12 @@ class FakeStatement {
           : Math.min(minimum, state.cooldownUntil), null)
       return { cooldown_until: next } as T
     }
+    // consumeCounter binds (?1=day, ?2=key, ?3=now, ?4=limit)
     const key = String(this.values[1])
-    const count = (this.database.counts.get(key) ?? 0) + 1
+    const limit = Number(this.values[3])
+    const current = this.database.counts.get(key) ?? 0
+    if (current >= limit) return null
+    const count = current + 1
     this.database.counts.set(key, count)
     return { request_count: count } as T
   }
@@ -173,6 +177,7 @@ function environment(database: FakeD1, burstSuccess = true): Env {
     MAX_IMAGE_PIXELS: '20000000',
     MAX_OUTPUT_TOKENS: '4096',
     MAX_REQUEST_BYTES: '33554432',
+    UPSTREAM_TIMEOUT_MS: '60000',
     LEGACY_PUBLIC_API_KEY: 'free',
     PUBLIC_API_KEY: publicApiKey,
     GROQ_API_KEY_1: 'test-groq-key-1',
@@ -602,5 +607,82 @@ describe('Worker request accounting', () => {
     )
     expect(response.status).toBe(400)
     expect(database.counts.size).toBe(0)
+  })
+
+  it('aborts and releases the lease when an upstream request exceeds the timeout', async () => {
+    const database = new FakeD1()
+    const env = environment(database) as Env & Record<string, string>
+    env.UPSTREAM_TIMEOUT_MS = '50'
+    // Faithfully simulate fetch honoring AbortSignal: reject when aborted, never resolve otherwise.
+    const groqFetch = vi.fn((_input: RequestInfo | URL, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          const error = new DOMException('The operation was aborted.', 'AbortError')
+          reject(error)
+        })
+      }))
+    vi.stubGlobal('fetch', groqFetch)
+
+    const response = await worker.fetch(qwenRequest(), env)
+
+    expect(response.status).toBe(502)
+    // A hung connection to one account must fail over to the other Groq accounts.
+    expect(groqFetch).toHaveBeenCalledTimes(5)
+    for (const call of groqFetch.mock.calls) {
+      expect(call[1]?.signal).toBeInstanceOf(AbortSignal)
+    }
+    // Leases are released (with the transient cooldown) rather than held until expiry.
+    expect([...database.keyStates.values()].map(state => state.activeRequests)).toEqual([0, 0, 0, 0, 0, 0])
+    for (const state of database.keyStates.values()) {
+      if (state.keySlot < 5) expect(state.cooldownUntil).toBeGreaterThan(Date.now())
+    }
+  })
+
+  it('rolls back the client quota reservation when the global daily limit is reached', async () => {
+    const database = new FakeD1()
+    const env = environment(database) as Env & Record<string, string>
+    env.GLOBAL_DAILY_LIMIT = '1'
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({
+      choices: [{ finish_reason: 'stop', message: { content: 'ok', role: 'assistant' } }],
+    })))
+
+    const first = await worker.fetch(qwenRequest(), env)
+    expect(first.status).toBe(200)
+
+    const second = await worker.fetch(qwenRequest(), env)
+    expect(second.status).toBe(429)
+    expect(await second.json()).toMatchObject({ error: { code: 'global_daily_limit_exceeded' } })
+
+    // The rejected request must not leave the client charged; the global row stays at its cap.
+    const entries = [...database.counts.entries()]
+    const clientEntry = entries.find(([key]) => key !== '__global__')
+    expect(clientEntry?.[1]).toBe(1)
+    expect(database.counts.get('__global__')).toBe(1)
+  })
+
+  it('decrements (not deletes) quota rows above one when rolling back concurrent usage', async () => {
+    const database = new FakeD1()
+    const secret = '0123456789abcdef0123456789abcdef'
+    const key = await crypto.subtle.importKey(
+      'raw',
+      new TextEncoder().encode(secret),
+      { hash: 'SHA-256', name: 'HMAC' },
+      false,
+      ['sign'],
+    )
+    const digest = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode('203.0.113.10'))
+    const clientHash = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')
+    // Simulate prior traffic so the decrement branch (request_count > 1) is exercised, not DELETE.
+    database.counts.set(clientHash, 2)
+    database.counts.set('__global__', 2)
+
+    const response = await worker.fetch(
+      request('data:image/png;base64,iVBORw0KGgo='),
+      environment(database),
+    )
+
+    expect(response.status).toBe(400)
+    expect(database.counts.get(clientHash)).toBe(2)
+    expect(database.counts.get('__global__')).toBe(2)
   })
 })

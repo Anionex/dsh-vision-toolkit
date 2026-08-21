@@ -12,6 +12,7 @@ interface __BaseEnv_Env {
 	MAX_IMAGE_PIXELS: "20000000";
 	MAX_OUTPUT_TOKENS: "4096";
 	MAX_REQUEST_BYTES: "33554432";
+	UPSTREAM_TIMEOUT_MS: "60000";
 	IP_HASH_SECRET: string;
 }
 declare namespace Cloudflare {

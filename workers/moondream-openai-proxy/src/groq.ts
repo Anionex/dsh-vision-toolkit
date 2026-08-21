@@ -6,6 +6,8 @@ const KEY_LEASE_MS = 120_000
 const AUTH_COOLDOWN_MS = 15 * 60 * 1000
 const RATE_LIMIT_COOLDOWN_MS = 60_000
 const TRANSIENT_COOLDOWN_MS = 5_000
+/** Must stay below KEY_LEASE_MS so a timed-out request releases before the reaper can re-lease it. */
+const DEFAULT_UPSTREAM_TIMEOUT_MS = 60_000
 
 interface ProviderSecrets {
   GROQ_API_KEY_1?: string
@@ -16,9 +18,22 @@ interface ProviderSecrets {
   FALLBACK_VISION_API_KEY?: string
   FALLBACK_VISION_MODEL?: string
   FALLBACK_VISION_URL?: string
+  UPSTREAM_TIMEOUT_MS?: string
 }
 
 type ProviderEnv = Env & ProviderSecrets
+
+function upstreamTimeoutMs(env: ProviderEnv): number {
+  const raw = Number(env.UPSTREAM_TIMEOUT_MS)
+  if (Number.isFinite(raw) && raw > 0) return Math.min(raw, KEY_LEASE_MS - 1_000)
+  return DEFAULT_UPSTREAM_TIMEOUT_MS
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException
+    ? error.name === 'AbortError' || error.name === 'TimeoutError'
+    : error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError')
+}
 
 export class VisionProviderError extends Error {
   constructor(
@@ -246,6 +261,8 @@ export async function runVisionCompletion(
   const statuses: number[] = []
   let lastRetryAfter: string | undefined
   let poolUnavailable = false
+  let anyAborted = false
+  const timeoutMs = upstreamTimeoutMs(env)
 
   for (let attempt = 0; attempt < upstreams.length; attempt += 1) {
     const lease = await scheduler.acquire(slots)
@@ -272,11 +289,17 @@ export async function runVisionCompletion(
           'content-type': 'application/json',
         },
         method: 'POST',
+        signal: AbortSignal.timeout(timeoutMs),
       })
-    } catch {
+    } catch (error) {
+      if (isAbortError(error)) anyAborted = true
       await releaseLease(scheduler, lease.slot, requestId, TRANSIENT_COOLDOWN_MS)
       if (attempt + 1 < upstreams.length) continue
-      throw new VisionProviderError('Vision provider is temporarily unavailable', 502, 'upstream_error')
+      throw new VisionProviderError(
+        anyAborted ? 'Vision provider timed out' : 'Vision provider is temporarily unavailable',
+        502,
+        anyAborted ? 'upstream_timeout' : 'upstream_error',
+      )
     }
 
     if (response.ok) {
