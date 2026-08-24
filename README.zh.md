@@ -17,7 +17,7 @@
 
 **更强大的视觉工具箱——给 DeepSeek Harness 里的纯文本模型装上眼睛：图片问答、长图 OCR、前端 UI 还原、GUI 视觉任务，一套视觉工具箱和一个 Skill。**
 
-🚀 粘贴图片，直接提问 ｜ 一行命令安装即用 ｜ 内置免费视觉 ｜ 场景丰富
+🚀 粘贴图片，直接提问 ｜ 一行命令安装即用 ｜ 场景丰富
 
 [亮点](#亮点) ｜ [快速开始](#快速开始三步完成) ｜ [工具一览](#工具一览) ｜ [配置与限制](#配置与限制) ｜ [常见问题](#常见问题) ｜ [交流群](#开发与社区)
 
@@ -34,8 +34,7 @@
 ## 亮点
 
 - **粘贴图片，直接提问。** 在 DSH Web 里粘贴图片，文本模型会自动切换到看图模式变体，不需要手动复制路径或更换模型。图片保留原生缩略图、会话记录和工作区路径；Web 可以预览产物。
-- **一行命令安装即用。** 安装插件后默认使用内置免费 Gemini 3.7 Flash 视觉服务，不需要申请 API Key。
-- **内置免费视觉模型额度。** 安装后即可直接使用共享服务，每台机器每天有**100 张图**的免费额度。
+- **一行命令安装即用。** 安装插件后即可在 **设置 → 视觉工具** 中配置视觉模型并开始使用。
 - **不只是看图描述，是获取图中真正需要关注的内容。** 模型不只是生成通用描述，而是围绕“报错在哪里”“按钮在哪”等当前任务提取证据。
 - **一套经过实战验证的视觉任务方法论**：项目提供的skill，会告诉 agent 面对不同视觉任务时应该看什么、选择哪个工具、按什么步骤推进，以及最后如何验证结果。
 
@@ -45,8 +44,6 @@
 
 1. **视觉工具和 Skill**：让 Agent 知道什么时候该看图、定位、OCR、裁剪、描摹或做像素对比。
 2. **DSH 原生接入**：把这些能力放进 Profile、会话、Settings、Artifacts 和 Web 界面。
-
-> **安装即可使用。** 默认接入内置免费 Gemini 3.7 Flash 视觉服务，不需要申请 API Key。
 
 ```sh
 dsh plugin --profile web add @anionex/dsh-vision-toolkit
@@ -85,12 +82,12 @@ dsh plugin --profile web add @anionex/dsh-vision-toolkit
 
 ## 最近更新
 
-- **2026-08-20 · AIHubMix 申请教程：** 新增通过 Inferera 入口申请 API Key、使用免费 Gemini 3.7 Flash 视觉模型的图文教程，并在视觉工具设置中直接提供入口。
+- **2026-08-20 · AIHubMix 申请教程：** 新增通过 Inferera 入口申请 API Key 并配置 Gemini 3.7 Flash 视觉模型的图文教程，并在视觉工具设置中直接提供入口。
 - **2026-08-19 · 透明变体路由默认开启：** 模型选择器默认只显示每个模型一项并保留原模型名，粘贴图片、历史图片和内置 `read_image` 工具都能直接使用，不再需要手动切换到 `(Vision Toolkit)` 变体；如需恢复显式条目，可在 设置 → 高级设置 → 图片输入 关闭“透明变体路由”。
 - **2026-08-16 · Windows Python：** 支持 Microsoft Store Python，解决 Windows 用户首次创建隔离环境失败的问题。
-- **2026-08-17 · 免费视觉升级：** 默认模型切换到 Gemini 3.7 Flash，并修复 Qwen/Gemini 检测框坐标顺序错位的问题。
+- **2026-08-17 · 视觉升级：** 默认模型切换到 Gemini 3.7 Flash，并修复 Qwen/Gemini 检测框坐标顺序错位的问题。
 - **2026-08-16 · 图片粘贴：** 文本模型自动切换到 `(Vision Toolkit)` 变体并保留工作区路径，解决粘贴图片被拦截或后续无法复用的问题。
-- **2026-08-16 · 共享容量：** 扩大免费服务容量，减少高峰期出现 `429` 的情况。
+- **2026-08-16 · 服务稳定性：** 扩大服务容量，减少高峰期出现 `429` 的情况。
 - **2026-08-16 · 真实模型测试：** Settings 新增完整图片请求测试，解决 `/models` 可访问却不能证明模型真的会看图的问题。
 
 ## 适合谁用
@@ -178,7 +175,7 @@ dsh plugin --profile desktop add @anionex/dsh-vision-toolkit
 
 ### 2. 重启并确认
 
-重启正在运行的 Web Profile，打开 **设置 → 视觉工具**。默认免费服务已经配置好；你可以直接运行**测试视觉模型**确认连接。
+重启正在运行的 Web Profile，打开 **设置 → 视觉工具**，配置视觉模型，然后运行**测试视觉模型**确认连接。
 
 首次启动会自动准备隔离运行环境：插件优先使用系统已有的 Python 3.11+；如果系统没有，会自动从国内镜像（`dsh-vision-python-bootstrap-1317715800.cos.ap-guangzhou.myqcloud.com`）下载一个带完整性校验的托管 Python（约 35MB，仅首次需要网络），镜像不可用时自动回退到 GitHub 官方发布源。锁定依赖（Pillow、NumPy、vtracer）会优先从腾讯云 PyPI 镜像（`mirrors.cloud.tencent.com/pypi/simple`）安装，镜像不可用时回退到官方 PyPI。普通安装不需要下载 `agent-vision-toolkit` 源码，也不需要设置本地路径。
 
@@ -253,37 +250,11 @@ flowchart LR
 
 ## 配置与限制
 
-### 默认免费服务
+### 配置视觉模型
 
-默认配置使用：
+在 **设置 → 视觉工具** 中配置视觉模型提供方，并把 API Key 保存为 DSH Credential。Settings 只保存 Credential 引用，不会回显密钥。
 
-```text
-Base URL: https://vision.anionex.me/v1
-Model:    gemini-3.7-flash
-API Key:  https://agent-vision.anionex.me（自动填写）
-```
-
-仍然使用旧模型名 `qwen/qwen3.6-27b` 的请求保持兼容，会自动路由到 Qwen 后端。
-
-这是共享的免费入口，不是无限量私有服务。请求保护规则包括：
-
-| 限制 | 当前值 |
-| --- | --- |
-| 每日额度 | 每台机器每天 100 张图 |
-| 单次请求图片数 | 最多 5 张 |
-| 单张图片大小 | 4 MiB |
-| 单张图片像素 | 20,000,000 |
-| 单次输出 | 最多 4,096 tokens |
-
-这些保护规则避免异常大的请求占满内存或请求时间。共享容量用尽时，服务会返回带 `Retry-After` 的明确 `429` 响应，不会只得到一个含糊的“模型失败”。
-
-仍然发送 `api_key="free"` 的旧客户端可以继续使用。
-
-### 使用自己的视觉模型
-
-如果你需要更高额度、私有端点或其他模型，可以在 **设置 → 视觉工具** 中修改提供方，并把 API Key 保存为 DSH Credential。Settings 只保存 Credential 引用，不会回显密钥。
-
-**AIHubMix 图文教程：** [申请 AIHubMix API Key，并用免费 Gemini 3.7 Flash 识图](docs/aihubmix-gemini-vision.zh.md)。教程包含账号与 API Key 获取截图、Vision Toolkit 的准确配置、免费模型选择和常见问题排查。
+**AIHubMix 图文教程：** [申请 AIHubMix API Key 并配置 Gemini 3.7 Flash 识图](docs/aihubmix-gemini-vision.zh.md)。教程包含账号与 API Key 获取截图、Vision Toolkit 的准确配置、模型选择和常见问题排查。
 
 也可以在 Profile patch 中配置：
 
@@ -313,7 +284,7 @@ API Key:  https://agent-vision.anionex.me（自动填写）
 | --- | --- |
 | 视觉模型测试失败：`Vision API returned an incompatible response structure` | 通常是 API 地址少了路径前缀。LM Studio、Ollama 等本地 OpenAI 兼容服务需填写 `http://127.0.0.1:1234/v1`（带 `/v1`），插件会在其后拼接 `/chat/completions`；只填端口号会命中服务的未知端点并返回该错误 |
 | 粘贴图片后仍提示模型不支持图片 | 重启 Web Profile 并刷新页面，确认当前模型已切换到带 `(Vision Toolkit)` 的变体；也可以把图片先放进会话工作区，再调用 `/vision-skills` |
-| 免费服务提示 429 | 按错误中的 `Retry-After` 等待后重试；如果需要稳定高额度，切换到自己的视觉端点 |
+| 视觉服务提示 429 | 按错误中的 `Retry-After` 等待后重试；如果需要稳定高额度，切换到自己的视觉端点 |
 | 图片过大或像素超限 | 先裁剪或缩放图片；错误会明确显示是字节还是像素限制 |
 | 自定义 Credential 缺失 | 在 **设置 → 视觉工具** 填写 API Key，并确认 Credential 名称与配置一致 |
 | 首次运行时准备失败 | 自动下载托管 Python 需要网络和磁盘权限（默认先走国内镜像，失败时回退 GitHub）；失败时检查网络或包缓存，也可以安装 Python 3.11+ 或在 Settings 中配置 `runtime.python`，然后重新测试 |
