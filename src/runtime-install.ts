@@ -88,6 +88,8 @@ const PYPI_MIRROR_BASE_URL = 'https://mirrors.cloud.tencent.com/pypi/simple'
 const PROBE_TIMEOUT_MS = 30_000
 const LOCK_STALE_MS = 15 * 60 * 1000
 const LOCK_HEARTBEAT_MS = 5_000
+const WINDOWS_FILE_RETRY_ATTEMPTS = 5
+const WINDOWS_FILE_RETRY_DELAY_MS = 250
 
 /** Absolute root of the packaged upstream snapshot. */
 export function bundledUpstreamRoot(): string {
@@ -101,6 +103,28 @@ export function displayCommand(command: RuntimeCommand): string {
 
 function sha256(bytes: string | Buffer): string {
   return createHash('sha256').update(bytes).digest('hex')
+}
+
+/**
+ * Windows Defender/antivirus real-time scanning briefly locks freshly written
+ * Python DLLs, so recursive removal and directory replacement can fail with
+ * EBUSY/EPERM immediately after installation. Retry those transient Windows
+ * errors before surfacing them; non-Windows platforms pass through unchanged.
+ */
+export async function withWindowsTransientRetry<T>(operation: () => Promise<T>): Promise<T> {
+  let lastError: unknown
+  for (let attempt = 1; attempt <= WINDOWS_FILE_RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      return await operation()
+    } catch (error) {
+      lastError = error
+      const code = (error as NodeJS.ErrnoException).code
+      const transient = process.platform === 'win32' && (code === 'EBUSY' || code === 'EPERM' || code === 'EACCES')
+      if (!transient) break
+      await new Promise(resolveWait => setTimeout(resolveWait, WINDOWS_FILE_RETRY_DELAY_MS * attempt))
+    }
+  }
+  throw lastError
 }
 
 export function isolatedPythonEnvironment(home: string): NodeJS.ProcessEnv {
@@ -488,7 +512,7 @@ async function withDirectoryLock<T>(lockPath: string, fn: () => Promise<T>): Pro
     await writeFile(join(lockPath, 'owner'), `${owner}\n`, { flag: 'wx' })
   } catch (error) {
     if (acquired) {
-      await rm(lockPath, { recursive: true, force: true }).catch(() => {})
+      await withWindowsTransientRetry(() => rm(lockPath, { recursive: true, force: true })).catch(() => {})
       throw error
     }
     if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
@@ -497,7 +521,7 @@ async function withDirectoryLock<T>(lockPath: string, fn: () => Promise<T>): Pro
       try {
         const info = await stat(lockPath)
         if (Date.now() - info.mtimeMs > LOCK_STALE_MS) {
-          await rm(lockPath, { recursive: true, force: true })
+          await withWindowsTransientRetry(() => rm(lockPath, { recursive: true, force: true }))
           return withDirectoryLock(lockPath, fn)
         }
       } catch {
@@ -518,7 +542,7 @@ async function withDirectoryLock<T>(lockPath: string, fn: () => Promise<T>): Pro
     clearInterval(heartbeat)
     try {
       if ((await readFile(join(lockPath, 'owner'), 'utf8')).trim() === owner) {
-        await rm(lockPath, { recursive: true, force: true })
+        await withWindowsTransientRetry(() => rm(lockPath, { recursive: true, force: true }))
       }
     } catch {
       // The lock was already removed or replaced.
@@ -552,7 +576,7 @@ export async function acquireBundledPython(
     if (ready !== undefined) return
     const parent = dirname(root)
     await mkdir(parent, { recursive: true })
-    await rm(root, { recursive: true, force: true })
+    await withWindowsTransientRetry(() => rm(root, { recursive: true, force: true }))
     const work = await mkdtemp(join(parent, '.python-bootstrap-'))
     try {
       const archive = join(work, 'python.tar.gz')
@@ -589,9 +613,14 @@ export async function acquireBundledPython(
         )
       }
       if (process.platform !== 'win32') await chmod(extractedInterpreter, 0o755)
-      await rename(extractDir, root)
+      await withWindowsTransientRetry(() => rename(extractDir, root))
     } finally {
-      await rm(work, { recursive: true, force: true })
+      await withWindowsTransientRetry(() => rm(work, { recursive: true, force: true })).catch(error => {
+        ctx.logger.warn(
+          'dsh-vision-toolkit: bundled Python staging cleanup failed: %s',
+          error instanceof Error ? error.message : String(error),
+        )
+      })
     }
   })
   const metadata = await pythonMetadata(ctx, command, cwd)
@@ -827,7 +856,7 @@ async function waitForManagedRuntime(
     try {
       const info = await stat(lockPath)
       if (Date.now() - info.mtimeMs > LOCK_STALE_MS) {
-        await rm(lockPath, { recursive: true, force: true })
+        await withWindowsTransientRetry(() => rm(lockPath, { recursive: true, force: true }))
         return undefined
       }
     } catch {
@@ -844,7 +873,7 @@ async function releaseManagedLock(lockPath: string, owner: string): Promise<void
   } catch {
     return
   }
-  await rm(lockPath, { recursive: true, force: true })
+  await withWindowsTransientRetry(() => rm(lockPath, { recursive: true, force: true }))
 }
 
 async function prepareManaged(
@@ -899,7 +928,7 @@ async function prepareManaged(
     await writeFile(join(lockPath, 'owner'), `${lockOwner}\n`, { flag: 'wx' })
   } catch (error) {
     if (lockAcquired) {
-      await rm(lockPath, { recursive: true, force: true })
+      await withWindowsTransientRetry(() => rm(lockPath, { recursive: true, force: true })).catch(() => {})
       throw error
     }
     if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
@@ -1016,17 +1045,17 @@ async function prepareManaged(
     const quarantine = `${finalRoot}.replaced-${randomUUID()}`
     let quarantined = false
     try {
-      await rename(finalRoot, quarantine)
+      await withWindowsTransientRetry(() => rename(finalRoot, quarantine))
       quarantined = true
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     }
     try {
-      await rename(staging, finalRoot)
+      await withWindowsTransientRetry(() => rename(staging, finalRoot))
     } catch (error) {
       if (quarantined) {
         try {
-          await rename(quarantine, finalRoot)
+          await withWindowsTransientRetry(() => rename(quarantine, finalRoot))
         } catch (restoreError) {
           throw new VisionToolkitError(
             'runtime',
@@ -1037,13 +1066,28 @@ async function prepareManaged(
       }
       throw error
     }
-    await rm(quarantine, { recursive: true, force: true })
+    await withWindowsTransientRetry(() => rm(quarantine, { recursive: true, force: true })).catch(error => {
+      ctx.logger.warn(
+        'dsh-vision-toolkit: managed runtime quarantine cleanup failed: %s',
+        error instanceof Error ? error.message : String(error),
+      )
+    })
     const python: RuntimeCommand = { program: interpreter, prefix: [], display: interpreter }
     return { source: 'managed', root: BUNDLED_ROOT, python, cleanHome, pythonVersion: metadata.version, dependencies }
   } finally {
     clearInterval(heartbeat)
-    await rm(staging, { recursive: true, force: true })
-    await releaseManagedLock(lockPath, lockOwner)
+    await withWindowsTransientRetry(() => rm(staging, { recursive: true, force: true })).catch(error => {
+      ctx.logger.warn(
+        'dsh-vision-toolkit: managed runtime staging cleanup failed: %s',
+        error instanceof Error ? error.message : String(error),
+      )
+    })
+    await releaseManagedLock(lockPath, lockOwner).catch(error => {
+      ctx.logger.warn(
+        'dsh-vision-toolkit: managed runtime lock cleanup failed: %s',
+        error instanceof Error ? error.message : String(error),
+      )
+    })
   }
 }
 

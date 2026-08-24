@@ -38,6 +38,13 @@ interface UpstreamManifest {
 export declare function bundledUpstreamRoot(): string;
 /** Convert one command into a user-facing executable string. */
 export declare function displayCommand(command: RuntimeCommand): string;
+/**
+ * Windows Defender/antivirus real-time scanning briefly locks freshly written
+ * Python DLLs, so recursive removal and directory replacement can fail with
+ * EBUSY/EPERM immediately after installation. Retry those transient Windows
+ * errors before surfacing them; non-Windows platforms pass through unchanged.
+ */
+export declare function withWindowsTransientRetry<T>(operation: () => Promise<T>): Promise<T>;
 export declare function isolatedPythonEnvironment(home: string): NodeJS.ProcessEnv;
 /** Verify every packaged upstream file against the committed content manifest. */
 export declare function verifyBundledUpstream(): Promise<UpstreamManifest>;
