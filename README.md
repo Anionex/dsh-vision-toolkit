@@ -61,8 +61,8 @@ dsh plugin --profile web add @anionex/dsh-vision-toolkit
 
 <table>
 <tr>
-<td width="220"><a href="https://aihubmix.com/?aff=5wj6sgx8"><img src="assets/logo_aihubmix.png" alt="AIHubMix" height="48"></a></td>
-<td>Thanks to <a href="https://aihubmix.com/?aff=5wj6sgx8">AIHubMix</a> for sponsoring this project! AIHubMix is a stable, high-concurrency AI model API gateway that connects Claude, GPT, Gemini, DeepSeek, and other mainstream models through a single API key, compatible with multiple protocols, with <b>free model options</b> available. To sign up, use the <a href="https://aihubmix.com/?aff=5wj6sgx8">AIHubMix entry</a> outside mainland China or the <a href="https://inferera.com/?aff=5wj6sgx8">Inferera entry</a> within mainland China.</td>
+<td width="220"><a href="https://aihubmix.com/?aff=sinZ"><img src="assets/logo_aihubmix.png" alt="AIHubMix" height="48"></a></td>
+<td>Thanks to <a href="https://aihubmix.com/?aff=sinZ">AIHubMix</a> for sponsoring this project! AIHubMix is a stable, high-concurrency AI model API gateway that connects Claude, GPT, Gemini, DeepSeek, and other mainstream models through a single API key, compatible with multiple protocols, with <b>free model options</b> available. To sign up, use the <a href="https://aihubmix.com/?aff=sinZ">AIHubMix entry</a> outside mainland China or the <a href="https://inferera.com/?aff=sinZ">Inferera entry</a> within mainland China.</td>
 </tr>
 </table>
 

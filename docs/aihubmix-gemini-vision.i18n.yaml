@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write dsh-vision-toolkit/docs/aihubmix-gemini-vision.md
-aihubmix-gemini-vision.md: c2958163461843045fc4547e56fbaae78d1b9f72
-aihubmix-gemini-vision.zh.md: dd2ba9246bb921f4986cacfd28e31aaeec4903e3
+aihubmix-gemini-vision.md: acaab7aec126dd50b99c2950e0e37139d00be8e0
+aihubmix-gemini-vision.zh.md: 769370728d9b734b9947c9223045ac00f045f3a2
