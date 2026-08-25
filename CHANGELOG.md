@@ -4,6 +4,13 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+## [0.1.39] - 2026-08-25
+
+### Fixed
+
+- Retried transient Windows `EBUSY`/`EPERM`/`EACCES` failures when deleting or replacing managed and bundled-Python runtime directories, so antivirus real-time scans no longer make first-run environment preparation report "运行环境尚未就绪".
+- Kept the primary runtime preparation error visible when best-effort cleanup also fails: staging, quarantine, bundled-Python staging, and lock cleanup now log a warning instead of masking the real failure.
+
 ## [0.1.38] - 2026-08-20
 
 ### Fixed
@@ -402,7 +409,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 - Runtime teardown cancels in-flight operations before removing Agent-scoped tools, the activation bootstrap, and the Skill.
 - The Web client is published through the current nested `dsh.client` manifest and loader-compatible built artifact required by DSH snapshot0810.
 
-[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.38...HEAD
+[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.39...HEAD
+[0.1.39]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.38...v0.1.39
 [0.1.38]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.37...v0.1.38
 [0.1.37]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.36...v0.1.37
 [0.1.36]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.35...v0.1.36
