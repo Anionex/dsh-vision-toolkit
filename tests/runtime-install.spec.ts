@@ -13,6 +13,7 @@ import { resolveConfig } from '../src/config.ts'
 import {
   acquireBundledPython,
   bundledUpstreamRoot,
+  ignoreCleanupFailure,
   prepareUpstreamRuntime,
   pythonBootstrapTarget,
   resolveBootstrapPython,
@@ -81,6 +82,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  rmMock.mockImplementation((path, options) => realRm(path, options))
   vi.unstubAllGlobals()
   if (originalDshHome === undefined) delete process.env.DSH_HOME
   else process.env.DSH_HOME = originalDshHome
@@ -422,8 +424,28 @@ describe('bundled Python bootstrap', () => {
       message: expect.stringContaining('could not be downloaded'),
     })
     expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('bundled Python staging cleanup failed'),
-      expect.any(String),
+      'dsh-vision-toolkit: %s cleanup failed: %s',
+      'bundled Python staging',
+      'busy',
+    )
+  })
+})
+
+describe('cleanup failure isolation', () => {
+  it('turns successful-path cleanup failures into warnings only', async () => {
+    const ctx = new Context()
+    contexts.push(ctx)
+    await ctx.plugin(BundledPythonSubprocessService)
+    const busy = Object.assign(new Error('busy'), { code: 'EBUSY' })
+    rmMock.mockImplementation(async () => {
+      throw busy
+    })
+    const warn = vi.spyOn(ctx.logger, 'warn')
+    await expect(ignoreCleanupFailure(ctx, 'managed runtime quarantine', join(tmpdir(), 'quarantine'))).resolves.toBeUndefined()
+    expect(warn).toHaveBeenCalledWith(
+      'dsh-vision-toolkit: %s cleanup failed: %s',
+      'managed runtime quarantine',
+      'busy',
     )
   })
 })

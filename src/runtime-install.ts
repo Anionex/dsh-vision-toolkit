@@ -129,6 +129,23 @@ export async function withWindowsTransientRetry<T>(operation: () => Promise<T>):
   throw lastError
 }
 
+/**
+ * Best-effort removal used after the primary runtime path has already
+ * succeeded or failed. Transient Windows locks must not turn a usable runtime
+ * into an error, but leaving the directory behind should still be audible.
+ */
+export async function ignoreCleanupFailure(ctx: Context, label: string, path: string): Promise<void> {
+  try {
+    await withWindowsTransientRetry(() => rm(path, { recursive: true, force: true }))
+  } catch (error) {
+    ctx.logger.warn(
+      'dsh-vision-toolkit: %s cleanup failed: %s',
+      label,
+      error instanceof Error ? error.message : String(error),
+    )
+  }
+}
+
 export function isolatedPythonEnvironment(home: string): NodeJS.ProcessEnv {
   return {
     HOME: home,
@@ -617,12 +634,7 @@ export async function acquireBundledPython(
       if (process.platform !== 'win32') await chmod(extractedInterpreter, 0o755)
       await withWindowsTransientRetry(() => rename(extractDir, root))
     } finally {
-      await withWindowsTransientRetry(() => rm(work, { recursive: true, force: true })).catch(error => {
-        ctx.logger.warn(
-          'dsh-vision-toolkit: bundled Python staging cleanup failed: %s',
-          error instanceof Error ? error.message : String(error),
-        )
-      })
+      await ignoreCleanupFailure(ctx, 'bundled Python staging', work)
     }
   })
   const metadata = await pythonMetadata(ctx, command, cwd)
@@ -1068,22 +1080,12 @@ async function prepareManaged(
       }
       throw error
     }
-    await withWindowsTransientRetry(() => rm(quarantine, { recursive: true, force: true })).catch(error => {
-      ctx.logger.warn(
-        'dsh-vision-toolkit: managed runtime quarantine cleanup failed: %s',
-        error instanceof Error ? error.message : String(error),
-      )
-    })
+    await ignoreCleanupFailure(ctx, 'managed runtime quarantine', quarantine)
     const python: RuntimeCommand = { program: interpreter, prefix: [], display: interpreter }
     return { source: 'managed', root: BUNDLED_ROOT, python, cleanHome, pythonVersion: metadata.version, dependencies }
   } finally {
     clearInterval(heartbeat)
-    await withWindowsTransientRetry(() => rm(staging, { recursive: true, force: true })).catch(error => {
-      ctx.logger.warn(
-        'dsh-vision-toolkit: managed runtime staging cleanup failed: %s',
-        error instanceof Error ? error.message : String(error),
-      )
-    })
+    await ignoreCleanupFailure(ctx, 'managed runtime staging', staging)
     await releaseManagedLock(lockPath, lockOwner).catch(error => {
       ctx.logger.warn(
         'dsh-vision-toolkit: managed runtime lock cleanup failed: %s',
