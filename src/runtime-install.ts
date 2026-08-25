@@ -118,10 +118,12 @@ export async function withWindowsTransientRetry<T>(operation: () => Promise<T>):
       return await operation()
     } catch (error) {
       lastError = error
-      const code = (error as NodeJS.ErrnoException).code
+      const code = error instanceof Error ? (error as NodeJS.ErrnoException).code : undefined
       const transient = process.platform === 'win32' && (code === 'EBUSY' || code === 'EPERM' || code === 'EACCES')
       if (!transient) break
-      await new Promise(resolveWait => setTimeout(resolveWait, WINDOWS_FILE_RETRY_DELAY_MS * attempt))
+      if (attempt < WINDOWS_FILE_RETRY_ATTEMPTS) {
+        await new Promise(resolveWait => setTimeout(resolveWait, WINDOWS_FILE_RETRY_DELAY_MS * attempt))
+      }
     }
   }
   throw lastError

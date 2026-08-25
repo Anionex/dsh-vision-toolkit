@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type { SubprocessHandle, SubprocessOutputRead, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
@@ -20,6 +20,21 @@ import {
   storePythonProbeEnvironment,
   visionToolkitStateRoot,
 } from '../src/runtime-install.ts'
+
+vi.mock('node:fs/promises', async importOriginal => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>()
+  return {
+    ...actual,
+    rm: vi.fn((path: Parameters<typeof actual.rm>[0], options?: Parameters<typeof actual.rm>[1]) => actual.rm(path, options)),
+  }
+})
+
+const rmMock = vi.mocked(rm)
+let realRm: typeof rm
+
+beforeAll(async () => {
+  realRm = (await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')).rm
+})
 
 class ProbeSubprocessService extends SubprocessRuntime {
   readonly spawns: SubprocessSpawnSpec[] = []
@@ -58,6 +73,7 @@ const contexts: Context[] = []
 let originalDshHome: string | undefined
 
 beforeEach(async () => {
+  rmMock.mockImplementation((path, options) => realRm(path, options))
   originalDshHome = process.env.DSH_HOME
   const home = await mkdtemp(join(tmpdir(), 'dsh-vt-runtime-home-'))
   roots.push(home)
@@ -384,6 +400,30 @@ describe('bundled Python bootstrap', () => {
       2,
       expect.stringContaining('python-build-standalone/releases/download/'),
       expect.any(AbortSignal),
+    )
+  })
+
+  it('keeps the primary download error when staging cleanup also fails', async () => {
+    const { manifest } = await bundledPythonFixtureManifest()
+    const requestMock = vi.fn().mockRejectedValue(new Error('download boom'))
+    const ctx = new Context()
+    contexts.push(ctx)
+    const fiber = await ctx.plugin(BundledPythonSubprocessService)
+    const stateRoot = visionToolkitStateRoot()
+    await mkdir(join(stateRoot, 'home'), { recursive: true })
+    const busy = Object.assign(new Error('busy'), { code: 'EBUSY' })
+    rmMock.mockImplementation(async (path, options) => {
+      if (String(path).includes('.python-bootstrap-')) throw busy
+      return realRm(path, options)
+    })
+    const warn = vi.spyOn(ctx.logger, 'warn')
+    await expect(acquireBundledPython(ctx, stateRoot, join(stateRoot, 'home'), manifest, requestMock)).rejects.toMatchObject({
+      code: 'runtime',
+      message: expect.stringContaining('could not be downloaded'),
+    })
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('bundled Python staging cleanup failed'),
+      expect.any(String),
     )
   })
 })
