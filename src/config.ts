@@ -44,6 +44,24 @@ const BUILT_IN_FREE_VISION_MODEL_ALIASES = new Set([
   'moondream3.1-9B-A2B',
 ])
 
+/** Canonical model-facing tool names the plugin may register, in registration order. */
+const KNOWN_TOOL_NAMES = [
+  'vision_glance', 'vision_ground', 'vision_detect', 'vision_trace', 'vision_crop',
+  'vision_pixel_diff', 'vision_long_screenshot_ocr', 'vision_extract_foreground',
+  'vision_dominant_colors', 'vision_html_screenshot',
+]
+
+/**
+ * The credential-free, local-only image tools. These never call a third-party
+ * vision model (they operate purely on the local image bytes), so `localOnly`
+ * mode exposes exactly this set and disables the understanding tools that need
+ * a vision credential.
+ */
+const LOCAL_ONLY_TOOL_NAMES = [
+  'vision_crop', 'vision_trace', 'vision_pixel_diff', 'vision_extract_foreground',
+  'vision_dominant_colors', 'vision_html_screenshot',
+]
+
 /** Full user-facing configuration; every field defaults at the schema boundary. */
 export interface VisionToolkitConfig {
   provider?: {
@@ -80,6 +98,14 @@ export interface VisionToolkitConfig {
   }
   /** Extra directories (besides the workspace) inputs may come from. */
   allowedDirs?: string[]
+  /** Whitelist of model-facing vision tool names to register. Empty/absent keeps every tool. */
+  enabledTools?: string[]
+  /**
+   * Local-only mode: expose only the credential-free image tools (crop, trace,
+   * pixel diff, foreground, dominant colors, HTML screenshot) so no third-party
+   * vision model is ever called. When true it overrides `enabledTools`.
+   */
+  localOnly?: boolean
   /**
    * Image-input variants: sibling model-selector entries for every model the
    * host positively declares text-only. A variant declares image input, so
@@ -139,6 +165,13 @@ export const Config: Schema<VisionToolkitConfig> = z.object({
     autoSwitch: z.boolean().default(true),
     hidden: z.boolean().default(true),
   }),
+  // Whitelist of vision tool names to register. Empty/absent keeps every tool.
+  // Set to only local (credential-free) image operations to avoid any third-party
+  // vision-model call, e.g. ["vision_crop","vision_trace","vision_pixel_diff"].
+  enabledTools: z.array(z.string()).default([]),
+  // Local-only mode switch: expose only the credential-free image tools so no
+  // third-party vision model is ever called. Overrides `enabledTools` when true.
+  localOnly: z.boolean().default(false),
 })
 
 /** Configuration after static validation, with every default materialized. */
@@ -162,6 +195,8 @@ export interface ResolvedVisionToolkitConfig {
     python?: string
   }
   allowedDirs: string[]
+  enabledTools: string[]
+  localOnly: boolean
   imageInputVariants: {
     enabled: boolean
     providers: string[]
@@ -255,6 +290,18 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
     throw new VisionToolkitError('config', 'runtime.python must not be empty')
   }
   const allowedDirs = (config.allowedDirs ?? []).map(dir => dir.trim()).filter(dir => dir.length > 0)
+  const localOnly = config.localOnly ?? false
+  const enabledTools = (localOnly ? LOCAL_ONLY_TOOL_NAMES : (config.enabledTools ?? []))
+    .map(tool => String(tool).trim())
+    .filter(tool => tool.length > 0)
+  for (const tool of enabledTools) {
+    if (!KNOWN_TOOL_NAMES.includes(tool)) {
+      throw new VisionToolkitError(
+        'config',
+        `enabledTools names "${tool}", which is not a known vision tool; allowed names are ${KNOWN_TOOL_NAMES.join(', ')}`,
+      )
+    }
+  }
   const imageInputVariants = config.imageInputVariants ?? {}
   const variantProviders = (imageInputVariants.providers ?? [])
     .map(provider => provider.trim())
@@ -272,6 +319,8 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
       ...(python !== undefined ? { python } : {}),
     },
     allowedDirs,
+    enabledTools,
+    localOnly,
     imageInputVariants: {
       enabled: imageInputVariants.enabled ?? true,
       providers: variantProviders,

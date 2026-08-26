@@ -94,6 +94,9 @@ const en = {
   hiddenVariants: 'Transparent variant routing',
   hiddenVariantsLabel: 'Keep the original model names and enable images automatically',
   hiddenVariantsHint: 'Text-only models keep one model-selector entry with the original name while the session runs on the image-capable variant. Pasted images, image history, and the built-in read_image tool keep working; disable to restore the explicit (Vision Toolkit) entries.',
+  localOnly: 'Local-only tools',
+  localOnlyLabel: 'Only local image tools (no third-party vision model)',
+  localOnlyHint: 'Exposes only the credential-free image operations (crop, trace, pixel diff, foreground, dominant colors, HTML screenshot). Tools that need a third-party vision model (glance, ground, detect, long-screenshot OCR) are not registered, so no third-party call is made.',
   pluginVersion: 'Plugin',
   upstreamVersion: 'Upstream',
   activeGeneration: 'Runtime generation',
@@ -282,6 +285,9 @@ const zh: Record<LocaleKey, string> = {
   hiddenVariants: '透明变体路由',
   hiddenVariantsLabel: '保留原模型名并自动启用图片能力',
   hiddenVariantsHint: '文本模型在模型列表中只显示原名称，会话实际运行在支持图片的变体路由上：粘贴图片、历史图片和内置 read_image 工具均可正常使用。关闭后恢复显示显式的（Vision Toolkit）条目。',
+  localOnly: '本地工具',
+  localOnlyLabel: '仅使用本地图像工具（不调用第三方视觉模型）',
+  localOnlyHint: '只开放免凭据的图像操作（裁剪、描摹、像素差异、前景提取、取色、HTML 转截图）。需要第三方视觉模型的理解类工具（glance、ground、detect、长截图 OCR）不会注册，因此不会发起任何第三方调用。',
   pluginVersion: '插件版本',
   upstreamVersion: '工具包版本',
   activeGeneration: '本次运行已应用',
@@ -479,6 +485,8 @@ interface SettingsValue {
   concurrency?: number
   runtime?: { mode?: 'managed' | 'external'; agentVisionToolkitPath?: string; python?: string }
   allowedDirs?: string[]
+  enabledTools?: string[]
+  localOnly?: boolean
   imageInputVariants?: {
     enabled?: boolean
     providers?: string[]
@@ -1090,6 +1098,7 @@ interface Draft {
   variantEnabled: boolean
   variantProviders: string
   variantAutoSwitch: boolean
+  localOnly: boolean
 }
 
 function draftOf(value: SettingsValue): Draft {
@@ -1113,6 +1122,7 @@ function draftOf(value: SettingsValue): Draft {
     variantEnabled: value.imageInputVariants?.enabled ?? true,
     variantProviders: (value.imageInputVariants?.providers ?? []).join('\n'),
     variantAutoSwitch: value.imageInputVariants?.autoSwitch ?? true,
+    localOnly: value.localOnly ?? ((value.enabledTools?.length ?? 0) > 0),
   }
 }
 
@@ -1153,6 +1163,7 @@ function valueOf(draft: Draft, t: Translate): SettingsValue {
       ...(draft.python.trim().length === 0 ? {} : { python: draft.python.trim() }),
     },
     allowedDirs: draft.allowedDirs.split(/\r?\n/).map(entry => entry.trim()).filter(Boolean),
+    localOnly: draft.localOnly,
     imageInputVariants: {
       ...(draft.variantEnabled ? {} : { enabled: false }),
       ...(draft.variantProviders.trim().length === 0 ? {} : {
@@ -1462,6 +1473,7 @@ function LoadedSettings({ controller, t }: SettingsInjected) {
           </div></section>
 
           <section className="dvt-panel"><div className="dvt-panel-title"><h3>{t('imageInput')}</h3></div><label className="dvt-check"><input type="checkbox" checked={draft.hiddenVariants} disabled={!snapshot.writable || busy} onChange={(event) => { update('hiddenVariants', event.target.checked) }} /><span>{t('hiddenVariantsLabel')}</span><small>{t('hiddenVariantsHint')}</small></label></section>
+          <section className="dvt-panel"><div className="dvt-panel-title"><h3>{t('localOnly')}</h3></div><label className="dvt-check"><input type="checkbox" checked={draft.localOnly} disabled={!snapshot.writable || busy} onChange={(event) => { update('localOnly', event.target.checked) }} /><span>{t('localOnlyLabel')}</span><small>{t('localOnlyHint')}</small></label></section>
 
           <section className="dvt-panel"><div className="dvt-panel-title"><h3>{t('runtime')}</h3><span className={`dvt-badge ${snapshot.runtime.ready ? 'ok' : 'error'}`}>{snapshot.runtime.ready ? snapshot.runtime.upstream?.source === 'managed' ? t('runtimeManaged') : snapshot.runtime.upstream?.source === 'external' ? t('runtimeExternal') : t('runtimeReady') : t('runtimeUnavailable')}</span></div><div className="dvt-form-grid">
             <Field label={t('runtimeMode')}><select value={draft.runtimeMode} onChange={(event) => { update('runtimeMode', event.target.value as 'managed' | 'external') }}><option value="managed">{t('runtimeManaged')}</option><option value="external">{t('runtimeExternal')}</option></select></Field>

@@ -4,6 +4,10 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+### Added
+
+- Added a `localOnly` Settings switch: when enabled, only the credential-free image tools (`vision_crop`, `vision_trace`, `vision_pixel_diff`, `vision_extract_foreground`, `vision_dominant_colors`, `vision_html_screenshot`) are registered and the understanding tools that require a third-party vision model (`vision_glance`, `vision_ground`, `vision_detect`, `vision_long_screenshot_ocr`) are not, so no third-party vision-model call is made. The switch is exposed in the Vision Toolkit Settings panel (bilingual) and overrides the lower-level `enabledTools` whitelist when true. It also keeps the pasted-image auto-description from calling a third-party vision model, handing the assistant the local image path instead so the credential-free tools can process it.
+
 ## [0.1.39] - 2026-08-25
 
 ### Fixed

@@ -48,6 +48,14 @@ export interface VisionToolkitConfig {
     };
     /** Extra directories (besides the workspace) inputs may come from. */
     allowedDirs?: string[];
+    /** Whitelist of model-facing vision tool names to register. Empty/absent keeps every tool. */
+    enabledTools?: string[];
+    /**
+     * Local-only mode: expose only the credential-free image tools (crop, trace,
+     * pixel diff, foreground, dominant colors, HTML screenshot) so no third-party
+     * vision model is ever called. When true it overrides `enabledTools`.
+     */
+    localOnly?: boolean;
     /**
      * Image-input variants: sibling model-selector entries for every model the
      * host positively declares text-only. A variant declares image input, so
@@ -102,6 +110,8 @@ export interface ResolvedVisionToolkitConfig {
         python?: string;
     };
     allowedDirs: string[];
+    enabledTools: string[];
+    localOnly: boolean;
     imageInputVariants: {
         enabled: boolean;
         providers: string[];

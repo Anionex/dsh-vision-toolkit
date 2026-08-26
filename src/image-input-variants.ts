@@ -344,6 +344,7 @@ async function readImageBlock(
   block: ImageBlock,
   query: string,
   sessionId?: string,
+  localOnly?: boolean,
 ): Promise<ContentBlock> {
   const attachments = ctx.get('attachments')
   const current = runtime()
@@ -362,6 +363,12 @@ async function readImageBlock(
     temporaryDirectory = materialized.temporaryDirectory
     if (materialized.persistent) pathEvidence = imagePathEvidence(materialized.file)
 
+    // localOnly: never call a third-party vision model. Hand the assistant the
+    // local path so the credential-free tools can process it; skip the glance
+    // description entirely so no third-party call is made on paste.
+    if (localOnly) {
+      return { type: 'text', text: `${pathEvidence}${pathEvidence === '' ? '' : '\n'}${UNAVAILABLE_PREFIX}image description is disabled (localOnly). Use a local image tool on the path above.` }
+    }
     // Save the attachment before checking runtime readiness: the text model
     // can still use the path with a later visual-tool call if the bridge is
     // temporarily unavailable on this turn.
@@ -411,6 +418,7 @@ export async function convertImagesToEvidence(
   signal?: AbortSignal,
   sessionId?: string,
   runtimeHash = 'process-only-runtime',
+  localOnly?: boolean,
 ): Promise<Message[]> {
   const session = sessionId === undefined ? undefined : ctx.sessions.get(sessionId as never)
   const sessionIdentity = session === undefined
@@ -467,7 +475,7 @@ export async function convertImagesToEvidence(
           prompt: query,
           runtimeHash,
         }), () =>
-          readImageBlock(ctx, runtime, block, query, sessionId)),
+          readImageBlock(ctx, runtime, block, query, sessionId, localOnly)),
         signal,
       ),
       signal,
@@ -504,6 +512,7 @@ export class ImageInputVariantAdapter extends LlmAdapter {
     private readonly runtime: () => VisionToolkitRuntime | undefined,
     private readonly cache: EvidenceCache,
     private readonly hidden: () => boolean = () => false,
+    private readonly localOnly: () => boolean = () => false,
   ) {
     super()
   }
@@ -574,6 +583,7 @@ export class ImageInputVariantAdapter extends LlmAdapter {
       options.signal,
       options.sessionId === undefined ? undefined : String(options.sessionId),
       captured?.evidenceFingerprint ?? 'process-only-runtime',
+      this.localOnly(),
     )
     // Delegate through the host service under the upstream route: the variant
     // is a wire-only facade, and the upstream route owns retry and replay.
@@ -945,6 +955,7 @@ export function installImageInputVariants(
               getRuntime,
               evidenceCache,
               () => getConfig().imageInputVariants.hidden,
+              () => getConfig().localOnly,
             ),
           )
           registrations.set(upstream, dispose)
