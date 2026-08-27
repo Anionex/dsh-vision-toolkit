@@ -41,6 +41,8 @@ export declare function platformTempDirectory(platform?: NodeJS.Platform, enviro
 export declare function normalizePlatformTempPath(raw: string, platform?: NodeJS.Platform, tempDirectory?: string): string;
 /** Stable opaque workspace id used below a configured shared storage root. */
 export declare function workspaceStorageId(workspace: string): string;
+/** Resolve a shared base and prove every POSIX ancestor is protected from replacement. */
+export declare function assertSecureSharedStorageBase(requested: string): Promise<string>;
 /**
  * Resolve the plugin-managed root for one workspace. Blank configuration keeps
  * the legacy workspace-local `.dsh-vision-toolkit` directory. A configured

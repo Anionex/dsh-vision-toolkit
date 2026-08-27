@@ -8,13 +8,13 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { constants as fsConstants } from 'node:fs'
 import type { Stats } from 'node:fs'
-import { chmod, lstat, mkdir, open, readFile, realpath, stat, writeFile } from 'node:fs/promises'
+import { chmod, lstat, mkdir, open, readFile, realpath, writeFile } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { basename, dirname, extname, isAbsolute, join, relative, sep } from 'node:path'
 import type { JsonValue } from '@deepseek-ai/dsh-tools'
 import type { ArtifactDescriptor, ArtifactKind } from './artifacts.ts'
-import { isWithin } from './paths.ts'
+import { assertSecureSharedStorageBase, isWithin } from './paths.ts'
 import { visionToolkitStateRoot } from './runtime-install.ts'
 
 /** Prefix owned by the plugin's artifact capability route. */
@@ -187,17 +187,7 @@ async function assertManagedArtifactRoot(root: string): Promise<void> {
     if (storageInfo.uid !== process.geteuid() || (storageInfo.mode & 0o077) !== 0) {
       throw new Error('shared workspace storage is not private to the current user')
     }
-    const base = dirname(storageRoot)
-    const baseEntry = await lstat(base)
-    if (baseEntry.isSymbolicLink() && baseEntry.uid !== 0) throw new Error('shared storage base is not trusted')
-    const baseInfo = baseEntry.isSymbolicLink() ? await stat(base) : baseEntry
-    const writableByOthers = (baseInfo.mode & 0o022) !== 0
-    const sticky = (baseInfo.mode & 0o1000) !== 0
-    if (
-      !baseInfo.isDirectory()
-      || (baseInfo.uid !== process.geteuid() && baseInfo.uid !== 0)
-      || (writableByOthers && !sticky)
-    ) throw new Error('shared storage base is not trusted')
+    await assertSecureSharedStorageBase(dirname(storageRoot))
   }
 }
 

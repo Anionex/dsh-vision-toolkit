@@ -101,6 +101,17 @@ describe('createPathPolicy', () => {
     expect(policy.storageRoot).toBe(join(await realpath('/tmp'), workspaceStorageId(await realpath(workspace))))
   })
 
+  it('rejects a private shared base below a replaceable parent directory', async () => {
+    if (typeof process.geteuid !== 'function') return
+    const workspace = await tempDir('workspace')
+    const parent = await outsideTempDir('replaceable-parent')
+    const shared = join(parent, 'shared')
+    await mkdir(shared, { mode: 0o700 })
+    await chmod(parent, 0o777)
+
+    await expect(createPathPolicy(workspace, [], shared)).rejects.toMatchObject({ code: 'path' })
+  })
+
   it('resolves and realpaths allowedDirs', async () => {
     const workspace = await tempDir('workspace')
     const allowed = await tempDir('allowed')

@@ -1,7 +1,7 @@
 import { createServer, type Server } from 'node:http'
 import { chmod, mkdtemp, mkdir, readFile, rm, symlink, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   ArtifactAccessController,
@@ -126,6 +126,19 @@ describe('ArtifactAccessController', () => {
       mimeType: 'image/png', kind: 'image', previewIntent: 'image',
     }, 'shared')
     await chmod(storageRoot, 0o755)
+    const controller = new ArtifactAccessController(await prepareArtifactAccessKey(join(root, 'state')))
+    const grant = grantOf(controller, descriptor)
+    const base = await listen(controller)
+
+    expect((await fetch(`${base}${grant.previewUrl}`)).status).toBe(404)
+  })
+
+  it('rejects shared artifacts when the configured base can be replaced through its parent', async () => {
+    if (typeof process.geteuid !== 'function') return
+    const { root, descriptor, storageRoot } = await fixture('shared.png', 'shared-artifact', {
+      mimeType: 'image/png', kind: 'image', previewIntent: 'image',
+    }, 'shared')
+    await chmod(dirname(dirname(storageRoot)), 0o777)
     const controller = new ArtifactAccessController(await prepareArtifactAccessKey(join(root, 'state')))
     const grant = grantOf(controller, descriptor)
     const base = await listen(controller)
