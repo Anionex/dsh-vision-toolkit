@@ -22,6 +22,7 @@ import {
 } from './paste-images.ts'
 import {
   resolveConfig,
+  retainedStorageHistory,
   isBuiltInFreeVisionProvider,
   VISION_TOOLKIT_SETTINGS_NAMESPACE,
   type ResolvedVisionToolkitConfig,
@@ -304,12 +305,7 @@ export class VisionToolkitWebBackend {
   private async save(request: SaveRequest): Promise<VisionToolkitSettingsSnapshot> {
     if (!this.ctx.settings.writable) throw new Error('settings provider is read-only')
     const current = resolveConfig(descriptorOf(this.ctx).value as VisionToolkitConfig)
-    const requested = resolveConfig(request.value)
-    const storageHistory = [...new Set([
-      ...current.storageHistory,
-      ...requested.storageHistory,
-      ...(current.storageDir === undefined ? [] : [current.storageDir]),
-    ])].filter(storageDir => storageDir !== requested.storageDir)
+    const storageHistory = retainedStorageHistory(request.value, current)
     const value: VisionToolkitConfig = {
       ...request.value,
       ...(storageHistory.length === 0 ? {} : { storageHistory }),

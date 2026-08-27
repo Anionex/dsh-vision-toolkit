@@ -19,6 +19,7 @@ import {
   Config,
   VISION_TOOLKIT_SETTINGS_NAMESPACE,
   resolveConfig,
+  retainedStorageHistory,
   type ResolvedVisionToolkitConfig,
   type VisionToolkitConfig,
 } from './config.ts'
@@ -123,8 +124,13 @@ export async function apply(ctx: Context, config: VisionToolkitConfig = {}): Pro
     () => ({ hidden: currentConfig().imageInputVariants.hidden }),
   )
   disposers.push(variants.dispose)
-  disposers.push(settings.watch(async (next) => {
+  disposers.push(settings.watch(async (next, previous) => {
     try {
+      const storageHistory = retainedStorageHistory(next, previous)
+      if (JSON.stringify(storageHistory) !== JSON.stringify(next.storageHistory)) {
+        await settings.update({ storageHistory })
+        return
+      }
       await manager.reconfigure(next)
       ensureOperational()
       variants.reconcile()

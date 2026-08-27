@@ -128,6 +128,8 @@ export interface ResolvedVisionToolkitConfig {
  * @returns the fully defaulted, validated configuration.
  */
 export declare function resolveConfig(config?: VisionToolkitConfig): ResolvedVisionToolkitConfig;
+/** Merge prior storage roots into the next resolved generation's read-only history. */
+export declare function retainedStorageHistory(next: VisionToolkitConfig, previous: VisionToolkitConfig): string[];
 /** Whether a resolved provider should use the bundled public key instead of DSH credentials. */
 export declare function isBuiltInFreeVisionProvider(provider: ResolvedVisionToolkitConfig['provider']): boolean;
 //# sourceMappingURL=config.d.ts.map

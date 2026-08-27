@@ -299,6 +299,20 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
   }
 }
 
+/** Merge prior storage roots into the next resolved generation's read-only history. */
+export function retainedStorageHistory(
+  next: VisionToolkitConfig,
+  previous: VisionToolkitConfig,
+): string[] {
+  const resolvedNext = resolveConfig(next)
+  const resolvedPrevious = resolveConfig(previous)
+  return [...new Set([
+    ...resolvedPrevious.storageHistory,
+    ...resolvedNext.storageHistory,
+    ...(resolvedPrevious.storageDir === undefined ? [] : [resolvedPrevious.storageDir]),
+  ])].filter(storageDir => storageDir !== resolvedNext.storageDir)
+}
+
 /** Whether a resolved provider should use the bundled public key instead of DSH credentials. */
 export function isBuiltInFreeVisionProvider(provider: ResolvedVisionToolkitConfig['provider']): boolean {
   return String(provider.credential) === BUILT_IN_FREE_VISION_CREDENTIAL

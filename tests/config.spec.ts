@@ -6,6 +6,7 @@ import {
   BUILT_IN_FREE_VISION_MODEL,
   DEFAULT_VISION_USER_AGENT,
   isBuiltInFreeVisionProvider,
+  retainedStorageHistory,
   resolveConfig,
 } from '../src/config.ts'
 
@@ -43,6 +44,17 @@ describe('resolveConfig', () => {
     expect(config.imageInputVariants).toEqual({ enabled: false, providers: ['deepseek-official', 'glm'], autoSwitch: true, hidden: true })
     expect(resolveConfig({ imageInputVariants: {} }).imageInputVariants).toEqual({ enabled: true, providers: [], autoSwitch: true, hidden: true })
     expect(resolveConfig({ imageInputVariants: { hidden: true } }).imageInputVariants.hidden).toBe(true)
+  })
+
+  it('retains prior storage roots across resolved Settings generations', () => {
+    expect(retainedStorageHistory(
+      { storageDir: '/storage/c', storageHistory: ['/storage/a'] },
+      { storageDir: '/storage/b', storageHistory: ['/storage/a'] },
+    )).toEqual(['/storage/a', '/storage/b'])
+    expect(retainedStorageHistory(
+      { storageDir: '/storage/a' },
+      { storageDir: '/storage/a', storageHistory: ['/storage/b'] },
+    )).toEqual(['/storage/b'])
   })
 
   it('normalizes the provider URL and credential', () => {
