@@ -237,7 +237,7 @@ describe('convertImagesToEvidence', () => {
     expect([...await readFile(imagePath as string)]).toEqual([7, 8, 9])
   })
 
-  it('keeps native attachments below the configured shared storage root', async () => {
+  it.skipIf(typeof process.geteuid !== 'function')('keeps native attachments below the configured shared storage root', async () => {
     const glance = vi.fn(async () => glanceResult('shared storage description'))
     const attachments = { readImage: vi.fn(async () => ({ ref: attachment('shared-native'), data: Uint8Array.of(6, 5, 4) })) }
     const workspace = await tempRoot()
@@ -590,7 +590,7 @@ describe('ImageInputVariantAdapter', () => {
     })
   })
 
-  it('materializes native attachments under validated startup storage when the runtime is unavailable', async () => {
+  it.skipIf(typeof process.geteuid !== 'function')('materializes native attachments under validated startup storage when the runtime is unavailable', async () => {
     const attachments = { readImage: vi.fn(async () => ({ ref: attachment('startup-native'), data: Uint8Array.of(8, 7, 6) })) }
     const delegated: GenerateOptions[] = []
     const upstreamStream = vi.fn(async function* (options: GenerateOptions): AsyncGenerator<StreamChunk> {
@@ -868,7 +868,7 @@ describe('ImageInputVariantAdapter', () => {
     expect(delegated).toHaveLength(3)
   })
 
-  it('captures the storage directory from the same runtime generation as evidence', async () => {
+  it.skipIf(typeof process.geteuid !== 'function')('captures the storage directory from the same runtime generation as evidence', async () => {
     const oldStorage = await tempRoot()
     const newStorage = await tempRoot()
     const workspace = await tempRoot()

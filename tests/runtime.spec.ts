@@ -333,7 +333,7 @@ describe('VisionToolkitRuntime', () => {
     expect(result).toMatchObject({ mimeType: 'image/png', width: 40, height: 20, clamped: false })
   })
 
-  it('writes artifacts and compression cache below the configured shared storage root', async () => {
+  it.skipIf(typeof process.geteuid !== 'function')('writes artifacts and compression cache below the configured shared storage root', async () => {
     const shared = await mkdtemp(join(tmpdir(), 'dsh-vision-toolkit-shared-'))
     tempDirs.push(shared)
     const { runtime } = await setup({ storageDir: shared, maxImageBytes: 1024 }, null)
@@ -348,7 +348,7 @@ describe('VisionToolkitRuntime', () => {
     expect((await readdir(join(storageRoot, 'tmp', 'compressed-images'))).length).toBeGreaterThan(0)
   })
 
-  it('reads a persisted image from a previously configured shared storage root', async () => {
+  it.skipIf(typeof process.geteuid !== 'function')('reads a persisted image from a previously configured shared storage root', async () => {
     const previousShared = await outsideTempDir('previous-storage')
     const currentShared = await outsideTempDir('current-storage')
     const workspace = await tempWorkspace()

@@ -93,15 +93,26 @@ export function workspaceStorageId(
     .slice(0, 20)
 }
 
-function assertSecureWorkspaceStorage(info: Stats, requested: string): void {
-  if (typeof process.geteuid !== 'function') return
-  if (info.uid !== process.geteuid() || (info.mode & 0o077) !== 0) {
+function currentPosixUid(): number {
+  if (typeof process.geteuid !== 'function') {
+    throw new VisionToolkitError(
+      'path',
+      'configured storage directory is not supported on this platform because ownership and permissions cannot be verified',
+    )
+  }
+  return process.geteuid()
+}
+
+export function assertSecureWorkspaceStorage(info: Stats, requested: string): void {
+  const currentUid = currentPosixUid()
+  if (info.uid !== currentUid || (info.mode & 0o077) !== 0) {
     throw new VisionToolkitError('path', `workspace storage directory must be owned by the current user with mode 0700: ${requested}`)
   }
 }
 
 /** Resolve a shared base and prove every POSIX ancestor is protected from replacement. */
 export async function assertSecureSharedStorageBase(requested: string): Promise<string> {
+  const currentUid = currentPosixUid()
   const requestedPath = resolve(requested)
   const requestedChain: string[] = []
   let requestedCurrent = requestedPath
@@ -114,7 +125,7 @@ export async function assertSecureSharedStorageBase(requested: string): Promise<
   for (const component of requestedChain.reverse()) {
     const info = await lstat(component)
     if (info.isSymbolicLink()) {
-      if (!(typeof process.geteuid === 'function' && info.uid === 0)) {
+      if (info.uid !== 0) {
         throw new VisionToolkitError('path', `configured storage directory contains an untrusted symbolic link: ${component}`)
       }
       continue
@@ -122,23 +133,14 @@ export async function assertSecureSharedStorageBase(requested: string): Promise<
     if (!info.isDirectory()) {
       throw new VisionToolkitError('path', `configured storage path component is not a directory: ${component}`)
     }
-    if (typeof process.geteuid === 'function') {
-      const writableByOthers = (info.mode & 0o022) !== 0
-      const sticky = (info.mode & 0o1000) !== 0
-      if (
-        (info.uid !== process.geteuid() && info.uid !== 0)
-        || (writableByOthers && !sticky)
-      ) throw new VisionToolkitError('path', `configured storage directory has an untrusted path component: ${component}`)
-    }
+    const writableByOthers = (info.mode & 0o022) !== 0
+    const sticky = (info.mode & 0o1000) !== 0
+    if (
+      (info.uid !== currentUid && info.uid !== 0)
+      || (writableByOthers && !sticky)
+    ) throw new VisionToolkitError('path', `configured storage directory has an untrusted path component: ${component}`)
   }
   const canonical = await realpath(requestedPath)
-  if (typeof process.geteuid !== 'function') {
-    const info = await lstat(canonical)
-    if (!info.isDirectory()) throw new VisionToolkitError('path', `configured storage path is not a directory: ${requested}`)
-    return canonical
-  }
-
-  const currentUid = process.geteuid()
   let current = canonical
   while (true) {
     const info = await lstat(current)
@@ -157,6 +159,7 @@ export async function assertSecureSharedStorageBase(requested: string): Promise<
 }
 
 function requestedSharedStorageBase(storageDirRaw: string): string {
+  currentPosixUid()
   const configured = normalizePlatformTempPath(expandUserHome(storageDirRaw.trim()))
   if (!isAbsolute(configured)) {
     throw new VisionToolkitError('path', `configured storage directory must be an absolute path: ${storageDirRaw}`)

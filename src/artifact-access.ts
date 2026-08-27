@@ -14,7 +14,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { basename, dirname, extname, isAbsolute, join, relative, sep } from 'node:path'
 import type { JsonValue } from '@deepseek-ai/dsh-tools'
 import type { ArtifactDescriptor, ArtifactKind } from './artifacts.ts'
-import { assertSecureSharedStorageBase, isWithin } from './paths.ts'
+import { assertSecureSharedStorageBase, assertSecureWorkspaceStorage, isWithin } from './paths.ts'
 import { visionToolkitStateRoot } from './runtime-install.ts'
 
 /** Prefix owned by the plugin's artifact capability route. */
@@ -183,12 +183,8 @@ async function assertManagedArtifactRoot(root: string): Promise<void> {
   if (storageInfo.isSymbolicLink() || !storageInfo.isDirectory()) {
     throw new Error('shared workspace storage is not a real directory')
   }
-  if (typeof process.geteuid === 'function') {
-    if (storageInfo.uid !== process.geteuid() || (storageInfo.mode & 0o077) !== 0) {
-      throw new Error('shared workspace storage is not private to the current user')
-    }
-    await assertSecureSharedStorageBase(dirname(storageRoot))
-  }
+  assertSecureWorkspaceStorage(storageInfo, storageRoot)
+  await assertSecureSharedStorageBase(dirname(storageRoot))
 }
 
 async function assertNoSymlinkPath(root: string, path: string): Promise<void> {

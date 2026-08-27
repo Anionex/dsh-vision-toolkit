@@ -64,7 +64,7 @@ describe('VisionToolkitRuntimeManager', () => {
     expect(prepared).toEqual(['first', 'broken'])
   })
 
-  it('keeps consumers on the active configuration while a candidate fails', async () => {
+  it.skipIf(typeof process.geteuid !== 'function')('keeps consumers on the active configuration while a candidate fails', async () => {
     const ctx = new Context()
     contexts.push(ctx)
     const activeStorage = await tempDir('active-storage')
@@ -101,7 +101,7 @@ describe('VisionToolkitRuntimeManager', () => {
     expect(manager.status()).toMatchObject({ ready: true, generation: 1 })
   })
 
-  it('keeps validated startup storage available when initial runtime preparation fails', async () => {
+  it.skipIf(typeof process.geteuid !== 'function')('keeps validated startup storage available when initial runtime preparation fails', async () => {
     const ctx = new Context()
     contexts.push(ctx)
     const shared = await tempDir('startup-storage')
@@ -135,7 +135,7 @@ describe('VisionToolkitRuntimeManager', () => {
     expect(factory).not.toHaveBeenCalled()
   })
 
-  it('passes previously validated storage roots to later runtime generations', async () => {
+  it.skipIf(typeof process.geteuid !== 'function')('passes previously validated storage roots to later runtime generations', async () => {
     const ctx = new Context()
     contexts.push(ctx)
     const firstStorage = await tempDir('history-first')
@@ -153,7 +153,7 @@ describe('VisionToolkitRuntimeManager', () => {
     expect(seen).toEqual([[], [firstStorage]])
   })
 
-  it('retains startup storage after initial runtime preparation fails', async () => {
+  it.skipIf(typeof process.geteuid !== 'function')('retains startup storage after initial runtime preparation fails', async () => {
     const ctx = new Context()
     contexts.push(ctx)
     const firstStorage = await tempDir('failed-history-first')
@@ -173,7 +173,7 @@ describe('VisionToolkitRuntimeManager', () => {
     expect(seen).toEqual([[], [firstStorage]])
   })
 
-  it('restores readable storage history from persisted configuration', async () => {
+  it.skipIf(typeof process.geteuid !== 'function')('restores readable storage history from persisted configuration', async () => {
     const ctx = new Context()
     contexts.push(ctx)
     const previousStorage = await tempDir('persisted-history-previous')

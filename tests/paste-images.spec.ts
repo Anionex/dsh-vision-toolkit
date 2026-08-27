@@ -85,7 +85,7 @@ describe('pasted image Web backend', () => {
     await expect(readFile(values[1]!.absolutePath)).resolves.toEqual(Buffer.from([4, 5]))
   })
 
-  it('stores pasted images below the configured shared root without touching the workspace', async () => {
+  it.skipIf(typeof process.geteuid !== 'function')('stores pasted images below the configured shared root without touching the workspace', async () => {
     const cwd = await workspace()
     const shared = await workspace()
     const { upload } = await setup(cwd, MAX_PASTE_IMAGE_BYTES, shared)
@@ -99,7 +99,7 @@ describe('pasted image Web backend', () => {
     await expect(readdir(cwd)).resolves.toEqual([])
   })
 
-  it('migrates an in-flight paste to the active storage generation before responding', async () => {
+  it.skipIf(typeof process.geteuid !== 'function')('migrates an in-flight paste to the active storage generation before responding', async () => {
     const cwd = await workspace()
     const first = await workspace()
     const second = await workspace()

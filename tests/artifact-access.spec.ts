@@ -107,7 +107,7 @@ describe('ArtifactAccessController', () => {
     expect(await response.text()).toBe('{"ok":true}\n')
   })
 
-  it('serves artifacts from a private workspace directory below shared storage', async () => {
+  it.skipIf(typeof process.geteuid !== 'function')('serves artifacts from a private workspace directory below shared storage', async () => {
     const { root, descriptor } = await fixture('shared.png', 'shared-artifact', {
       mimeType: 'image/png', kind: 'image', previewIntent: 'image',
     }, 'shared')
@@ -118,6 +118,23 @@ describe('ArtifactAccessController', () => {
     const response = await fetch(`${base}${grant.previewUrl}`)
     expect(response.status).toBe(200)
     expect(await response.text()).toBe('shared-artifact')
+  })
+
+  it('rejects shared artifacts when POSIX ownership checks are unavailable', async () => {
+    const { root, descriptor } = await fixture('shared.png', 'shared-artifact', {
+      mimeType: 'image/png', kind: 'image', previewIntent: 'image',
+    }, 'shared')
+    const controller = new ArtifactAccessController(await prepareArtifactAccessKey(join(root, 'state')))
+    const grant = grantOf(controller, descriptor)
+    const base = await listen(controller)
+    const descriptorBefore = Object.getOwnPropertyDescriptor(process, 'geteuid')
+    Object.defineProperty(process, 'geteuid', { configurable: true, value: undefined })
+    try {
+      expect((await fetch(`${base}${grant.previewUrl}`)).status).toBe(404)
+    } finally {
+      if (descriptorBefore === undefined) delete (process as { geteuid?: unknown }).geteuid
+      else Object.defineProperty(process, 'geteuid', descriptorBefore)
+    }
   })
 
   it('rejects a shared workspace artifact directory with permissive storage permissions', async () => {

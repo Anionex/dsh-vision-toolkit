@@ -5,6 +5,7 @@
  * link is allowed only when its real target stays inside the fence.
  * @module dsh-vision-toolkit/paths
  */
+import type { Stats } from 'node:fs';
 /** Supported input image extensions (the upstream client's allowlist). */
 export declare const SUPPORTED_IMAGE_EXTENSIONS: readonly [".png", ".jpg", ".jpeg", ".gif", ".webp"];
 /** Resolved path policy for one tool invocation. */
@@ -41,6 +42,7 @@ export declare function platformTempDirectory(platform?: NodeJS.Platform, enviro
 export declare function normalizePlatformTempPath(raw: string, platform?: NodeJS.Platform, tempDirectory?: string): string;
 /** Stable opaque per-user workspace id used below a shared storage root. */
 export declare function workspaceStorageId(workspace: string, userIdentity?: string): string;
+export declare function assertSecureWorkspaceStorage(info: Stats, requested: string): void;
 /** Resolve a shared base and prove every POSIX ancestor is protected from replacement. */
 export declare function assertSecureSharedStorageBase(requested: string): Promise<string>;
 /** Validate and write-probe a configured shared root before Settings activation. */
