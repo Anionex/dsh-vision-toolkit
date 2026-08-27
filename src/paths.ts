@@ -167,7 +167,8 @@ export async function resolveWorkspaceStorage(
   }
   let base: string
   try {
-    const info = await stat(requestedBase)
+    const info = await lstat(requestedBase)
+    if (info.isSymbolicLink()) throw new Error('configured storage path must not be a symbolic link')
     if (!info.isDirectory()) throw new Error('configured storage path is not a directory')
     assertSecureSharedBase(info, requestedBase)
     base = await realpath(requestedBase)

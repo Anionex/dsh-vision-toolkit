@@ -81,6 +81,16 @@ describe('createPathPolicy', () => {
     await expect(createPathPolicy(workspace, [], shared)).rejects.toMatchObject({ code: 'path' })
   })
 
+  it('rejects a configured shared storage base that is a symbolic link', async () => {
+    const workspace = await tempDir('workspace')
+    const target = await outsideTempDir('shared-target')
+    const parent = await outsideTempDir('shared-link-parent')
+    const sharedLink = join(parent, 'shared-link')
+    await symlink(target, sharedLink)
+
+    await expect(createPathPolicy(workspace, [], sharedLink)).rejects.toMatchObject({ code: 'path' })
+  })
+
   it('resolves and realpaths allowedDirs', async () => {
     const workspace = await tempDir('workspace')
     const allowed = await tempDir('allowed')
