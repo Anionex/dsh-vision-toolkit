@@ -1,7 +1,8 @@
 /** Plugin-managed storage for images pasted into the DSH Web composer. */
 
 import { createHash, randomUUID } from 'node:crypto'
-import { lstat, mkdir, open, realpath, rename, rm } from 'node:fs/promises'
+import { constants as fsConstants } from 'node:fs'
+import { copyFile, lstat, mkdir, open, realpath, rename, rm } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { basename, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
@@ -52,6 +53,7 @@ export interface PasteVerdict {
 }
 
 const MAX_NAME_BYTES = 180
+const MAX_STORAGE_GENERATION_RETRIES = 4
 
 /**
  * Hard per-image upload ceiling for pastes. Files between the configured
@@ -245,10 +247,38 @@ async function writeImage(
   }
 }
 
+async function copyImage(
+  source: string,
+  directory: string,
+  filename: string,
+): Promise<string> {
+  const id = randomUUID()
+  const finalPath = join(directory, `${id}-${filename}`)
+  const stagingPath = join(directory, `.${id}.partial`)
+  ensurePathInside(directory, finalPath)
+  ensurePathInside(directory, stagingPath)
+  try {
+    await copyFile(source, stagingPath, fsConstants.COPYFILE_EXCL)
+    await rename(stagingPath, finalPath)
+    return finalPath
+  } catch (error) {
+    await rm(stagingPath, { force: true }).catch(() => {})
+    throw error
+  }
+}
+
+export interface PasteStorageGeneration {
+  generation: number
+  storageDir?: string
+}
+
+class PasteStorageChangedError extends Error {}
+
 /** Runtime limit face kept separate for focused backend tests. */
 export interface PasteImageRuntime {
   maxUploadBytes(): number
   storageDirectory?(): string | undefined
+  storageGeneration?(): PasteStorageGeneration
 }
 
 /** Same-origin, live-Session-bound image upload endpoint. */
@@ -257,6 +287,16 @@ export class PastedImageBackend {
     private readonly ctx: Context,
     private readonly runtime: PasteImageRuntime,
   ) {}
+
+  private storageGeneration(): PasteStorageGeneration {
+    const current = this.runtime.storageGeneration?.()
+    if (current !== undefined) return current
+    const storageDir = this.runtime.storageDirectory?.()
+    return {
+      generation: 0,
+      ...(storageDir === undefined ? {} : { storageDir }),
+    }
+  }
 
   async handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
     if (req.method !== 'POST') {
@@ -269,6 +309,7 @@ export class PastedImageBackend {
       return
     }
 
+    let managedPath: string | undefined
     try {
       const url = new URL(req.url ?? PASTE_IMAGES_ROUTE, 'http://dsh.internal')
       const sessionId = singleQuery(url, 'sessionId')
@@ -279,12 +320,27 @@ export class PastedImageBackend {
       if (contentLength !== undefined && Number(contentLength) !== size) {
         throw new TypeError('Content-Length does not match the declared size')
       }
-      const directory = await sessionPasteRoot(this.ctx, sessionId, this.runtime.storageDirectory?.())
-      const writtenPath = await writeImage(req, directory.writeRoot, filename, size, this.runtime.maxUploadBytes())
-      const absolutePath = join(directory.visibleRoot, basename(writtenPath))
-      responseJson(res, 201, { ok: true, value: { absolutePath, filename, bytes: size } })
+      let storage = this.storageGeneration()
+      let directory = await sessionPasteRoot(this.ctx, sessionId, storage.storageDir)
+      managedPath = await writeImage(req, directory.writeRoot, filename, size, this.runtime.maxUploadBytes())
+      for (let attempt = 0; attempt < MAX_STORAGE_GENERATION_RETRIES; attempt += 1) {
+        const current = this.storageGeneration()
+        if (current.generation === storage.generation && current.storageDir === storage.storageDir) {
+          const absolutePath = join(directory.visibleRoot, basename(managedPath))
+          responseJson(res, 201, { ok: true, value: { absolutePath, filename, bytes: size } })
+          return
+        }
+        const nextDirectory = await sessionPasteRoot(this.ctx, sessionId, current.storageDir)
+        const migratedPath = await copyImage(managedPath, nextDirectory.writeRoot, filename)
+        await rm(managedPath, { force: true }).catch(() => {})
+        managedPath = migratedPath
+        directory = nextDirectory
+        storage = current
+      }
+      throw new PasteStorageChangedError('Vision Toolkit settings changed repeatedly during image copy; retry the paste')
     } catch (error) {
-      const status = error instanceof RangeError ? 413 : 400
+      if (managedPath !== undefined) await rm(managedPath, { force: true }).catch(() => {})
+      const status = error instanceof PasteStorageChangedError ? 409 : error instanceof RangeError ? 413 : 400
       this.ctx.logger.warn('dsh-vision-toolkit pasted image rejected: %s', message(error))
       requestError(res, status, 'paste-image-rejected', message(error))
     }

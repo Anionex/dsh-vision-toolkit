@@ -60,16 +60,22 @@ export interface PasteRoot {
  * plugin files into the project directory.
  */
 export declare function sessionPasteRoot(ctx: Context, sessionId: string, storageDir?: string): Promise<PasteRoot>;
+export interface PasteStorageGeneration {
+    generation: number;
+    storageDir?: string;
+}
 /** Runtime limit face kept separate for focused backend tests. */
 export interface PasteImageRuntime {
     maxUploadBytes(): number;
     storageDirectory?(): string | undefined;
+    storageGeneration?(): PasteStorageGeneration;
 }
 /** Same-origin, live-Session-bound image upload endpoint. */
 export declare class PastedImageBackend {
     private readonly ctx;
     private readonly runtime;
     constructor(ctx: Context, runtime: PasteImageRuntime);
+    private storageGeneration;
     handle(req: IncomingMessage, res: ServerResponse): Promise<void>;
 }
 //# sourceMappingURL=paste-images.d.ts.map
