@@ -153,6 +153,7 @@ interface RuntimeGarbageCandidate {
   kind: RuntimeGarbageKind
   lockName?: string
   lockToken?: string
+  minimumAgeMs?: number
 }
 
 function runtimeGarbageLockToken(lockBase: string): string {
@@ -166,7 +167,11 @@ function managedRuntimeGarbage(name: string): RuntimeGarbageCandidate | undefine
   }
   const replaced = name.indexOf('.replaced-')
   if (replaced > 0) {
-    return { kind: 'managed runtime quarantine', lockName: `${name.slice(0, replaced)}.lock` }
+    return {
+      kind: 'managed runtime quarantine',
+      lockName: `${name.slice(0, replaced)}.lock`,
+      minimumAgeMs: LEGACY_RUNTIME_GC_STALE_MS,
+    }
   }
   return undefined
 }
@@ -248,6 +253,20 @@ async function garbageCollectDirectory(
         continue
       }
     }
+    if (candidate.minimumAgeMs !== undefined) {
+      try {
+        const info = await stat(path)
+        if (now - info.mtimeMs <= candidate.minimumAgeMs) continue
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue
+        ctx.logger.warn(
+          'dsh-vision-toolkit: runtime garbage collection inspection failed for %s: %s',
+          path,
+          error instanceof Error ? error.message : String(error),
+        )
+        continue
+      }
+    }
     await ignoreCleanupFailure(ctx, `stale ${candidate.kind}`, path)
   }
 }
@@ -255,9 +274,9 @@ async function garbageCollectDirectory(
 /**
  * Opportunistically remove abandoned runtime staging and quarantine trees.
  * Current names encode their owning runtime lock, so live preparation is
- * skipped. Legacy names are collected only when no runtime lock is active and
- * after a conservative 24-hour grace period because they cannot be associated
- * with a specific lock.
+ * skipped. Quarantines retain a 24-hour recovery window; legacy names use the
+ * same grace period and are collected only when no runtime lock is active
+ * because they cannot be associated with a specific lock.
  */
 export async function garbageCollectRuntimeCache(
   ctx: Context,

@@ -54,9 +54,9 @@ export declare function ignoreCleanupFailure(ctx: Context, label: string, path: 
 /**
  * Opportunistically remove abandoned runtime staging and quarantine trees.
  * Current names encode their owning runtime lock, so live preparation is
- * skipped. Legacy names are collected only when no runtime lock is active and
- * after a conservative 24-hour grace period because they cannot be associated
- * with a specific lock.
+ * skipped. Quarantines retain a 24-hour recovery window; legacy names use the
+ * same grace period and are collected only when no runtime lock is active
+ * because they cannot be associated with a specific lock.
  */
 export declare function garbageCollectRuntimeCache(ctx: Context, stateRoot: string, now?: number): Promise<void>;
 export declare function isolatedPythonEnvironment(home: string): NodeJS.ProcessEnv;
