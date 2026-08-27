@@ -481,9 +481,11 @@ describe('runtime cache garbage collection', () => {
       join(pythonRoot, `.prepare-${runtimeGcToken('runtime-a')}-ABC123`),
       join(bootstrapRoot, `.python-bootstrap-${runtimeGcToken('3.13.15-test-x64')}-ABC123`),
     ]
-    const recentQuarantine = join(pythonRoot, 'runtime-a.replaced-recovery')
-    const staleQuarantine = join(pythonRoot, 'runtime-c.replaced-stale')
-    const activeQuarantine = join(pythonRoot, 'runtime-b.replaced-active')
+    const now = Date.now()
+    const staleMs = now - 25 * 60 * 60 * 1000
+    const recentQuarantine = join(pythonRoot, `runtime-a.replaced-${now}-recovery`)
+    const staleQuarantine = join(pythonRoot, `runtime-c.replaced-${staleMs}-stale`)
+    const activeQuarantine = join(pythonRoot, `runtime-b.replaced-${staleMs}-active`)
     const activePrepare = join(pythonRoot, `.prepare-${runtimeGcToken('runtime-b')}-ABC123`)
     const activeBootstrap = join(bootstrapRoot, `.python-bootstrap-${runtimeGcToken('3.14.0-test-x64')}-ABC123`)
     const active = [activeQuarantine, activePrepare, activeBootstrap]
@@ -498,9 +500,8 @@ describe('runtime cache garbage collection', () => {
     }
     await mkdir(join(pythonRoot, 'runtime-b.lock'), { recursive: true })
     await mkdir(join(bootstrapRoot, '3.14.0-test-x64.lock'), { recursive: true })
-    const now = Date.now()
     const stale = new Date(now - 25 * 60 * 60 * 1000)
-    for (const path of [staleQuarantine, ...staleLegacy]) await utimes(path, stale, stale)
+    for (const path of staleLegacy) await utimes(path, stale, stale)
 
     await garbageCollectRuntimeCache(ctx, stateRoot, now)
 
@@ -514,14 +515,11 @@ describe('runtime cache garbage collection', () => {
     await garbageCollectRuntimeCache(ctx, stateRoot, now)
 
     for (const path of [activePrepare, activeBootstrap, ...staleLegacy]) expect(await pathExists(path)).toBe(false)
-    expect(await pathExists(activeQuarantine)).toBe(true)
+    expect(await pathExists(activeQuarantine)).toBe(false)
     expect(await pathExists(recentQuarantine)).toBe(true)
     expect(await pathExists(recentLegacy)).toBe(true)
 
-    await utimes(activeQuarantine, stale, stale)
-    await utimes(recentQuarantine, stale, stale)
-    await garbageCollectRuntimeCache(ctx, stateRoot, now)
-    expect(await pathExists(activeQuarantine)).toBe(false)
+    await garbageCollectRuntimeCache(ctx, stateRoot, now + 25 * 60 * 60 * 1000)
     expect(await pathExists(recentQuarantine)).toBe(false)
   })
 
@@ -543,13 +541,12 @@ describe('runtime cache garbage collection', () => {
       process.arch,
     ].join('-')
     const finalRoot = join(stateRoot, 'python', runtimeId)
-    const quarantine = `${finalRoot}.replaced-stale`
-    const recovery = `${finalRoot}.replaced-recovery`
+    const now = Date.now()
+    const quarantine = `${finalRoot}.replaced-${now - 25 * 60 * 60 * 1000}-stale`
+    const recovery = `${finalRoot}.replaced-${now}-recovery`
     await mkdir(finalRoot, { recursive: true })
     await mkdir(quarantine, { recursive: true })
     await mkdir(recovery, { recursive: true })
-    const stale = new Date(Date.now() - 25 * 60 * 60 * 1000)
-    await utimes(quarantine, stale, stale)
     await writeFile(join(finalRoot, 'runtime.json'), `${JSON.stringify({
       schemaVersion: 1,
       upstreamCommit: UPSTREAM_COMMIT,

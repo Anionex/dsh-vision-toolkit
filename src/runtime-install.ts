@@ -154,6 +154,7 @@ interface RuntimeGarbageCandidate {
   lockName?: string
   lockToken?: string
   minimumAgeMs?: number
+  createdAtMs?: number
 }
 
 function runtimeGarbageLockToken(lockBase: string): string {
@@ -167,10 +168,12 @@ function managedRuntimeGarbage(name: string): RuntimeGarbageCandidate | undefine
   }
   const replaced = name.indexOf('.replaced-')
   if (replaced > 0) {
+    const stamped = /^(\d{13})-/.exec(name.slice(replaced + '.replaced-'.length))
     return {
       kind: 'managed runtime quarantine',
       lockName: `${name.slice(0, replaced)}.lock`,
       minimumAgeMs: LEGACY_RUNTIME_GC_STALE_MS,
+      ...(stamped === null ? {} : { createdAtMs: Number(stamped[1]) }),
     }
   }
   return undefined
@@ -254,18 +257,21 @@ async function garbageCollectDirectory(
       }
     }
     if (candidate.minimumAgeMs !== undefined) {
-      try {
-        const info = await stat(path)
-        if (now - info.mtimeMs <= candidate.minimumAgeMs) continue
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue
-        ctx.logger.warn(
-          'dsh-vision-toolkit: runtime garbage collection inspection failed for %s: %s',
-          path,
-          error instanceof Error ? error.message : String(error),
-        )
-        continue
+      let createdAt = candidate.createdAtMs
+      if (createdAt === undefined) {
+        try {
+          createdAt = (await stat(path)).mtimeMs
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue
+          ctx.logger.warn(
+            'dsh-vision-toolkit: runtime garbage collection inspection failed for %s: %s',
+            path,
+            error instanceof Error ? error.message : String(error),
+          )
+          continue
+        }
       }
+      if (now - createdAt <= candidate.minimumAgeMs) continue
     }
     await ignoreCleanupFailure(ctx, `stale ${candidate.kind}`, path)
   }
@@ -1198,7 +1204,7 @@ async function prepareManaged(
       manager,
     }
     await writeFile(join(staging, 'runtime.json'), `${JSON.stringify(marker, null, 2)}\n`)
-    const quarantine = `${finalRoot}.replaced-${randomUUID()}`
+    const quarantine = `${finalRoot}.replaced-${Date.now()}-${randomUUID()}`
     let quarantined = false
     try {
       await withWindowsTransientRetry(() => rename(finalRoot, quarantine))
