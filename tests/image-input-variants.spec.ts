@@ -590,6 +590,43 @@ describe('ImageInputVariantAdapter', () => {
     })
   })
 
+  it('materializes native attachments under validated startup storage when the runtime is unavailable', async () => {
+    const attachments = { readImage: vi.fn(async () => ({ ref: attachment('startup-native'), data: Uint8Array.of(8, 7, 6) })) }
+    const delegated: GenerateOptions[] = []
+    const upstreamStream = vi.fn(async function* (options: GenerateOptions): AsyncGenerator<StreamChunk> {
+      delegated.push(options)
+      yield { type: 'finish', reason: { kind: 'stop' } }
+    })
+    const workspace = await tempRoot()
+    const shared = await tempRoot()
+    const ctx = {
+      get: (name: string) => name === 'attachments' ? attachments : undefined,
+      sessions: { get: vi.fn(() => ({ header: { cwd: workspace, createdAt: 1 } })) },
+      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(), stream: upstreamStream },
+    } as never
+    const adapter = new ImageInputVariantAdapter(
+      ctx,
+      ctx.llm,
+      'up',
+      'Upstream',
+      () => undefined,
+      new EvidenceCache(4),
+      () => false,
+      () => shared,
+    )
+
+    for await (const _chunk of adapter.stream({
+      provider: 'vision-toolkit-up',
+      model: 'plain',
+      messages: [message('m1', [imageBlock('startup-native')])],
+      sessionId: 'session-startup' as never,
+    })) { /* drain */ }
+
+    const text = delegated[0]?.messages[0]?.content.find(block => block.type === 'text' && block.text.includes('runtime is not ready'))
+    expect(text).toMatchObject({ type: 'text', text: expect.stringContaining(shared) })
+    await expect(readdir(workspace)).resolves.toEqual([])
+  })
+
   it('binds one runtime instance to both the evidence fingerprint and vision read', async () => {
     const firstGlance = vi.fn(async () => glanceResult('first runtime'))
     const secondGlance = vi.fn(async () => glanceResult('second runtime'))

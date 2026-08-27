@@ -523,6 +523,7 @@ export class ImageInputVariantAdapter extends LlmAdapter {
     private readonly runtime: () => VisionToolkitRuntime | undefined,
     private readonly cache: EvidenceCache,
     private readonly hidden: () => boolean = () => false,
+    private readonly startupStorageDirectory: () => string | undefined = () => undefined,
   ) {
     super()
   }
@@ -575,7 +576,7 @@ export class ImageInputVariantAdapter extends LlmAdapter {
 
   override async *stream(options: GenerateOptions): AsyncGenerator<StreamChunk> {
     const current = this.runtime()
-    const storageDir = current?.storageDirectory
+    const storageDir = current === undefined ? this.startupStorageDirectory() : current.storageDirectory
     let captured: CapturedEvidenceRuntime | undefined
     if (current !== undefined && options.messages.some(message => contentHasImage(message.content))) {
       try {
@@ -597,7 +598,11 @@ export class ImageInputVariantAdapter extends LlmAdapter {
       options.messages,
       options.signal,
       options.sessionId === undefined ? undefined : String(options.sessionId),
-      captured?.evidenceFingerprint ?? 'process-only-runtime',
+      captured?.evidenceFingerprint ?? createHash('sha256')
+        .update('process-only-runtime')
+        .update('\0')
+        .update(storageDir ?? '')
+        .digest('hex'),
       storageDir,
     )
     // Delegate through the host service under the upstream route: the variant
@@ -834,6 +839,7 @@ export function installImageInputVariants(
   ctx: Context,
   getConfig: () => ResolvedVisionToolkitConfig,
   getRuntime: () => VisionToolkitRuntime | undefined,
+  getStartupStorageDirectory: () => string | undefined = () => undefined,
 ): { dispose: () => void; reconcile: () => void } {
   const evidenceStore = new SessionEvidenceStore(ctx)
   const evidenceCache = new EvidenceCache(EVIDENCE_CACHE_LIMIT, evidenceStore)
@@ -979,6 +985,7 @@ export function installImageInputVariants(
               getRuntime,
               evidenceCache,
               () => getConfig().imageInputVariants.hidden,
+              getStartupStorageDirectory,
             ),
           )
           registrations.set(upstream, { dispose, retryPolicyKey: upstreamRetryPolicyKey })

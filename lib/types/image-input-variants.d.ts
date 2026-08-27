@@ -70,7 +70,8 @@ export declare class ImageInputVariantAdapter extends LlmAdapter {
     private readonly runtime;
     private readonly cache;
     private readonly hidden;
-    constructor(ctx: Context, llm: LlmService, upstream: string, upstreamName: string, runtime: () => VisionToolkitRuntime | undefined, cache: EvidenceCache, hidden?: () => boolean);
+    private readonly startupStorageDirectory;
+    constructor(ctx: Context, llm: LlmService, upstream: string, upstreamName: string, runtime: () => VisionToolkitRuntime | undefined, cache: EvidenceCache, hidden?: () => boolean, startupStorageDirectory?: () => string | undefined);
     providerInfo(provider: string): LlmProviderInfo;
     providerRetryPolicy(_provider: string): ResolvedRetryPolicy;
     listModels(provider: string): Promise<readonly LlmModelInfo[]>;
@@ -133,7 +134,7 @@ export declare function createPasteTakeoverResolver(ctx: Context, getConfig: () 
  * @param getRuntime - the currently serving Vision Toolkit runtime, if ready.
  * @returns the disposer and a manual re-sweep trigger (settings changes).
  */
-export declare function installImageInputVariants(ctx: Context, getConfig: () => ResolvedVisionToolkitConfig, getRuntime: () => VisionToolkitRuntime | undefined): {
+export declare function installImageInputVariants(ctx: Context, getConfig: () => ResolvedVisionToolkitConfig, getRuntime: () => VisionToolkitRuntime | undefined, getStartupStorageDirectory?: () => string | undefined): {
     dispose: () => void;
     reconcile: () => void;
 };
