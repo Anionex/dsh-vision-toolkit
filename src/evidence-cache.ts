@@ -73,7 +73,7 @@ function hash(value: string): string {
   return createHash('sha256').update(value).digest('hex')
 }
 
-/** Fingerprint every runtime setting that can change the generated description. */
+/** Fingerprint every runtime setting that can change generated evidence or its embedded path. */
 export function evidenceRuntimeFingerprint(
   config: ResolvedVisionToolkitConfig,
   credentialSha256?: string,
@@ -99,6 +99,7 @@ export function evidenceRuntimeFingerprint(
     maxImageBytes: config.maxImageBytes,
     maxImagePixels: config.maxImagePixels,
     runtime: config.runtime,
+    storageDir: config.storageDir ?? null,
   }))
 }
 

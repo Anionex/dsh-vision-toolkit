@@ -1,4 +1,4 @@
-import { lstat, mkdtemp, mkdir, readFile, realpath, symlink, writeFile } from 'node:fs/promises'
+import { chmod, lstat, mkdtemp, mkdir, readFile, realpath, symlink, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -57,6 +57,17 @@ describe('createPathPolicy', () => {
     expect(policy.allowedDirs).toContain(expectedRoot)
     await expect(lstat(join(workspace, '.dsh-vision-toolkit'))).rejects.toMatchObject({ code: 'ENOENT' })
     expect((await createPathPolicy(workspace, [], shared)).storageRoot).toBe(expectedRoot)
+  })
+
+  it('rejects a pre-created shared workspace directory with unsafe permissions', async () => {
+    if (typeof process.geteuid !== 'function') return
+    const workspace = await tempDir('workspace')
+    const shared = await outsideTempDir('shared')
+    const child = join(shared, workspaceStorageId(await realpath(workspace)))
+    await mkdir(child, { mode: 0o700 })
+    await chmod(child, 0o777)
+
+    await expect(createPathPolicy(workspace, [], shared)).rejects.toMatchObject({ code: 'path' })
   })
 
   it('resolves and realpaths allowedDirs', async () => {

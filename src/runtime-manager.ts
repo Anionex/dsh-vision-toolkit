@@ -69,6 +69,12 @@ export class VisionToolkitRuntimeManager {
     return this.active.runtime
   }
 
+  /** Configuration belonging to the currently serving runtime generation. */
+  currentConfig(): ResolvedVisionToolkitConfig {
+    if (this.active === undefined) throw new Error('dsh-vision-toolkit runtime is not ready')
+    return this.active.config
+  }
+
   /** Whether at least one generation is available. */
   get ready(): boolean {
     return this.active !== undefined

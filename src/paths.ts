@@ -7,6 +7,7 @@
  */
 
 import { createHash, randomUUID } from 'node:crypto'
+import type { Stats } from 'node:fs'
 import { cp, link, lstat, mkdir, readdir, realpath, rename, rm, stat } from 'node:fs/promises'
 import { extname, isAbsolute, join, relative, resolve, sep, win32 } from 'node:path'
 import { homedir, tmpdir } from 'node:os'
@@ -82,7 +83,28 @@ export function workspaceStorageId(workspace: string): string {
   return createHash('sha256').update(workspace).digest('hex').slice(0, 20)
 }
 
-async function managedDirectory(parent: string, requested: string, label: string): Promise<string> {
+function assertSecureSharedBase(info: Stats, requested: string): void {
+  if (typeof process.geteuid !== 'function') return
+  const writableByOthers = (info.mode & 0o022) !== 0
+  const sticky = (info.mode & 0o1000) !== 0
+  if (writableByOthers && !sticky) {
+    throw new VisionToolkitError('path', `configured storage directory must not be writable by other users unless it has the sticky bit: ${requested}`)
+  }
+}
+
+function assertSecureWorkspaceStorage(info: Stats, requested: string): void {
+  if (typeof process.geteuid !== 'function') return
+  if (info.uid !== process.geteuid() || (info.mode & 0o077) !== 0) {
+    throw new VisionToolkitError('path', `workspace storage directory must be owned by the current user with mode 0700: ${requested}`)
+  }
+}
+
+async function managedDirectory(
+  parent: string,
+  requested: string,
+  label: string,
+  secureWorkspaceStorage = false,
+): Promise<string> {
   try {
     await mkdir(requested, { mode: 0o700 })
   } catch (error) {
@@ -99,6 +121,7 @@ async function managedDirectory(parent: string, requested: string, label: string
   if (info.isSymbolicLink() || !info.isDirectory()) {
     throw new VisionToolkitError('path', `${label} must be a real directory: ${requested}`)
   }
+  if (secureWorkspaceStorage) assertSecureWorkspaceStorage(info, requested)
   const canonical = await realpath(requested)
   if (!isWithin(parent, canonical)) {
     throw new VisionToolkitError('path', `${label} escaped its configured root: ${requested}`)
@@ -141,13 +164,14 @@ export async function resolveWorkspaceStorage(
   try {
     const info = await stat(requestedBase)
     if (!info.isDirectory()) throw new Error('configured storage path is not a directory')
+    assertSecureSharedBase(info, requestedBase)
     base = await realpath(requestedBase)
   } catch (error) {
     throw new VisionToolkitError('path', `configured storage directory is not accessible: ${requestedBase}`, { cause: error })
   }
   const id = workspaceStorageId(workspace)
   const visibleRoot = join(requestedBase, id)
-  const root = await managedDirectory(base, join(base, id), 'workspace storage directory')
+  const root = await managedDirectory(base, join(base, id), 'workspace storage directory', true)
   return { workspace, root, visibleRoot }
 }
 

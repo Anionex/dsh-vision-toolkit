@@ -35,6 +35,8 @@ export declare class VisionToolkitRuntimeManager {
     constructor(ctx: Context, factory?: RuntimeGenerationFactory);
     /** The currently serving runtime; unavailable until one generation prepares. */
     current(): VisionToolkitRuntime;
+    /** Configuration belonging to the currently serving runtime generation. */
+    currentConfig(): ResolvedVisionToolkitConfig;
     /** Whether at least one generation is available. */
     get ready(): boolean;
     /** Resolve and fully prepare a candidate without changing the active runtime. */

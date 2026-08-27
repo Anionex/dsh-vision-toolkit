@@ -53,6 +53,22 @@ describe('VisionToolkitRuntimeManager', () => {
     expect(prepared).toEqual(['first', 'broken'])
   })
 
+  it('keeps consumers on the active configuration while a candidate fails', async () => {
+    const ctx = new Context()
+    contexts.push(ctx)
+    const factory: RuntimeGenerationFactory = async (_ctx, resolved) => {
+      if (resolved.storageDir === '/tmp/rejected-storage') throw new Error('fixture runtime unavailable')
+      return fakeRuntime(resolved)
+    }
+    const manager = new VisionToolkitRuntimeManager(ctx, factory)
+    await manager.initialize({ ...config('first'), storageDir: '/tmp/active-storage' })
+
+    await expect(manager.reconfigure({ ...config('first'), storageDir: '/tmp/rejected-storage' }))
+      .rejects.toThrow('fixture runtime unavailable')
+
+    expect(manager.currentConfig().storageDir).toBe('/tmp/active-storage')
+  })
+
   it('treats transparent-routing visibility as display-only so toggling it does not rebuild the runtime', async () => {
     const ctx = new Context()
     contexts.push(ctx)

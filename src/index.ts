@@ -19,6 +19,7 @@ import {
   Config,
   VISION_TOOLKIT_SETTINGS_NAMESPACE,
   resolveConfig,
+  type ResolvedVisionToolkitConfig,
   type VisionToolkitConfig,
 } from './config.ts'
 import { VisionToolExposure } from './exposure.ts'
@@ -97,16 +98,19 @@ export async function apply(ctx: Context, config: VisionToolkitConfig = {}): Pro
   }
 
   const backend = new VisionToolkitWebBackend(ctx, manager, artifacts, ensureOperational)
+  const currentConfig = (): ResolvedVisionToolkitConfig => manager.ready
+    ? manager.currentConfig()
+    : resolveConfig(settings.get())
   const pastedImages = new PastedImageBackend(ctx, {
     maxUploadBytes: () => MAX_PASTE_IMAGE_BYTES,
-    storageDirectory: () => resolveConfig(settings.get()).storageDir,
+    storageDirectory: () => manager.ready ? manager.currentConfig().storageDir : undefined,
   })
   // Image-input variants register asynchronously once eligible routes exist;
   // the runtime getter stays lazy so variants appear even when the runtime
   // becomes ready after the first sweep.
   const variants = installImageInputVariants(
     ctx,
-    () => resolveConfig(settings.get()),
+    currentConfig,
     () => manager.ready ? manager.current() : undefined,
   )
   installVisionToolkitWeb(
@@ -114,8 +118,8 @@ export async function apply(ctx: Context, config: VisionToolkitConfig = {}): Pro
     backend,
     artifacts,
     pastedImages,
-    createPasteTakeoverResolver(ctx, () => resolveConfig(settings.get())),
-    () => ({ hidden: resolveConfig(settings.get()).imageInputVariants.hidden }),
+    createPasteTakeoverResolver(ctx, currentConfig),
+    () => ({ hidden: currentConfig().imageInputVariants.hidden }),
   )
   disposers.push(variants.dispose)
   disposers.push(settings.watch(async (next) => {
