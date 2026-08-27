@@ -63,6 +63,10 @@ dsh plugin --profile web add @anionex/dsh-vision-toolkit
 <td width="220"><a href="https://aihubmix.com/?aff=sinZ"><img src="assets/logo_aihubmix.png" alt="AIHubMix" height="48"></a></td>
 <td>感谢 <a href="https://aihubmix.com/?aff=sinZ">AIHubMix</a> 赞助本项目！AIHubMix 是稳定、高并发的 AI 大模型 API 聚合平台，一个 API Key 即可接入 Claude、GPT、Gemini、DeepSeek 等主流模型，兼容多种协议，并提供<b>免费模型选择</b>。注册时，海外用户请使用 <a href="https://aihubmix.com/?aff=sinZ">AIHubMix 入口</a>，中国大陆用户请使用 <a href="https://inferera.com/?aff=sinZ">Inferera 入口</a>。</td>
 </tr>
+<tr>
+<td width="220"><a href="https://api.ewo.so/register?aff=U6PT7J"><img src="assets/logo_eapi_dark.png" alt="E-API" height="48"></a></td>
+<td><b>推荐：</b><a href="https://api.ewo.so/register?aff=U6PT7J">E-API</a> 提供聚合模型 API，兼容 OpenAI、Anthropic 和 Codex 接口。其公开定价目前显示，部分 Claude 模型相比官方标价<b>优惠约 97%–98%</b>（例如 Claude Sonnet 5 每百万 Token 的输入/输出价格约为 US$0.037 / US$0.186），DeepSeek V4 系列相比官方定价<b>优惠约 25%</b>。价格可能调整，使用前请以<a href="https://api.ewo.so/pricing">模型定价页</a>为准。</td>
+</tr>
 </table>
 
 </details>
