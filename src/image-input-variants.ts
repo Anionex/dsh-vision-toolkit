@@ -23,6 +23,7 @@ import type {
   LlmProviderInfo,
   LlmResolvedModelInfo,
   Message,
+  ResolvedRetryPolicy,
   StreamChunk,
 } from '@deepseek-ai/dsh-llm'
 // Type-only imports activate the host service declarations on Context.
@@ -513,6 +514,10 @@ export class ImageInputVariantAdapter extends LlmAdapter {
       id: provider,
       name: this.hidden() ? this.upstreamName : `${this.upstreamName}${VARIANT_SUFFIX}`,
     }
+  }
+
+  override providerRetryPolicy(_provider: string): ResolvedRetryPolicy {
+    return this.llm.providerRetryPolicy(this.upstream)
   }
 
   override async listModels(provider: string): Promise<readonly LlmModelInfo[]> {
