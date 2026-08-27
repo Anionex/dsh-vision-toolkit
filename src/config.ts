@@ -84,6 +84,8 @@ export interface VisionToolkitConfig {
    * `.dsh-vision-toolkit` into the workspace.
    */
   storageDir?: string
+  /** Internal read-only history used to keep persisted paths valid after storage moves. */
+  storageHistory?: string[]
   /** Extra directories (besides the workspace) inputs may come from. */
   allowedDirs?: string[]
   /**
@@ -139,6 +141,7 @@ export const Config: Schema<VisionToolkitConfig> = z.object({
     python: z.string(),
   }),
   storageDir: z.string(),
+  storageHistory: z.array(z.string()).default([]),
   allowedDirs: z.array(z.string()).default([]),
   imageInputVariants: z.object({
     enabled: z.boolean().default(true),
@@ -169,6 +172,7 @@ export interface ResolvedVisionToolkitConfig {
     python?: string
   }
   storageDir?: string
+  storageHistory: string[]
   allowedDirs: string[]
   imageInputVariants: {
     enabled: boolean
@@ -263,6 +267,9 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
     throw new VisionToolkitError('config', 'runtime.python must not be empty')
   }
   const storageDir = config.storageDir?.trim()
+  const storageHistory = [...new Set((config.storageHistory ?? [])
+    .map(dir => dir.trim())
+    .filter(dir => dir.length > 0 && dir !== storageDir))]
   const allowedDirs = (config.allowedDirs ?? []).map(dir => dir.trim()).filter(dir => dir.length > 0)
   const imageInputVariants = config.imageInputVariants ?? {}
   const variantProviders = (imageInputVariants.providers ?? [])
@@ -281,6 +288,7 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
       ...(python !== undefined ? { python } : {}),
     },
     ...(storageDir === undefined || storageDir.length === 0 ? {} : { storageDir }),
+    storageHistory,
     allowedDirs,
     imageInputVariants: {
       enabled: imageInputVariants.enabled ?? true,

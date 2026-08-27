@@ -263,6 +263,25 @@ export async function resolveWorkspaceStorage(
   return { workspace, root, visibleRoot }
 }
 
+async function resolveReadableWorkspaceStorageRoot(
+  workspace: string,
+  storageDirRaw: string,
+): Promise<string> {
+  const requestedBase = requestedSharedStorageBase(storageDirRaw)
+  const base = await assertSecureSharedStorageBase(requestedBase)
+  const requestedRoot = join(base, workspaceStorageId(workspace))
+  const info = await lstat(requestedRoot)
+  if (info.isSymbolicLink() || !info.isDirectory()) {
+    throw new VisionToolkitError('path', `historical workspace storage must be a real directory: ${requestedRoot}`)
+  }
+  assertSecureWorkspaceStorage(info, requestedRoot)
+  const root = await realpath(requestedRoot)
+  if (!isWithin(base, root)) {
+    throw new VisionToolkitError('path', `historical workspace storage escaped its configured root: ${requestedRoot}`)
+  }
+  return root
+}
+
 /**
  * Build the per-invocation path policy: resolve workspace storage, realpath the
  * platform temp directory and allowed directories, and create the artifact
@@ -270,12 +289,14 @@ export async function resolveWorkspaceStorage(
  * @param workspaceRaw - session workspace (or process cwd fallback).
  * @param allowedDirs - configured extra allowed roots.
  * @param storageDirRaw - optional shared storage root.
+ * @param readableStorageDirs - previously validated shared roots retained for persisted input paths.
  * @returns the resolved policy.
  */
 export async function createPathPolicy(
   workspaceRaw: string,
   allowedDirs: readonly string[],
   storageDirRaw?: string,
+  readableStorageDirs: readonly string[] = [],
 ): Promise<PathPolicy> {
   const storage = await resolveWorkspaceStorage(workspaceRaw, storageDirRaw)
   const { workspace } = storage
@@ -287,6 +308,15 @@ export async function createPathPolicy(
     throw new VisionToolkitError('path', `platform temporary directory is not accessible: ${tempDirectoryRaw}`, { cause: error })
   }
   const roots = [workspace, tempDir, storage.root]
+  for (const raw of readableStorageDirs) {
+    if (raw === storageDirRaw) continue
+    try {
+      roots.push(await resolveReadableWorkspaceStorageRoot(workspace, raw))
+    } catch {
+      // Historical roots are read-only compatibility fences. Missing or newly
+      // unsafe roots stay unauthorized without breaking the active runtime.
+    }
+  }
   for (const raw of allowedDirs) {
     const candidate = expandUserHome(raw)
     const target = isAbsolute(candidate) ? candidate : resolve(workspace, candidate)

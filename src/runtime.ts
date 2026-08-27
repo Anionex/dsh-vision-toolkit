@@ -696,6 +696,7 @@ export class VisionToolkitRuntime {
     private readonly ctx: Context,
     private readonly config: ResolvedVisionToolkitConfig,
     adapter?: UpstreamAdapter,
+    private readonly readableStorageDirs: readonly string[] = [],
   ) {
     this.adapter = adapter ?? new UpstreamAdapter(ctx, config)
   }
@@ -885,7 +886,7 @@ export class VisionToolkitRuntime {
   }
 
   private pathPolicy(workspace: string): Promise<PathPolicy> {
-    return createPathPolicy(workspace, this.config.allowedDirs, this.config.storageDir)
+    return createPathPolicy(workspace, this.config.allowedDirs, this.config.storageDir, this.readableStorageDirs)
   }
 
   private async compressedImageRoot(policy: PathPolicy): Promise<string> {

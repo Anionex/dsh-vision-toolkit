@@ -37,12 +37,17 @@ export interface RuntimeStorageGeneration {
 export type RuntimeGenerationFactory = (
   ctx: Context,
   config: ResolvedVisionToolkitConfig,
+  readableStorageDirs: readonly string[],
 ) => Promise<VisionToolkitRuntime>
 
-async function defaultFactory(ctx: Context, config: ResolvedVisionToolkitConfig): Promise<VisionToolkitRuntime> {
+async function defaultFactory(
+  ctx: Context,
+  config: ResolvedVisionToolkitConfig,
+  readableStorageDirs: readonly string[],
+): Promise<VisionToolkitRuntime> {
   const adapter = new UpstreamAdapter(ctx, config)
   await adapter.prepare()
-  return new VisionToolkitRuntime(ctx, config, adapter)
+  return new VisionToolkitRuntime(ctx, config, adapter, readableStorageDirs)
 }
 
 function fingerprint(config: ResolvedVisionToolkitConfig): string {
@@ -65,6 +70,7 @@ export class VisionToolkitRuntimeManager {
   private reconfigureTicket = 0
   private lastError: string | undefined
   private validatedStartupStorageDir: string | null | undefined
+  private readonly readableStorageDirs = new Set<string>()
 
   constructor(
     private readonly ctx: Context,
@@ -116,8 +122,21 @@ export class VisionToolkitRuntimeManager {
     if (this.active?.fingerprint === resolvedFingerprint) {
       return { ...this.active, config }
     }
-    const runtime = await this.factory(this.ctx, config)
+    const runtime = await this.factory(
+      this.ctx,
+      config,
+      [...new Set([...this.readableStorageDirs, ...config.storageHistory])]
+        .filter(storageDir => storageDir !== config.storageDir),
+    )
     return { config, fingerprint: resolvedFingerprint, runtime }
+  }
+
+  private rememberStorageDirectory(storageDir: string | undefined): void {
+    if (storageDir !== undefined) this.readableStorageDirs.add(storageDir)
+  }
+
+  private rememberStorageDirectories(storageDirs: readonly string[]): void {
+    for (const storageDir of storageDirs) this.rememberStorageDirectory(storageDir)
   }
 
   /** Resolve and fully prepare a candidate without changing the active runtime. */
@@ -139,6 +158,8 @@ export class VisionToolkitRuntimeManager {
     }
     this.reconfigureTicket += 1
     this.active = candidate
+    this.rememberStorageDirectories(candidate.config.storageHistory)
+    this.rememberStorageDirectory(candidate.config.storageDir)
     this.generation += 1
     this.lastError = undefined
     this.ctx.logger.info(
@@ -156,6 +177,8 @@ export class VisionToolkitRuntimeManager {
       const config = resolveConfig(raw)
       if (config.storageDir !== undefined) await preflightSharedStorageBase(config.storageDir)
       this.validatedStartupStorageDir = config.storageDir ?? null
+      this.rememberStorageDirectories(config.storageHistory)
+      this.rememberStorageDirectory(config.storageDir)
       this.activateCandidate(await this.prepareResolvedCandidate(config))
     } catch (error) {
       this.lastError = messageOf(error)
@@ -180,6 +203,8 @@ export class VisionToolkitRuntimeManager {
     if (ticket !== this.reconfigureTicket) return false
     const changed = this.active?.fingerprint !== candidate.fingerprint
     this.active = candidate
+    this.rememberStorageDirectories(candidate.config.storageHistory)
+    this.rememberStorageDirectory(candidate.config.storageDir)
     if (changed) {
       this.generation += 1
       this.ctx.logger.info(

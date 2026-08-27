@@ -52,6 +52,8 @@ export interface VisionToolkitConfig {
      * `.dsh-vision-toolkit` into the workspace.
      */
     storageDir?: string;
+    /** Internal read-only history used to keep persisted paths valid after storage moves. */
+    storageHistory?: string[];
     /** Extra directories (besides the workspace) inputs may come from. */
     allowedDirs?: string[];
     /**
@@ -108,6 +110,7 @@ export interface ResolvedVisionToolkitConfig {
         python?: string;
     };
     storageDir?: string;
+    storageHistory: string[];
     allowedDirs: string[];
     imageInputVariants: {
         enabled: boolean;

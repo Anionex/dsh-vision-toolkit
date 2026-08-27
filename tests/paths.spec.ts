@@ -84,6 +84,42 @@ describe('createPathPolicy', () => {
     expect((await createPathPolicy(workspace, [], shared)).storageRoot).toBe(expectedRoot)
   })
 
+  it('retains only the same workspace child from a previous shared storage root', async () => {
+    const workspace = await tempDir('workspace')
+    const previousShared = await outsideTempDir('previous-shared')
+    const currentShared = await outsideTempDir('current-shared')
+    const previousPolicy = await createPathPolicy(workspace, [], previousShared)
+    const persisted = join(previousPolicy.storageRoot, 'persisted.png')
+    await writeFile(persisted, 'fixture')
+    const sibling = join(previousShared, 'another-workspace')
+    await mkdir(sibling, { mode: 0o700 })
+    const siblingImage = join(sibling, 'private.png')
+    await writeFile(siblingImage, 'fixture')
+
+    const policy = await createPathPolicy(workspace, [], currentShared, [previousShared])
+
+    await expect(resolveInputFile(persisted, policy)).resolves.toMatchObject({ path: await realpath(persisted) })
+    await expect(resolveInputFile(siblingImage, policy)).rejects.toMatchObject({ code: 'path' })
+    expect(policy.allowedDirs).toContain(previousPolicy.storageRoot)
+    expect(policy.allowedDirs).not.toContain(await realpath(previousShared))
+  })
+
+  it('drops a previous workspace storage child that becomes unsafe', async () => {
+    if (typeof process.geteuid !== 'function') return
+    const workspace = await tempDir('workspace')
+    const previousShared = await outsideTempDir('previous-unsafe')
+    const currentShared = await outsideTempDir('current-safe')
+    const previousPolicy = await createPathPolicy(workspace, [], previousShared)
+    const persisted = join(previousPolicy.storageRoot, 'persisted.png')
+    await writeFile(persisted, 'fixture')
+    await chmod(previousPolicy.storageRoot, 0o777)
+
+    const policy = await createPathPolicy(workspace, [], currentShared, [previousShared])
+
+    expect(policy.allowedDirs).not.toContain(previousPolicy.storageRoot)
+    await expect(resolveInputFile(persisted, policy)).rejects.toMatchObject({ code: 'path' })
+  })
+
   it('rejects a pre-created shared workspace directory with unsafe permissions', async () => {
     if (typeof process.geteuid !== 'function') return
     const workspace = await tempDir('workspace')

@@ -485,6 +485,7 @@ interface SettingsValue {
   concurrency?: number
   runtime?: { mode?: 'managed' | 'external'; agentVisionToolkitPath?: string; python?: string }
   storageDir?: string
+  storageHistory?: string[]
   allowedDirs?: string[]
   imageInputVariants?: {
     enabled?: boolean

@@ -135,6 +135,65 @@ describe('VisionToolkitRuntimeManager', () => {
     expect(factory).not.toHaveBeenCalled()
   })
 
+  it('passes previously validated storage roots to later runtime generations', async () => {
+    const ctx = new Context()
+    contexts.push(ctx)
+    const firstStorage = await tempDir('history-first')
+    const secondStorage = await tempDir('history-second')
+    const seen: string[][] = []
+    const factory: RuntimeGenerationFactory = async (_ctx, resolved, readableStorageDirs) => {
+      seen.push([...readableStorageDirs])
+      return fakeRuntime(resolved)
+    }
+    const manager = new VisionToolkitRuntimeManager(ctx, factory)
+
+    await manager.initialize({ ...config('first'), storageDir: firstStorage })
+    await manager.reconfigure({ ...config('second'), storageDir: secondStorage })
+
+    expect(seen).toEqual([[], [firstStorage]])
+  })
+
+  it('retains startup storage after initial runtime preparation fails', async () => {
+    const ctx = new Context()
+    contexts.push(ctx)
+    const firstStorage = await tempDir('failed-history-first')
+    const secondStorage = await tempDir('failed-history-second')
+    const seen: string[][] = []
+    const factory: RuntimeGenerationFactory = async (_ctx, resolved, readableStorageDirs) => {
+      seen.push([...readableStorageDirs])
+      if (resolved.provider.model === 'broken') throw new Error('fixture runtime unavailable')
+      return fakeRuntime(resolved)
+    }
+    const manager = new VisionToolkitRuntimeManager(ctx, factory)
+
+    await expect(manager.initialize({ ...config('broken'), storageDir: firstStorage }))
+      .rejects.toThrow('fixture runtime unavailable')
+    await manager.reconfigure({ ...config('repaired'), storageDir: secondStorage })
+
+    expect(seen).toEqual([[], [firstStorage]])
+  })
+
+  it('restores readable storage history from persisted configuration', async () => {
+    const ctx = new Context()
+    contexts.push(ctx)
+    const previousStorage = await tempDir('persisted-history-previous')
+    const currentStorage = await tempDir('persisted-history-current')
+    const seen: string[][] = []
+    const factory: RuntimeGenerationFactory = async (_ctx, resolved, readableStorageDirs) => {
+      seen.push([...readableStorageDirs])
+      return fakeRuntime(resolved)
+    }
+    const manager = new VisionToolkitRuntimeManager(ctx, factory)
+
+    await manager.initialize({
+      ...config('current'),
+      storageDir: currentStorage,
+      storageHistory: [previousStorage],
+    })
+
+    expect(seen).toEqual([[previousStorage]])
+  })
+
   it('treats transparent-routing visibility as display-only so toggling it does not rebuild the runtime', async () => {
     const ctx = new Context()
     contexts.push(ctx)

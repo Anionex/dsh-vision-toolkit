@@ -245,6 +245,7 @@ interface SettingsValue {
         python?: string;
     };
     storageDir?: string;
+    storageHistory?: string[];
     allowedDirs?: string[];
     imageInputVariants?: {
         enabled?: boolean;

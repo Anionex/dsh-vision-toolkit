@@ -28,7 +28,7 @@ export interface RuntimeStorageGeneration {
     storageDir?: string;
 }
 /** Test seam for preparing one generation. */
-export type RuntimeGenerationFactory = (ctx: Context, config: ResolvedVisionToolkitConfig) => Promise<VisionToolkitRuntime>;
+export type RuntimeGenerationFactory = (ctx: Context, config: ResolvedVisionToolkitConfig, readableStorageDirs: readonly string[]) => Promise<VisionToolkitRuntime>;
 /** Internal runtime source with prepare-before-swap semantics. */
 export declare class VisionToolkitRuntimeManager {
     private readonly ctx;
@@ -38,6 +38,7 @@ export declare class VisionToolkitRuntimeManager {
     private reconfigureTicket;
     private lastError;
     private validatedStartupStorageDir;
+    private readonly readableStorageDirs;
     constructor(ctx: Context, factory?: RuntimeGenerationFactory);
     /** The currently serving runtime; unavailable until one generation prepares. */
     current(): VisionToolkitRuntime;
@@ -50,6 +51,8 @@ export declare class VisionToolkitRuntimeManager {
     /** Validated storage for best-effort consumers; undefined when startup preflight failed. */
     validatedStorageDirectory(): string | undefined;
     private prepareResolvedCandidate;
+    private rememberStorageDirectory;
+    private rememberStorageDirectories;
     /** Resolve and fully prepare a candidate without changing the active runtime. */
     prepareCandidate(raw: VisionToolkitConfig): Promise<PreparedRuntimeGeneration>;
     /**

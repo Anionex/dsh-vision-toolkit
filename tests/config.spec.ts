@@ -28,6 +28,7 @@ describe('resolveConfig', () => {
     expect(config.runtime.mode).toBe('managed')
     expect(config.runtime.python).toBeUndefined()
     expect(config.storageDir).toBeUndefined()
+    expect(config.storageHistory).toEqual([])
     expect(config.allowedDirs).toEqual([])
     expect(config.imageInputVariants).toEqual({ enabled: true, providers: [], autoSwitch: true, hidden: true })
   })
@@ -57,12 +58,14 @@ describe('resolveConfig', () => {
       language: 'en',
       runtime: { mode: 'external', agentVisionToolkitPath: '/tmp/toolkit', python: 'python3.12' },
       storageDir: ' /tmp/dsh-vision-toolkit ',
+      storageHistory: [' /previous/storage ', '/tmp/dsh-vision-toolkit', '/previous/storage', '  '],
       allowedDirs: ['~/Pictures'],
     })
     expect(config.provider.baseUrl).toBe('https://example.com/v1')
     expect(config.provider.credential).toBe('MY_VISION_KEY')
     expect(config.runtime.agentVisionToolkitPath).toBe('/tmp/toolkit')
     expect(config.storageDir).toBe('/tmp/dsh-vision-toolkit')
+    expect(config.storageHistory).toEqual(['/previous/storage'])
     expect(config.provider.protocol).toBe('anthropic')
     expect(config.provider.anthropicThinking).toBe('disabled')
     expect(config.provider.userAgent).toBe('custom-vision-client/2.0')

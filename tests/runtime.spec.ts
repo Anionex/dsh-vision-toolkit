@@ -1,6 +1,6 @@
 import { copyFile, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -9,7 +9,7 @@ import LocalSubprocessService from '@deepseek-ai/dsh-subprocess-local'
 import type { Credentials } from '@deepseek-ai/dsh-credentials'
 import { resolveConfig, type VisionToolkitConfig } from '../src/config.ts'
 import { VisionToolkitError } from '../src/errors.ts'
-import { workspaceStorageId } from '../src/paths.ts'
+import { createPathPolicy, workspaceStorageId } from '../src/paths.ts'
 import { createDeadline, Semaphore, VisionToolkitRuntime } from '../src/runtime.ts'
 import {
   UpstreamAdapter,
@@ -30,6 +30,12 @@ async function tempWorkspace(): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), 'dsh-vision-toolkit-runtime-'))
   tempDirs.push(dir)
   await copyFile(SAMPLE_IMAGE, join(dir, 'sample.png'))
+  return dir
+}
+
+async function outsideTempDir(prefix: string): Promise<string> {
+  const dir = await mkdtemp(join(homedir(), `.dsh-vision-toolkit-runtime-${prefix}-`))
+  tempDirs.push(dir)
   return dir
 }
 
@@ -54,6 +60,7 @@ async function setup(
   overrides: VisionToolkitConfig = {},
   credential: string | null = 'test-vision-key',
   prepared = preparedFixture(),
+  readableStorageDirs: readonly string[] = [],
 ) {
   const ctx = new Context()
   contexts.push(ctx)
@@ -73,7 +80,7 @@ async function setup(
     ...overrides,
   })
   const adapter = new UpstreamAdapter(ctx, config, prepared)
-  const runtime = new VisionToolkitRuntime(ctx, config, adapter)
+  const runtime = new VisionToolkitRuntime(ctx, config, adapter, readableStorageDirs)
   return { ctx, config, adapter, runtime }
 }
 
@@ -339,6 +346,19 @@ describe('VisionToolkitRuntime', () => {
     expect(result.outputPath).toContain(join(storageRoot, 'artifacts'))
     expect(await readdir(workspace)).toEqual(['sample.png'])
     expect((await readdir(join(storageRoot, 'tmp', 'compressed-images'))).length).toBeGreaterThan(0)
+  })
+
+  it('reads a persisted image from a previously configured shared storage root', async () => {
+    const previousShared = await outsideTempDir('previous-storage')
+    const currentShared = await outsideTempDir('current-storage')
+    const workspace = await tempWorkspace()
+    const previousPolicy = await createPathPolicy(workspace, [], previousShared)
+    const persisted = join(previousPolicy.storageRoot, 'persisted.png')
+    await copyFile(SAMPLE_IMAGE, persisted)
+    const { runtime } = await setup({ storageDir: currentShared }, 'test-vision-key', preparedFixture(), [previousShared])
+
+    await expect(runtime.glance({ images: [persisted], query: 'what color?' }, { signal, workspace }))
+      .resolves.toMatchObject({ answer: 'Fixture answer to the question' })
   })
 
   it('trace writes an SVG and returns pinned vtracer facts without a credential', async () => {

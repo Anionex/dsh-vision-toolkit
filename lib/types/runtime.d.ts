@@ -349,10 +349,11 @@ export declare function parseRegion(region: string): {
 export declare class VisionToolkitRuntime {
     private readonly ctx;
     private readonly config;
+    private readonly readableStorageDirs;
     private readonly semaphores;
     private readonly glanceCache;
     private readonly adapter;
-    constructor(ctx: Context, config: ResolvedVisionToolkitConfig, adapter?: UpstreamAdapter);
+    constructor(ctx: Context, config: ResolvedVisionToolkitConfig, adapter?: UpstreamAdapter, readableStorageDirs?: readonly string[]);
     /** Pinned and prepared upstream identity. */
     get upstreamVersion(): UpstreamVersionInfo;
     /** Shared storage root belonging to this immutable runtime generation. */

@@ -58,9 +58,10 @@ export declare function resolveWorkspaceStorage(workspaceRaw: string, storageDir
  * @param workspaceRaw - session workspace (or process cwd fallback).
  * @param allowedDirs - configured extra allowed roots.
  * @param storageDirRaw - optional shared storage root.
+ * @param readableStorageDirs - previously validated shared roots retained for persisted input paths.
  * @returns the resolved policy.
  */
-export declare function createPathPolicy(workspaceRaw: string, allowedDirs: readonly string[], storageDirRaw?: string): Promise<PathPolicy>;
+export declare function createPathPolicy(workspaceRaw: string, allowedDirs: readonly string[], storageDirRaw?: string, readableStorageDirs?: readonly string[]): Promise<PathPolicy>;
 /**
  * Validate one input image path and return its fence-checked absolute path
  * and byte size.
