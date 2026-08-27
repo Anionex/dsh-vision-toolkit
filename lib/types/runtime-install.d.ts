@@ -51,6 +51,14 @@ export declare function withWindowsTransientRetry<T>(operation: () => Promise<T>
  * into an error, but leaving the directory behind should still be audible.
  */
 export declare function ignoreCleanupFailure(ctx: Context, label: string, path: string): Promise<void>;
+/**
+ * Opportunistically remove abandoned runtime staging and quarantine trees.
+ * Current names encode their owning runtime lock, so live preparation is
+ * skipped. Quarantines retain a 24-hour recovery window; legacy names use the
+ * same grace period and are collected only when no runtime lock is active
+ * because they cannot be associated with a specific lock.
+ */
+export declare function garbageCollectRuntimeCache(ctx: Context, stateRoot: string, now?: number): Promise<void>;
 export declare function isolatedPythonEnvironment(home: string): NodeJS.ProcessEnv;
 /** Verify every packaged upstream file against the committed content manifest. */
 export declare function verifyBundledUpstream(): Promise<UpstreamManifest>;
