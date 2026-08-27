@@ -67,6 +67,9 @@ const en = {
   runtimeMode: 'Runtime mode',
   toolkitPath: 'Pinned checkout path',
   python: 'Python override',
+  storage: 'Local files',
+  storageDir: 'Default save directory',
+  storageDirHint: 'Leave blank to keep .dsh-vision-toolkit in each workspace. Set a shared root such as /tmp/dsh-vision-toolkit to store artifacts, pasted images, and caches in an automatically generated workspace-specific child directory.',
   allowedDirs: 'Additional allowed directories',
   allowedDirsHint: 'One path per line. The session workspace is always allowed.',
   save: 'Save and apply',
@@ -89,7 +92,7 @@ const en = {
   connectionHint: 'The API connection test only queries GET /models. The vision model test sends the bundled diagnostic image and verifies one real multimodal request.',
   saveBeforeTesting: 'Save service changes before testing the connection.',
   advanced: 'Advanced settings',
-  advancedHint: 'Credential name, provider compatibility, output language, resource limits, runtime source, Python, and additional readable directories.',
+  advancedHint: 'Credential name, provider compatibility, output language, resource limits, default save directory, runtime source, Python, and additional readable directories.',
   imageInput: 'Image input',
   hiddenVariants: 'Transparent variant routing',
   hiddenVariantsLabel: 'Keep the original model names and enable images automatically',
@@ -255,6 +258,9 @@ const zh: Record<LocaleKey, string> = {
   runtimeMode: '环境来源',
   toolkitPath: 'agent-vision-toolkit 目录',
   python: 'Python 解释器（可选）',
+  storage: '本地文件',
+  storageDir: '默认保存目录',
+  storageDirHint: '留空时继续在各工作区创建 .dsh-vision-toolkit。填写共享根目录（例如 /tmp/dsh-vision-toolkit）后，产物、粘贴图片和缓存会保存到自动生成的工作区专属子目录中。',
   allowedDirs: '允许读取的其他目录',
   allowedDirsHint: '每行填写一个目录。当前会话的工作目录始终可以读取，无需重复填写。',
   save: '保存设置',
@@ -277,7 +283,7 @@ const zh: Record<LocaleKey, string> = {
   connectionHint: '“测试 API 连接”只请求 GET /models；“测试视觉模型”会发送插件自带的诊断图片，验证一次真实多模态调用。',
   saveBeforeTesting: '修改服务配置后，请先保存，再执行 API 或视觉模型测试。',
   advanced: '高级设置',
-  advancedHint: '凭据名称、服务兼容参数、结果语言、资源限制、运行环境来源、Python 和额外可读目录。一般无需修改。',
+  advancedHint: '凭据名称、服务兼容参数、结果语言、资源限制、默认保存目录、运行环境来源、Python 和额外可读目录。一般无需修改。',
   imageInput: '图片输入',
   hiddenVariants: '透明变体路由',
   hiddenVariantsLabel: '保留原模型名并自动启用图片能力',
@@ -478,6 +484,7 @@ interface SettingsValue {
   maxImagePixels?: number
   concurrency?: number
   runtime?: { mode?: 'managed' | 'external'; agentVisionToolkitPath?: string; python?: string }
+  storageDir?: string
   allowedDirs?: string[]
   imageInputVariants?: {
     enabled?: boolean
@@ -1085,6 +1092,7 @@ interface Draft {
   runtimeMode: 'managed' | 'external'
   toolkitPath: string
   python: string
+  storageDir: string
   allowedDirs: string
   hiddenVariants: boolean
   variantEnabled: boolean
@@ -1108,6 +1116,7 @@ function draftOf(value: SettingsValue): Draft {
     runtimeMode: value.runtime?.mode ?? 'managed',
     toolkitPath: value.runtime?.agentVisionToolkitPath ?? '',
     python: value.runtime?.python ?? '',
+    storageDir: value.storageDir ?? '',
     allowedDirs: (value.allowedDirs ?? []).join('\n'),
     hiddenVariants: value.imageInputVariants?.hidden ?? true,
     variantEnabled: value.imageInputVariants?.enabled ?? true,
@@ -1152,6 +1161,7 @@ function valueOf(draft: Draft, t: Translate): SettingsValue {
       ...(draft.runtimeMode === 'external' ? { agentVisionToolkitPath: draft.toolkitPath.trim() } : {}),
       ...(draft.python.trim().length === 0 ? {} : { python: draft.python.trim() }),
     },
+    ...(draft.storageDir.trim().length === 0 ? {} : { storageDir: draft.storageDir.trim() }),
     allowedDirs: draft.allowedDirs.split(/\r?\n/).map(entry => entry.trim()).filter(Boolean),
     imageInputVariants: {
       ...(draft.variantEnabled ? {} : { enabled: false }),
@@ -1463,11 +1473,15 @@ function LoadedSettings({ controller, t }: SettingsInjected) {
 
           <section className="dvt-panel"><div className="dvt-panel-title"><h3>{t('imageInput')}</h3></div><label className="dvt-check"><input type="checkbox" checked={draft.hiddenVariants} disabled={!snapshot.writable || busy} onChange={(event) => { update('hiddenVariants', event.target.checked) }} /><span>{t('hiddenVariantsLabel')}</span><small>{t('hiddenVariantsHint')}</small></label></section>
 
+          <section className="dvt-panel"><div className="dvt-panel-title"><h3>{t('storage')}</h3></div><div className="dvt-form-grid">
+            <Field label={t('storageDir')} hint={t('storageDirHint')}><Input aria-label={t('storageDir')} placeholder="/tmp/dsh-vision-toolkit" value={draft.storageDir} onChange={(event) => { update('storageDir', event.target.value) }} /></Field>
+            <Field label={t('allowedDirs')} hint={t('allowedDirsHint')}><textarea rows={3} value={draft.allowedDirs} onChange={(event) => { update('allowedDirs', event.target.value) }} /></Field>
+          </div></section>
+
           <section className="dvt-panel"><div className="dvt-panel-title"><h3>{t('runtime')}</h3><span className={`dvt-badge ${snapshot.runtime.ready ? 'ok' : 'error'}`}>{snapshot.runtime.ready ? snapshot.runtime.upstream?.source === 'managed' ? t('runtimeManaged') : snapshot.runtime.upstream?.source === 'external' ? t('runtimeExternal') : t('runtimeReady') : t('runtimeUnavailable')}</span></div><div className="dvt-form-grid">
             <Field label={t('runtimeMode')}><select value={draft.runtimeMode} onChange={(event) => { update('runtimeMode', event.target.value as 'managed' | 'external') }}><option value="managed">{t('runtimeManaged')}</option><option value="external">{t('runtimeExternal')}</option></select></Field>
             {draft.runtimeMode === 'external' ? <Field label={t('toolkitPath')}><Input value={draft.toolkitPath} onChange={(event) => { update('toolkitPath', event.target.value) }} /></Field> : null}
             <Field label={t('python')}><Input placeholder="python3" value={draft.python} onChange={(event) => { update('python', event.target.value) }} /></Field>
-            <Field label={t('allowedDirs')} hint={t('allowedDirsHint')}><textarea rows={3} value={draft.allowedDirs} onChange={(event) => { update('allowedDirs', event.target.value) }} /></Field>
           </div>
           {snapshot.runtime.upstream === undefined ? null : <div className="dvt-runtime-facts"><code>{snapshot.runtime.upstream.path}</code><code>{snapshot.runtime.upstream.python} · {snapshot.runtime.upstream.pythonVersion}</code><code>{snapshot.runtime.upstream.runtimeHome}</code></div>}
           </section>

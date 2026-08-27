@@ -27,6 +27,7 @@ describe('resolveConfig', () => {
     expect(config.concurrency).toBe(4)
     expect(config.runtime.mode).toBe('managed')
     expect(config.runtime.python).toBeUndefined()
+    expect(config.storageDir).toBeUndefined()
     expect(config.allowedDirs).toEqual([])
     expect(config.imageInputVariants).toEqual({ enabled: true, providers: [], autoSwitch: true, hidden: true })
   })
@@ -55,15 +56,18 @@ describe('resolveConfig', () => {
       },
       language: 'en',
       runtime: { mode: 'external', agentVisionToolkitPath: '/tmp/toolkit', python: 'python3.12' },
+      storageDir: ' /tmp/dsh-vision-toolkit ',
       allowedDirs: ['~/Pictures'],
     })
     expect(config.provider.baseUrl).toBe('https://example.com/v1')
     expect(config.provider.credential).toBe('MY_VISION_KEY')
     expect(config.runtime.agentVisionToolkitPath).toBe('/tmp/toolkit')
+    expect(config.storageDir).toBe('/tmp/dsh-vision-toolkit')
     expect(config.provider.protocol).toBe('anthropic')
     expect(config.provider.anthropicThinking).toBe('disabled')
     expect(config.provider.userAgent).toBe('custom-vision-client/2.0')
     expect(config.allowedDirs).toEqual(['~/Pictures'])
+    expect(resolveConfig({ storageDir: '   ' }).storageDir).toBeUndefined()
   })
 
   it('keeps the v0.1.10 Moondream default recognized as the built-in free provider', () => {

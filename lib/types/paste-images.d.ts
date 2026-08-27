@@ -1,4 +1,4 @@
-/** Workspace-local storage for images pasted into the DSH Web composer. */
+/** Plugin-managed storage for images pasted into the DSH Web composer. */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Context } from '@deepseek-ai/cordis';
 /** Exact route used by the browser paste integration. */
@@ -55,13 +55,15 @@ export interface PasteRoot {
 }
 /**
  * Resolve the managed per-session image directory used by both browser pastes
- * and native attachment bridging. Keeping both flows under the same workspace
- * root makes the resulting absolute path valid for the model's visual tools.
+ * and native attachment bridging. A configured shared storage root receives a
+ * stable workspace-specific child, keeping projects isolated without writing
+ * plugin files into the project directory.
  */
-export declare function sessionPasteRoot(ctx: Context, sessionId: string): Promise<PasteRoot>;
+export declare function sessionPasteRoot(ctx: Context, sessionId: string, storageDir?: string): Promise<PasteRoot>;
 /** Runtime limit face kept separate for focused backend tests. */
 export interface PasteImageRuntime {
     maxUploadBytes(): number;
+    storageDirectory?(): string | undefined;
 }
 /** Same-origin, live-Session-bound image upload endpoint. */
 export declare class PastedImageBackend {

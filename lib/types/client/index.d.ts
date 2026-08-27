@@ -36,6 +36,9 @@ declare const en: {
     readonly runtimeMode: "Runtime mode";
     readonly toolkitPath: "Pinned checkout path";
     readonly python: "Python override";
+    readonly storage: "Local files";
+    readonly storageDir: "Default save directory";
+    readonly storageDirHint: "Leave blank to keep .dsh-vision-toolkit in each workspace. Set a shared root such as /tmp/dsh-vision-toolkit to store artifacts, pasted images, and caches in an automatically generated workspace-specific child directory.";
     readonly allowedDirs: "Additional allowed directories";
     readonly allowedDirsHint: "One path per line. The session workspace is always allowed.";
     readonly save: "Save and apply";
@@ -58,7 +61,7 @@ declare const en: {
     readonly connectionHint: "The API connection test only queries GET /models. The vision model test sends the bundled diagnostic image and verifies one real multimodal request.";
     readonly saveBeforeTesting: "Save service changes before testing the connection.";
     readonly advanced: "Advanced settings";
-    readonly advancedHint: "Credential name, provider compatibility, output language, resource limits, runtime source, Python, and additional readable directories.";
+    readonly advancedHint: "Credential name, provider compatibility, output language, resource limits, default save directory, runtime source, Python, and additional readable directories.";
     readonly imageInput: "Image input";
     readonly hiddenVariants: "Transparent variant routing";
     readonly hiddenVariantsLabel: "Keep the original model names and enable images automatically";
@@ -241,6 +244,7 @@ interface SettingsValue {
         agentVisionToolkitPath?: string;
         python?: string;
     };
+    storageDir?: string;
     allowedDirs?: string[];
     imageInputVariants?: {
         enabled?: boolean;

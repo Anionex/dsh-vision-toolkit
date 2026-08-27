@@ -46,6 +46,12 @@ export interface VisionToolkitConfig {
         /** Optional Python 3.11+ bootstrap/interpreter override. */
         python?: string;
     };
+    /**
+     * Optional shared storage root. When set, every workspace gets an isolated,
+     * automatically generated child directory below this root instead of writing
+     * `.dsh-vision-toolkit` into the workspace.
+     */
+    storageDir?: string;
     /** Extra directories (besides the workspace) inputs may come from. */
     allowedDirs?: string[];
     /**
@@ -101,6 +107,7 @@ export interface ResolvedVisionToolkitConfig {
         agentVisionToolkitPath?: string;
         python?: string;
     };
+    storageDir?: string;
     allowedDirs: string[];
     imageInputVariants: {
         enabled: boolean;

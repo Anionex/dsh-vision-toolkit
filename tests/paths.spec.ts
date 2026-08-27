@@ -15,6 +15,7 @@ import {
   resolveOutputDirectory,
   resolveOutputFile,
   seedStagedDirectory,
+  workspaceStorageId,
 } from '../src/paths.ts'
 import { VisionToolkitError } from '../src/errors.ts'
 
@@ -40,14 +41,22 @@ describe('createPathPolicy', () => {
     const workspace = await tempDir('workspace')
     const policy = await createPathPolicy(workspace, [])
     expect(policy.workspace).toBe(await realpath(workspace))
+    expect(policy.storageRoot).toBe(await realpath(join(workspace, '.dsh-vision-toolkit')))
     expect(policy.outputDir).toBe(await realpath(join(workspace, '.dsh-vision-toolkit', 'artifacts')))
   })
 
-  it('rejects an output directory outside the fence', async () => {
+  it('uses a stable workspace-specific child below a configured shared root', async () => {
     const workspace = await tempDir('workspace')
-    const outside = await outsideTempDir('outside')
-    await expect(createPathPolicy(workspace, [], join(outside, 'out')))
-      .rejects.toMatchObject({ code: 'path' })
+    const shared = await outsideTempDir('shared')
+    const policy = await createPathPolicy(workspace, [], shared)
+    const canonicalWorkspace = await realpath(workspace)
+    const expectedRoot = join(await realpath(shared), workspaceStorageId(canonicalWorkspace))
+
+    expect(policy.storageRoot).toBe(expectedRoot)
+    expect(policy.outputDir).toBe(join(expectedRoot, 'artifacts'))
+    expect(policy.allowedDirs).toContain(expectedRoot)
+    await expect(lstat(join(workspace, '.dsh-vision-toolkit'))).rejects.toMatchObject({ code: 'ENOENT' })
+    expect((await createPathPolicy(workspace, [], shared)).storageRoot).toBe(expectedRoot)
   })
 
   it('resolves and realpaths allowedDirs', async () => {

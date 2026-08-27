@@ -9,6 +9,7 @@ import LocalSubprocessService from '@deepseek-ai/dsh-subprocess-local'
 import type { Credentials } from '@deepseek-ai/dsh-credentials'
 import { resolveConfig, type VisionToolkitConfig } from '../src/config.ts'
 import { VisionToolkitError } from '../src/errors.ts'
+import { workspaceStorageId } from '../src/paths.ts'
 import { createDeadline, Semaphore, VisionToolkitRuntime } from '../src/runtime.ts'
 import {
   UpstreamAdapter,
@@ -323,6 +324,21 @@ describe('VisionToolkitRuntime', () => {
     const result = await runtime.crop({ image: 'sample.png', region: '10,20,50,40' }, { signal, workspace })
     expect(result.outputPath).toContain(join('.dsh-vision-toolkit', 'artifacts'))
     expect(result).toMatchObject({ mimeType: 'image/png', width: 40, height: 20, clamped: false })
+  })
+
+  it('writes artifacts and compression cache below the configured shared storage root', async () => {
+    const shared = await mkdtemp(join(tmpdir(), 'dsh-vision-toolkit-shared-'))
+    tempDirs.push(shared)
+    const { runtime } = await setup({ storageDir: shared, maxImageBytes: 1024 }, null)
+    const workspace = await tempWorkspace()
+    const canonicalWorkspace = await realpath(workspace)
+    const storageRoot = join(await realpath(shared), workspaceStorageId(canonicalWorkspace))
+
+    const result = await runtime.crop({ image: 'sample.png', region: '10,20,50,40' }, { signal, workspace })
+
+    expect(result.outputPath).toContain(join(storageRoot, 'artifacts'))
+    expect(await readdir(workspace)).toEqual(['sample.png'])
+    expect((await readdir(join(storageRoot, 'tmp', 'compressed-images'))).length).toBeGreaterThan(0)
   })
 
   it('trace writes an SVG and returns pinned vtracer facts without a credential', async () => {

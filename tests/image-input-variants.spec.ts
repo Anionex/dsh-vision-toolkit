@@ -230,6 +230,34 @@ describe('convertImagesToEvidence', () => {
     expect([...await readFile(imagePath as string)]).toEqual([7, 8, 9])
   })
 
+  it('keeps native attachments below the configured shared storage root', async () => {
+    const glance = vi.fn(async () => glanceResult('shared storage description'))
+    const attachments = { readImage: vi.fn(async () => ({ ref: attachment('shared-native'), data: Uint8Array.of(6, 5, 4) })) }
+    const workspace = await tempRoot()
+    const shared = await tempRoot()
+    const ctx = {
+      get: (name: string) => name === 'attachments' ? attachments : undefined,
+      sessions: { get: vi.fn(() => ({ header: { cwd: workspace } })) },
+    } as never
+
+    await convertImagesToEvidence(
+      ctx,
+      () => runtimeStub(glance),
+      new EvidenceCache(4),
+      [message('m1', [imageBlock('shared-native')])],
+      undefined,
+      'session-shared',
+      'runtime-shared',
+      shared,
+    )
+
+    const imagePath = glance.mock.calls[0]?.[0]?.images[0]
+    expect(imagePath).toBeDefined()
+    expect(imagePath).toContain(shared)
+    await expect(readdir(workspace)).resolves.toEqual([])
+    expect([...await readFile(imagePath as string)]).toEqual([6, 5, 4])
+  })
+
   it('does not reuse a session-bound path across sessions', async () => {
     const glance = vi.fn(async (request: { images: string[] }) => glanceResult(request.images[0] ?? 'missing'))
     const attachments = { readImage: vi.fn(async () => ({ ref: attachment('shared-a'), data: Uint8Array.of(4) })) }

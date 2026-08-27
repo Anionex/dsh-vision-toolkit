@@ -129,18 +129,21 @@ async function materializeImage(
   data: Uint8Array,
   extension: string,
   sessionId: string | undefined,
+  storageDir: string | undefined,
 ): Promise<MaterializedImage> {
   const session = sessionId === undefined ? undefined : ctx.sessions.get(sessionId as never)
   const cwd = session?.header.cwd
   if (sessionId !== undefined && cwd !== undefined && isAbsolute(cwd)) {
-    const root = await sessionPasteRoot(ctx, sessionId)
+    const root = await sessionPasteRoot(ctx, sessionId, storageDir)
     const identity = createHash('sha256')
       .update(`${sessionId}\u0000${String(block.attachment.attachmentId)}`)
       .digest('hex')
       .slice(0, 32)
-    const file = join(root.visibleRoot, `attachment-${identity}${extension}`)
+    const filename = `attachment-${identity}${extension}`
+    const writePath = join(root.writeRoot, filename)
+    const file = join(root.visibleRoot, filename)
     try {
-      await writeFile(file, Buffer.from(data), { mode: 0o600, flag: 'wx' })
+      await writeFile(writePath, Buffer.from(data), { mode: 0o600, flag: 'wx' })
     } catch (error) {
       if (!(error instanceof Error && 'code' in error && error.code === 'EEXIST')) throw error
     }
@@ -344,6 +347,7 @@ async function readImageBlock(
   block: ImageBlock,
   query: string,
   sessionId?: string,
+  storageDir?: string,
 ): Promise<ContentBlock> {
   const attachments = ctx.get('attachments')
   const current = runtime()
@@ -358,7 +362,7 @@ async function readImageBlock(
   let pathEvidence = ''
   try {
     const stored = await attachments.readImage(block.attachment)
-    const materialized = await materializeImage(ctx, block, stored.data, extension, sessionId)
+    const materialized = await materializeImage(ctx, block, stored.data, extension, sessionId, storageDir)
     temporaryDirectory = materialized.temporaryDirectory
     if (materialized.persistent) pathEvidence = imagePathEvidence(materialized.file)
 
@@ -401,6 +405,7 @@ async function readImageBlock(
  * @param signal - the caller's cancellation for this conversion pass.
  * @param sessionId - the live Session identity, when available.
  * @param runtimeHash - stable fingerprint of the vision provider and evidence runtime.
+ * @param storageDir - optional shared plugin storage root.
  * @returns the rewritten message list.
  */
 export async function convertImagesToEvidence(
@@ -411,6 +416,7 @@ export async function convertImagesToEvidence(
   signal?: AbortSignal,
   sessionId?: string,
   runtimeHash = 'process-only-runtime',
+  storageDir?: string,
 ): Promise<Message[]> {
   const session = sessionId === undefined ? undefined : ctx.sessions.get(sessionId as never)
   const sessionIdentity = session === undefined
@@ -467,7 +473,7 @@ export async function convertImagesToEvidence(
           prompt: query,
           runtimeHash,
         }), () =>
-          readImageBlock(ctx, runtime, block, query, sessionId)),
+          readImageBlock(ctx, runtime, block, query, sessionId, storageDir)),
         signal,
       ),
       signal,
@@ -504,6 +510,7 @@ export class ImageInputVariantAdapter extends LlmAdapter {
     private readonly runtime: () => VisionToolkitRuntime | undefined,
     private readonly cache: EvidenceCache,
     private readonly hidden: () => boolean = () => false,
+    private readonly storageDir: () => string | undefined = () => undefined,
   ) {
     super()
   }
@@ -574,6 +581,7 @@ export class ImageInputVariantAdapter extends LlmAdapter {
       options.signal,
       options.sessionId === undefined ? undefined : String(options.sessionId),
       captured?.evidenceFingerprint ?? 'process-only-runtime',
+      this.storageDir(),
     )
     // Delegate through the host service under the upstream route: the variant
     // is a wire-only facade, and the upstream route owns retry and replay.
@@ -945,6 +953,7 @@ export function installImageInputVariants(
               getRuntime,
               evidenceCache,
               () => getConfig().imageInputVariants.hidden,
+              () => getConfig().storageDir,
             ),
           )
           registrations.set(upstream, dispose)

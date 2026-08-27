@@ -78,6 +78,12 @@ export interface VisionToolkitConfig {
     /** Optional Python 3.11+ bootstrap/interpreter override. */
     python?: string
   }
+  /**
+   * Optional shared storage root. When set, every workspace gets an isolated,
+   * automatically generated child directory below this root instead of writing
+   * `.dsh-vision-toolkit` into the workspace.
+   */
+  storageDir?: string
   /** Extra directories (besides the workspace) inputs may come from. */
   allowedDirs?: string[]
   /**
@@ -132,6 +138,7 @@ export const Config: Schema<VisionToolkitConfig> = z.object({
     agentVisionToolkitPath: z.string(),
     python: z.string(),
   }),
+  storageDir: z.string(),
   allowedDirs: z.array(z.string()).default([]),
   imageInputVariants: z.object({
     enabled: z.boolean().default(true),
@@ -161,6 +168,7 @@ export interface ResolvedVisionToolkitConfig {
     agentVisionToolkitPath?: string
     python?: string
   }
+  storageDir?: string
   allowedDirs: string[]
   imageInputVariants: {
     enabled: boolean
@@ -254,6 +262,7 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
   if (python !== undefined && python.length === 0) {
     throw new VisionToolkitError('config', 'runtime.python must not be empty')
   }
+  const storageDir = config.storageDir?.trim()
   const allowedDirs = (config.allowedDirs ?? []).map(dir => dir.trim()).filter(dir => dir.length > 0)
   const imageInputVariants = config.imageInputVariants ?? {}
   const variantProviders = (imageInputVariants.providers ?? [])
@@ -271,6 +280,7 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
       ...(toolkitPath !== undefined ? { agentVisionToolkitPath: toolkitPath } : {}),
       ...(python !== undefined ? { python } : {}),
     },
+    ...(storageDir === undefined || storageDir.length === 0 ? {} : { storageDir }),
     allowedDirs,
     imageInputVariants: {
       enabled: imageInputVariants.enabled ?? true,

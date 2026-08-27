@@ -99,6 +99,7 @@ export async function apply(ctx: Context, config: VisionToolkitConfig = {}): Pro
   const backend = new VisionToolkitWebBackend(ctx, manager, artifacts, ensureOperational)
   const pastedImages = new PastedImageBackend(ctx, {
     maxUploadBytes: () => MAX_PASTE_IMAGE_BYTES,
+    storageDirectory: () => resolveConfig(settings.get()).storageDir,
   })
   // Image-input variants register asynchronously once eligible routes exist;
   // the runtime getter stays lazy so variants appear even when the runtime
