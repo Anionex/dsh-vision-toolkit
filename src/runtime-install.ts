@@ -22,9 +22,9 @@ import {
   utimes,
   writeFile,
 } from 'node:fs/promises'
-import { createWriteStream } from 'node:fs'
+import { createWriteStream, type Dirent } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { fileURLToPath } from 'node:url'
@@ -90,6 +90,7 @@ const LOCK_STALE_MS = 15 * 60 * 1000
 const LOCK_HEARTBEAT_MS = 5_000
 const WINDOWS_FILE_RETRY_ATTEMPTS = 5
 const WINDOWS_FILE_RETRY_DELAY_MS = 250
+const LEGACY_RUNTIME_GC_STALE_MS = 24 * 60 * 60 * 1000
 
 /** Absolute root of the packaged upstream snapshot. */
 export function bundledUpstreamRoot(): string {
@@ -144,6 +145,127 @@ export async function ignoreCleanupFailure(ctx: Context, label: string, path: st
       error instanceof Error ? error.message : String(error),
     )
   }
+}
+
+type RuntimeGarbageKind = 'managed runtime staging' | 'managed runtime quarantine' | 'bundled Python staging'
+
+interface RuntimeGarbageCandidate {
+  kind: RuntimeGarbageKind
+  lockName?: string
+  lockToken?: string
+}
+
+function runtimeGarbageLockToken(lockBase: string): string {
+  return sha256(lockBase).slice(0, 12)
+}
+
+function managedRuntimeGarbage(name: string): RuntimeGarbageCandidate | undefined {
+  if (name.startsWith('.prepare-')) {
+    const current = /^\.prepare-([a-f0-9]{12})-[^/]{6}$/.exec(name)
+    return { kind: 'managed runtime staging', ...(current === null ? {} : { lockToken: current[1] }) }
+  }
+  const replaced = name.indexOf('.replaced-')
+  if (replaced > 0) {
+    return { kind: 'managed runtime quarantine', lockName: `${name.slice(0, replaced)}.lock` }
+  }
+  return undefined
+}
+
+function bundledPythonGarbage(name: string): RuntimeGarbageCandidate | undefined {
+  if (!name.startsWith('.python-bootstrap-')) return undefined
+  const current = /^\.python-bootstrap-([a-f0-9]{12})-[^/]{6}$/.exec(name)
+  return { kind: 'bundled Python staging', ...(current === null ? {} : { lockToken: current[1] }) }
+}
+
+async function runtimeLockIsActive(lockPath: string, now: number): Promise<boolean> {
+  try {
+    const info = await stat(lockPath)
+    return now - info.mtimeMs <= LOCK_STALE_MS
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false
+    return true
+  }
+}
+
+async function garbageCollectDirectory(
+  ctx: Context,
+  parent: string,
+  classify: (name: string) => RuntimeGarbageCandidate | undefined,
+  now: number,
+): Promise<void> {
+  let entries: Dirent[]
+  try {
+    entries = await readdir(parent, { withFileTypes: true })
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
+    ctx.logger.warn(
+      'dsh-vision-toolkit: runtime garbage collection scan failed for %s: %s',
+      parent,
+      error instanceof Error ? error.message : String(error),
+    )
+    return
+  }
+  let activeLockTokens: Set<string> | undefined
+  const getActiveLockTokens = async (): Promise<Set<string>> => {
+    if (activeLockTokens !== undefined) return activeLockTokens
+    activeLockTokens = new Set<string>()
+    for (const lock of entries) {
+      if (
+        lock.isDirectory()
+        && lock.name.endsWith('.lock')
+        && await runtimeLockIsActive(join(parent, lock.name), now)
+      ) {
+        activeLockTokens.add(runtimeGarbageLockToken(lock.name.slice(0, -'.lock'.length)))
+      }
+    }
+    return activeLockTokens
+  }
+  let legacyCollectionSafe: boolean | undefined
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue
+    const candidate = classify(entry.name)
+    if (candidate === undefined) continue
+    const path = join(parent, entry.name)
+    if (candidate.lockName !== undefined) {
+      if (await runtimeLockIsActive(join(parent, candidate.lockName), now)) continue
+    } else if (candidate.lockToken !== undefined) {
+      if ((await getActiveLockTokens()).has(candidate.lockToken)) continue
+    } else {
+      if (legacyCollectionSafe === undefined) {
+        legacyCollectionSafe = (await getActiveLockTokens()).size === 0
+      }
+      if (!legacyCollectionSafe) continue
+      try {
+        const info = await stat(path)
+        if (now - info.mtimeMs <= LEGACY_RUNTIME_GC_STALE_MS) continue
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue
+        ctx.logger.warn(
+          'dsh-vision-toolkit: runtime garbage collection inspection failed for %s: %s',
+          path,
+          error instanceof Error ? error.message : String(error),
+        )
+        continue
+      }
+    }
+    await ignoreCleanupFailure(ctx, `stale ${candidate.kind}`, path)
+  }
+}
+
+/**
+ * Opportunistically remove abandoned runtime staging and quarantine trees.
+ * Current names encode their owning runtime lock, so live preparation is
+ * skipped. Legacy names are collected only when no runtime lock is active and
+ * after a conservative 24-hour grace period because they cannot be associated
+ * with a specific lock.
+ */
+export async function garbageCollectRuntimeCache(
+  ctx: Context,
+  stateRoot: string,
+  now: number = Date.now(),
+): Promise<void> {
+  await garbageCollectDirectory(ctx, join(stateRoot, 'python'), managedRuntimeGarbage, now)
+  await garbageCollectDirectory(ctx, join(stateRoot, 'python-bootstrap'), bundledPythonGarbage, now)
 }
 
 export function isolatedPythonEnvironment(home: string): NodeJS.ProcessEnv {
@@ -596,7 +718,7 @@ export async function acquireBundledPython(
     const parent = dirname(root)
     await mkdir(parent, { recursive: true })
     await withWindowsTransientRetry(() => rm(root, { recursive: true, force: true }))
-    const work = await mkdtemp(join(parent, '.python-bootstrap-'))
+    const work = await mkdtemp(join(parent, `.python-bootstrap-${runtimeGarbageLockToken(basename(root))}-`))
     try {
       const archive = join(work, 'python.tar.gz')
       const extractDir = join(work, 'extract')
@@ -897,6 +1019,7 @@ async function prepareManaged(
 ): Promise<PreparedUpstreamRuntime> {
   const stateRoot = visionToolkitStateRoot()
   await mkdir(stateRoot, { recursive: true })
+  await garbageCollectRuntimeCache(ctx, stateRoot)
   const cleanHome = join(stateRoot, 'home')
   await mkdir(cleanHome, { recursive: true })
   const bootstrap = await resolveBootstrapPython(ctx, config.runtime.python, cleanHome)
@@ -966,7 +1089,7 @@ async function prepareManaged(
     return prepareManaged(ctx, config, manifest)
   }
 
-  const staging = await mkdtemp(join(parent, '.prepare-'))
+  const staging = await mkdtemp(join(parent, `.prepare-${runtimeGarbageLockToken(runtimeId)}-`))
   const installEnv: NodeJS.ProcessEnv = {
     ...isolatedPythonEnvironment(cleanHome),
     UV_CACHE_DIR: join(stateRoot, 'uv-cache'),
