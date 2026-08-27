@@ -92,6 +92,16 @@ describe('createPathPolicy', () => {
     await expect(createPathPolicy(workspace, [], sharedLink)).rejects.toMatchObject({ code: 'path' })
   })
 
+  it('rejects an intermediate user-controlled symbolic link in the configured path', async () => {
+    const workspace = await tempDir('workspace')
+    const target = await outsideTempDir('shared-target')
+    const parent = await outsideTempDir('shared-alias-parent')
+    const alias = join(parent, 'alias')
+    await symlink(target, alias)
+
+    await expect(createPathPolicy(workspace, [], join(alias, 'shared'))).rejects.toMatchObject({ code: 'path' })
+  })
+
   it('accepts the root-owned platform /tmp alias as a shared storage base', async () => {
     if (typeof process.geteuid !== 'function') return
     const workspace = await tempDir('workspace')
