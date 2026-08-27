@@ -70,8 +70,7 @@ export declare class ImageInputVariantAdapter extends LlmAdapter {
     private readonly runtime;
     private readonly cache;
     private readonly hidden;
-    private readonly storageDir;
-    constructor(ctx: Context, llm: LlmService, upstream: string, upstreamName: string, runtime: () => VisionToolkitRuntime | undefined, cache: EvidenceCache, hidden?: () => boolean, storageDir?: () => string | undefined);
+    constructor(ctx: Context, llm: LlmService, upstream: string, upstreamName: string, runtime: () => VisionToolkitRuntime | undefined, cache: EvidenceCache, hidden?: () => boolean);
     providerInfo(provider: string): LlmProviderInfo;
     listModels(provider: string): Promise<readonly LlmModelInfo[]>;
     resolveModel(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;

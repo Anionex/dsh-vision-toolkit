@@ -510,7 +510,6 @@ export class ImageInputVariantAdapter extends LlmAdapter {
     private readonly runtime: () => VisionToolkitRuntime | undefined,
     private readonly cache: EvidenceCache,
     private readonly hidden: () => boolean = () => false,
-    private readonly storageDir: () => string | undefined = () => undefined,
   ) {
     super()
   }
@@ -559,6 +558,7 @@ export class ImageInputVariantAdapter extends LlmAdapter {
 
   override async *stream(options: GenerateOptions): AsyncGenerator<StreamChunk> {
     const current = this.runtime()
+    const storageDir = current?.storageDirectory
     let captured: CapturedEvidenceRuntime | undefined
     if (current !== undefined && options.messages.some(message => contentHasImage(message.content))) {
       try {
@@ -581,7 +581,7 @@ export class ImageInputVariantAdapter extends LlmAdapter {
       options.signal,
       options.sessionId === undefined ? undefined : String(options.sessionId),
       captured?.evidenceFingerprint ?? 'process-only-runtime',
-      this.storageDir(),
+      storageDir,
     )
     // Delegate through the host service under the upstream route: the variant
     // is a wire-only facade, and the upstream route owns retry and replay.
@@ -953,7 +953,6 @@ export function installImageInputVariants(
               getRuntime,
               evidenceCache,
               () => getConfig().imageInputVariants.hidden,
-              () => getConfig().storageDir,
             ),
           )
           registrations.set(upstream, dispose)

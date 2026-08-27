@@ -355,6 +355,8 @@ export declare class VisionToolkitRuntime {
     constructor(ctx: Context, config: ResolvedVisionToolkitConfig, adapter?: UpstreamAdapter);
     /** Pinned and prepared upstream identity. */
     get upstreamVersion(): UpstreamVersionInfo;
+    /** Shared storage root belonging to this immutable runtime generation. */
+    get storageDirectory(): string | undefined;
     /** Stable identity for persisted image descriptions produced by this runtime. */
     get evidenceFingerprint(): string;
     /** Capture the credential and provider identity used by one evidence conversion. */

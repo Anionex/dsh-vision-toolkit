@@ -85,8 +85,13 @@ export function workspaceStorageId(workspace: string): string {
 
 function assertSecureSharedBase(info: Stats, requested: string): void {
   if (typeof process.geteuid !== 'function') return
+  const currentUid = process.geteuid()
   const writableByOthers = (info.mode & 0o022) !== 0
   const sticky = (info.mode & 0o1000) !== 0
+  const trustedOwner = info.uid === currentUid || info.uid === 0
+  if (!trustedOwner) {
+    throw new VisionToolkitError('path', `configured storage directory must be owned by the current user or root: ${requested}`)
+  }
   if (writableByOthers && !sticky) {
     throw new VisionToolkitError('path', `configured storage directory must not be writable by other users unless it has the sticky bit: ${requested}`)
   }

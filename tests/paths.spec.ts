@@ -1,7 +1,7 @@
 import { chmod, lstat, mkdtemp, mkdir, readFile, realpath, symlink, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   commitStagedOutput,
   commitStagedDirectory,
@@ -66,6 +66,17 @@ describe('createPathPolicy', () => {
     const child = join(shared, workspaceStorageId(await realpath(workspace)))
     await mkdir(child, { mode: 0o700 })
     await chmod(child, 0o777)
+
+    await expect(createPathPolicy(workspace, [], shared)).rejects.toMatchObject({ code: 'path' })
+  })
+
+  it('rejects a sticky shared base not owned by the current user or root', async () => {
+    if (typeof process.geteuid !== 'function') return
+    const workspace = await tempDir('workspace')
+    const shared = await outsideTempDir('shared')
+    await chmod(shared, 0o1777)
+    const actualUid = process.geteuid()
+    vi.spyOn(process, 'geteuid').mockReturnValue(actualUid + 1)
 
     await expect(createPathPolicy(workspace, [], shared)).rejects.toMatchObject({ code: 'path' })
   })

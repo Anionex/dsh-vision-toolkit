@@ -50,11 +50,16 @@ function glanceResult(answer: string) {
   return { images: [], mode: 'describe' as const, answer, truncated: false }
 }
 
-function runtimeStub(glance: ReturnType<typeof vi.fn>, evidenceFingerprint = 'a'.repeat(64)) {
+function runtimeStub(
+  glance: ReturnType<typeof vi.fn>,
+  evidenceFingerprint = 'a'.repeat(64),
+  storageDirectory?: string,
+) {
   const captured = Object.freeze({ evidenceFingerprint, glance })
   return {
     glance,
     evidenceFingerprint,
+    storageDirectory,
     captureEvidenceRuntime: vi.fn(async () => captured),
   } as unknown as VisionToolkitRuntime
 }
@@ -790,6 +795,45 @@ describe('ImageInputVariantAdapter', () => {
     for await (const _chunk of adapter.stream(options)) { /* drain */ }
     expect(second.glance).toHaveBeenCalledTimes(1)
     expect(delegated).toHaveLength(3)
+  })
+
+  it('captures the storage directory from the same runtime generation as evidence', async () => {
+    const oldStorage = await tempRoot()
+    const newStorage = await tempRoot()
+    const workspace = await tempRoot()
+    const glance = vi.fn(async (request: { images: string[] }) => {
+      expect(request.images[0]).toContain(oldStorage)
+      expect(request.images[0]).not.toContain(newStorage)
+      return glanceResult('generation-consistent path')
+    })
+    const first = runtimeStub(glance, 'a'.repeat(64), oldStorage)
+    const second = runtimeStub(glance, 'b'.repeat(64), newStorage)
+    let current = first
+    vi.mocked(first.captureEvidenceRuntime).mockImplementation(async () => {
+      current = second
+      return Object.freeze({ evidenceFingerprint: 'a'.repeat(64), glance })
+    })
+    const attachments = { readImage: vi.fn(async () => ({ ref: attachment('a'), data: Uint8Array.of(1) })) }
+    const upstreamStream = vi.fn(async function* (): AsyncGenerator<StreamChunk> {
+      yield { type: 'finish', reason: { kind: 'stop' } }
+    })
+    const ctx = {
+      get: (name: string) => name === 'attachments' ? attachments : undefined,
+      sessions: { get: () => ({ header: { createdAt: 1, cwd: workspace } }) },
+      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(), stream: upstreamStream },
+    } as never
+    const adapter = new ImageInputVariantAdapter(ctx, ctx.llm, 'up', 'Upstream', () => current, new EvidenceCache(4))
+
+    for await (const _chunk of adapter.stream({
+      provider: 'vision-toolkit-up',
+      model: 'plain',
+      sessionId: 'session-storage-generation' as never,
+      messages: [message('m1', [imageBlock('a')])],
+    })) { /* drain */ }
+
+    expect(first.captureEvidenceRuntime).toHaveBeenCalledTimes(1)
+    expect(second.captureEvidenceRuntime).not.toHaveBeenCalled()
+    expect(glance).toHaveBeenCalledTimes(1)
   })
 })
 

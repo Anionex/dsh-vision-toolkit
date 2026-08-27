@@ -705,6 +705,11 @@ export class VisionToolkitRuntime {
     return this.adapter.versionInfo
   }
 
+  /** Shared storage root belonging to this immutable runtime generation. */
+  get storageDirectory(): string | undefined {
+    return this.config.storageDir
+  }
+
   /** Stable identity for persisted image descriptions produced by this runtime. */
   get evidenceFingerprint(): string {
     return evidenceRuntimeFingerprint(this.config, undefined, process.env.VISION_SSL_VERIFY?.trim())
