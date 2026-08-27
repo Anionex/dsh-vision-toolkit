@@ -313,6 +313,33 @@ export function retainedStorageHistory(
   ])].filter(storageDir => storageDir !== resolvedNext.storageDir)
 }
 
+export interface WatchedSettingsGeneration {
+  /** Configuration to activate now; omitted after a successful history writeback. */
+  config?: VisionToolkitConfig
+  /** Non-fatal internal-history persistence error. */
+  persistenceError?: unknown
+}
+
+/** Prepare one live Settings generation without letting internal history writeback block activation. */
+export async function prepareWatchedSettingsGeneration(
+  next: VisionToolkitConfig,
+  previous: VisionToolkitConfig,
+  writable: boolean,
+  persistStorageHistory: (storageHistory: string[]) => Promise<void>,
+): Promise<WatchedSettingsGeneration> {
+  const storageHistory = retainedStorageHistory(next, previous)
+  if (JSON.stringify(storageHistory) === JSON.stringify(next.storageHistory)) return { config: next }
+
+  const config = { ...next, storageHistory }
+  if (!writable) return { config }
+  try {
+    await persistStorageHistory(storageHistory)
+    return {}
+  } catch (persistenceError) {
+    return { config, persistenceError }
+  }
+}
+
 /** Whether a resolved provider should use the bundled public key instead of DSH credentials. */
 export function isBuiltInFreeVisionProvider(provider: ResolvedVisionToolkitConfig['provider']): boolean {
   return String(provider.credential) === BUILT_IN_FREE_VISION_CREDENTIAL

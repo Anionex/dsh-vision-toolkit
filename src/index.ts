@@ -18,8 +18,8 @@ import { ArtifactAccessController, prepareArtifactAccessKey } from './artifact-a
 import {
   Config,
   VISION_TOOLKIT_SETTINGS_NAMESPACE,
+  prepareWatchedSettingsGeneration,
   resolveConfig,
-  retainedStorageHistory,
   type ResolvedVisionToolkitConfig,
   type VisionToolkitConfig,
 } from './config.ts'
@@ -126,12 +126,20 @@ export async function apply(ctx: Context, config: VisionToolkitConfig = {}): Pro
   disposers.push(variants.dispose)
   disposers.push(settings.watch(async (next, previous) => {
     try {
-      const storageHistory = retainedStorageHistory(next, previous)
-      if (JSON.stringify(storageHistory) !== JSON.stringify(next.storageHistory)) {
-        await settings.update({ storageHistory })
-        return
+      const prepared = await prepareWatchedSettingsGeneration(
+        next,
+        previous,
+        ctx.settings.writable,
+        storageHistory => settings.update({ storageHistory }),
+      )
+      if (prepared.persistenceError !== undefined) {
+        const message = prepared.persistenceError instanceof Error
+          ? prepared.persistenceError.message
+          : String(prepared.persistenceError)
+        ctx.logger.warn('dsh-vision-toolkit: activating Settings without persisting internal storage history. %s', message)
       }
-      await manager.reconfigure(next)
+      if (prepared.config === undefined) return
+      await manager.reconfigure(prepared.config)
       ensureOperational()
       variants.reconcile()
     } catch (error) {

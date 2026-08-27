@@ -130,6 +130,14 @@ export interface ResolvedVisionToolkitConfig {
 export declare function resolveConfig(config?: VisionToolkitConfig): ResolvedVisionToolkitConfig;
 /** Merge prior storage roots into the next resolved generation's read-only history. */
 export declare function retainedStorageHistory(next: VisionToolkitConfig, previous: VisionToolkitConfig): string[];
+export interface WatchedSettingsGeneration {
+    /** Configuration to activate now; omitted after a successful history writeback. */
+    config?: VisionToolkitConfig;
+    /** Non-fatal internal-history persistence error. */
+    persistenceError?: unknown;
+}
+/** Prepare one live Settings generation without letting internal history writeback block activation. */
+export declare function prepareWatchedSettingsGeneration(next: VisionToolkitConfig, previous: VisionToolkitConfig, writable: boolean, persistStorageHistory: (storageHistory: string[]) => Promise<void>): Promise<WatchedSettingsGeneration>;
 /** Whether a resolved provider should use the bundled public key instead of DSH credentials. */
 export declare function isBuiltInFreeVisionProvider(provider: ResolvedVisionToolkitConfig['provider']): boolean;
 //# sourceMappingURL=config.d.ts.map

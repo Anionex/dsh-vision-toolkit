@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   BUILT_IN_FREE_VISION_BASE_URL,
   BUILT_IN_FREE_VISION_CREDENTIAL,
@@ -6,6 +6,7 @@ import {
   BUILT_IN_FREE_VISION_MODEL,
   DEFAULT_VISION_USER_AGENT,
   isBuiltInFreeVisionProvider,
+  prepareWatchedSettingsGeneration,
   retainedStorageHistory,
   resolveConfig,
 } from '../src/config.ts'
@@ -55,6 +56,36 @@ describe('resolveConfig', () => {
       { storageDir: '/storage/a' },
       { storageDir: '/storage/a', storageHistory: ['/storage/b'] },
     )).toEqual(['/storage/b'])
+  })
+
+  it('keeps read-only or failed history writeback from blocking live Settings activation', async () => {
+    const previous = { storageDir: '/storage/a' }
+    const next = { storageDir: '/storage/b' }
+    const readOnlyPersist = vi.fn(async () => {})
+
+    await expect(prepareWatchedSettingsGeneration(next, previous, false, readOnlyPersist))
+      .resolves.toEqual({ config: { storageDir: '/storage/b', storageHistory: ['/storage/a'] } })
+    expect(readOnlyPersist).not.toHaveBeenCalled()
+
+    const failure = new Error('read-only provider')
+    const failedPersist = vi.fn(async () => { throw failure })
+    await expect(prepareWatchedSettingsGeneration(next, previous, true, failedPersist))
+      .resolves.toEqual({
+        config: { storageDir: '/storage/b', storageHistory: ['/storage/a'] },
+        persistenceError: failure,
+      })
+  })
+
+  it('waits for the persisted Settings generation after internal history writeback succeeds', async () => {
+    const persist = vi.fn(async () => {})
+
+    await expect(prepareWatchedSettingsGeneration(
+      { storageDir: '/storage/b' },
+      { storageDir: '/storage/a' },
+      true,
+      persist,
+    )).resolves.toEqual({})
+    expect(persist).toHaveBeenCalledWith(['/storage/a'])
   })
 
   it('normalizes the provider URL and credential', () => {
