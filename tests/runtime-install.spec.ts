@@ -372,10 +372,18 @@ describe('bundled Python bootstrap', () => {
     const fiber = await ctx.plugin(BundledPythonSubprocessService)
     const stateRoot = visionToolkitStateRoot()
     await mkdir(join(stateRoot, 'home'), { recursive: true })
+    const target = pythonBootstrapTarget(process.platform, process.arch, false)
+    const orphan = join(
+      stateRoot,
+      'python-bootstrap',
+      `.python-bootstrap-${runtimeGcToken(`3.13.15-${target}`)}-ABC123`,
+    )
+    await mkdir(orphan, { recursive: true })
     const resolved = await resolveBootstrapPython(ctx, undefined, join(stateRoot, 'home'), manifest, requestMock)
     expect(resolved.version).toBe('3.13.15')
     expect(resolved.command.program).toContain(join('python-bootstrap', '3.13.15-'))
     expect(requestMock).toHaveBeenCalledTimes(1)
+    expect(await pathExists(orphan)).toBe(false)
   })
 
   it('does not auto-download when the user configured an interpreter', async () => {
@@ -485,6 +493,7 @@ describe('runtime cache garbage collection', () => {
     const staleMs = now - 25 * 60 * 60 * 1000
     const recentQuarantine = join(pythonRoot, `runtime-a.replaced-${now}-recovery`)
     const staleQuarantine = join(pythonRoot, `runtime-c.replaced-${staleMs}-stale`)
+    const legacyQuarantine = join(pythonRoot, 'runtime-d.replaced-legacy')
     const activeQuarantine = join(pythonRoot, `runtime-b.replaced-${staleMs}-active`)
     const activePrepare = join(pythonRoot, `.prepare-${runtimeGcToken('runtime-b')}-ABC123`)
     const activeBootstrap = join(bootstrapRoot, `.python-bootstrap-${runtimeGcToken('3.14.0-test-x64')}-ABC123`)
@@ -494,7 +503,7 @@ describe('runtime cache garbage collection', () => {
       join(pythonRoot, '.prepare-OLD123'),
       join(bootstrapRoot, '.python-bootstrap-OLD123'),
     ]
-    for (const path of [...orphaned, recentQuarantine, staleQuarantine, ...active, recentLegacy, ...staleLegacy]) {
+    for (const path of [...orphaned, recentQuarantine, staleQuarantine, legacyQuarantine, ...active, recentLegacy, ...staleLegacy]) {
       await mkdir(path, { recursive: true })
       await writeFile(join(path, 'payload'), 'fixture')
     }
@@ -506,9 +515,10 @@ describe('runtime cache garbage collection', () => {
     await garbageCollectRuntimeCache(ctx, stateRoot, now)
 
     for (const path of [...orphaned, staleQuarantine]) expect(await pathExists(path)).toBe(false)
-    for (const path of [recentQuarantine, ...active, recentLegacy, ...staleLegacy]) {
+    for (const path of [recentQuarantine, legacyQuarantine, ...active, recentLegacy, ...staleLegacy]) {
       expect(await pathExists(path)).toBe(true)
     }
+    expect(await pathExists(join(legacyQuarantine, '.dsh-vision-toolkit-gc-observed'))).toBe(true)
 
     await rm(join(pythonRoot, 'runtime-b.lock'), { recursive: true, force: true })
     await rm(join(bootstrapRoot, '3.14.0-test-x64.lock'), { recursive: true, force: true })
@@ -521,6 +531,7 @@ describe('runtime cache garbage collection', () => {
 
     await garbageCollectRuntimeCache(ctx, stateRoot, now + 25 * 60 * 60 * 1000)
     expect(await pathExists(recentQuarantine)).toBe(false)
+    expect(await pathExists(legacyQuarantine)).toBe(false)
   })
 
   it('runs before a cached managed runtime is reused', async () => {

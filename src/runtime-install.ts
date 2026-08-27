@@ -155,6 +155,7 @@ interface RuntimeGarbageCandidate {
   lockToken?: string
   minimumAgeMs?: number
   createdAtMs?: number
+  observationMarker?: string
 }
 
 function runtimeGarbageLockToken(lockBase: string): string {
@@ -173,7 +174,9 @@ function managedRuntimeGarbage(name: string): RuntimeGarbageCandidate | undefine
       kind: 'managed runtime quarantine',
       lockName: `${name.slice(0, replaced)}.lock`,
       minimumAgeMs: LEGACY_RUNTIME_GC_STALE_MS,
-      ...(stamped === null ? {} : { createdAtMs: Number(stamped[1]) }),
+      ...(stamped === null
+        ? { observationMarker: '.dsh-vision-toolkit-gc-observed' }
+        : { createdAtMs: Number(stamped[1]) }),
     }
   }
   return undefined
@@ -258,6 +261,17 @@ async function garbageCollectDirectory(
     }
     if (candidate.minimumAgeMs !== undefined) {
       let createdAt = candidate.createdAtMs
+      if (createdAt === undefined && candidate.observationMarker !== undefined) {
+        const marker = join(path, candidate.observationMarker)
+        try {
+          createdAt = (await stat(marker)).mtimeMs
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+            await writeFile(marker, `${now}\n`, { flag: 'wx' }).catch(() => {})
+          }
+          continue
+        }
+      }
       if (createdAt === undefined) {
         try {
           createdAt = (await stat(path)).mtimeMs
@@ -822,6 +836,7 @@ export async function resolveBootstrapPython(
   try {
     const stateRoot = visionToolkitStateRoot()
     await mkdir(stateRoot, { recursive: true })
+    await garbageCollectRuntimeCache(ctx, stateRoot)
     const bundled = await acquireBundledPython(ctx, stateRoot, cwd, manifestOverride, requestImpl)
     return {
       command: bundled.command,
