@@ -38,7 +38,7 @@ declare const en: {
     readonly python: "Python override";
     readonly storage: "Local files";
     readonly storageDir: "Default save directory";
-    readonly storageDirHint: "Leave blank to keep .dsh-vision-toolkit in each workspace. Set a shared root such as /tmp/dsh-vision-toolkit to store artifacts, pasted images, and caches in an automatically generated workspace-specific child directory.";
+    readonly storageDirHint: "Leave blank to keep .dsh-vision-toolkit in each workspace. Set an absolute shared root such as /tmp/dsh-vision-toolkit to store artifacts, pasted images, and caches in an automatically generated per-user, workspace-specific child directory.";
     readonly allowedDirs: "Additional allowed directories";
     readonly allowedDirsHint: "One path per line. The session workspace is always allowed.";
     readonly save: "Save and apply";

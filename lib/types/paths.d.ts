@@ -39,10 +39,12 @@ export declare function platformTempDirectory(platform?: NodeJS.Platform, enviro
  * unchanged, and the normal realpath fence still validates the result.
  */
 export declare function normalizePlatformTempPath(raw: string, platform?: NodeJS.Platform, tempDirectory?: string): string;
-/** Stable opaque workspace id used below a configured shared storage root. */
-export declare function workspaceStorageId(workspace: string): string;
+/** Stable opaque per-user workspace id used below a shared storage root. */
+export declare function workspaceStorageId(workspace: string, userIdentity?: string): string;
 /** Resolve a shared base and prove every POSIX ancestor is protected from replacement. */
 export declare function assertSecureSharedStorageBase(requested: string): Promise<string>;
+/** Validate and write-probe a configured shared root before Settings activation. */
+export declare function preflightSharedStorageBase(storageDirRaw: string): Promise<string>;
 /**
  * Resolve the plugin-managed root for one workspace. Blank configuration keeps
  * the legacy workspace-local `.dsh-vision-toolkit` directory. A configured

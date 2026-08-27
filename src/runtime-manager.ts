@@ -7,6 +7,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import { resolveConfig, type ResolvedVisionToolkitConfig, type VisionToolkitConfig } from './config.ts'
+import { preflightSharedStorageBase } from './paths.ts'
 import { VisionToolkitRuntime } from './runtime.ts'
 import { UpstreamAdapter, type UpstreamVersionInfo } from './upstream.ts'
 
@@ -83,6 +84,7 @@ export class VisionToolkitRuntimeManager {
   /** Resolve and fully prepare a candidate without changing the active runtime. */
   async prepareCandidate(raw: VisionToolkitConfig): Promise<PreparedRuntimeGeneration> {
     const config = resolveConfig(raw)
+    if (config.storageDir !== undefined) await preflightSharedStorageBase(config.storageDir)
     const resolvedFingerprint = fingerprint(config)
     if (this.active?.fingerprint === resolvedFingerprint) {
       return { ...this.active, config }

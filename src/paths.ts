@@ -8,7 +8,7 @@
 
 import { createHash, randomUUID } from 'node:crypto'
 import type { Stats } from 'node:fs'
-import { cp, link, lstat, mkdir, readdir, realpath, rename, rm, stat } from 'node:fs/promises'
+import { cp, link, lstat, mkdir, mkdtemp, readdir, realpath, rename, rm, stat } from 'node:fs/promises'
 import { dirname, extname, isAbsolute, join, relative, resolve, sep, win32 } from 'node:path'
 import { homedir, tmpdir } from 'node:os'
 import { VisionToolkitError } from './errors.ts'
@@ -78,9 +78,19 @@ export function normalizePlatformTempPath(
   return win32.join(tempDirectory, raw.slice('/tmp/'.length))
 }
 
-/** Stable opaque workspace id used below a configured shared storage root. */
-export function workspaceStorageId(workspace: string): string {
-  return createHash('sha256').update(workspace).digest('hex').slice(0, 20)
+/** Stable opaque per-user workspace id used below a shared storage root. */
+export function workspaceStorageId(
+  workspace: string,
+  userIdentity: string = typeof process.geteuid === 'function'
+    ? `uid:${process.geteuid()}`
+    : `home:${homedir()}`,
+): string {
+  return createHash('sha256')
+    .update(userIdentity)
+    .update('\0')
+    .update(workspace)
+    .digest('hex')
+    .slice(0, 20)
 }
 
 function assertSecureWorkspaceStorage(info: Stats, requested: string): void {
@@ -146,6 +156,52 @@ export async function assertSecureSharedStorageBase(requested: string): Promise<
   }
 }
 
+function requestedSharedStorageBase(storageDirRaw: string): string {
+  const configured = normalizePlatformTempPath(expandUserHome(storageDirRaw.trim()))
+  if (!isAbsolute(configured)) {
+    throw new VisionToolkitError('path', `configured storage directory must be an absolute path: ${storageDirRaw}`)
+  }
+  return resolve(configured)
+}
+
+async function ensureSharedStorageBase(storageDirRaw: string): Promise<{ requestedBase: string; base: string }> {
+  const requestedBase = requestedSharedStorageBase(storageDirRaw)
+  try {
+    await mkdir(requestedBase, { recursive: true, mode: 0o700 })
+  } catch (error) {
+    throw new VisionToolkitError('path', `configured storage directory is not writable: ${requestedBase}`, { cause: error })
+  }
+  try {
+    return { requestedBase, base: await assertSecureSharedStorageBase(requestedBase) }
+  } catch (error) {
+    throw new VisionToolkitError('path', `configured storage directory is not accessible: ${requestedBase}`, { cause: error })
+  }
+}
+
+/** Validate and write-probe a configured shared root before Settings activation. */
+export async function preflightSharedStorageBase(storageDirRaw: string): Promise<string> {
+  const { base } = await ensureSharedStorageBase(storageDirRaw)
+  let probe: string | undefined
+  let failure: unknown
+  try {
+    probe = await mkdtemp(join(base, '.dsh-vision-toolkit-preflight-'))
+    assertSecureWorkspaceStorage(await lstat(probe), probe)
+  } catch (error) {
+    failure = error
+  }
+  if (probe !== undefined) {
+    try {
+      await rm(probe, { recursive: true, force: true })
+    } catch (error) {
+      failure ??= error
+    }
+  }
+  if (failure !== undefined) {
+    throw new VisionToolkitError('path', `configured storage directory failed its write preflight: ${base}`, { cause: failure })
+  }
+  return base
+}
+
 async function managedDirectory(
   parent: string,
   requested: string,
@@ -200,19 +256,7 @@ export async function resolveWorkspaceStorage(
     return { workspace, root, visibleRoot }
   }
 
-  const configured = normalizePlatformTempPath(expandUserHome(storageDirRaw.trim()))
-  const requestedBase = isAbsolute(configured) ? configured : resolve(visibleWorkspace, configured)
-  try {
-    await mkdir(requestedBase, { recursive: true, mode: 0o700 })
-  } catch (error) {
-    throw new VisionToolkitError('path', `configured storage directory is not writable: ${requestedBase}`, { cause: error })
-  }
-  let base: string
-  try {
-    base = await assertSecureSharedStorageBase(requestedBase)
-  } catch (error) {
-    throw new VisionToolkitError('path', `configured storage directory is not accessible: ${requestedBase}`, { cause: error })
-  }
+  const { requestedBase, base } = await ensureSharedStorageBase(storageDirRaw)
   const id = workspaceStorageId(workspace)
   const visibleRoot = join(requestedBase, id)
   const root = await managedDirectory(base, join(base, id), 'workspace storage directory', true)

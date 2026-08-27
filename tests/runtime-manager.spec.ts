@@ -1,3 +1,6 @@
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ResolvedVisionToolkitConfig } from '../src/config.ts'
@@ -5,9 +8,17 @@ import type { VisionToolkitRuntime } from '../src/runtime.ts'
 import { VisionToolkitRuntimeManager, type RuntimeGenerationFactory } from '../src/runtime-manager.ts'
 
 const contexts: Context[] = []
+const tempDirs: string[] = []
+
+async function tempDir(prefix: string): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), `dsh-vision-toolkit-${prefix}-`))
+  tempDirs.push(dir)
+  return dir
+}
 
 afterEach(async () => {
   await Promise.all(contexts.splice(0).map(ctx => ctx.fiber.dispose()))
+  await Promise.all(tempDirs.splice(0).map(dir => rm(dir, { recursive: true, force: true })))
 })
 
 function fakeRuntime(config: ResolvedVisionToolkitConfig): VisionToolkitRuntime {
@@ -56,17 +67,38 @@ describe('VisionToolkitRuntimeManager', () => {
   it('keeps consumers on the active configuration while a candidate fails', async () => {
     const ctx = new Context()
     contexts.push(ctx)
+    const activeStorage = await tempDir('active-storage')
+    const rejectedStorage = await tempDir('rejected-storage')
     const factory: RuntimeGenerationFactory = async (_ctx, resolved) => {
-      if (resolved.storageDir === '/tmp/rejected-storage') throw new Error('fixture runtime unavailable')
+      if (resolved.storageDir === rejectedStorage) throw new Error('fixture runtime unavailable')
       return fakeRuntime(resolved)
     }
     const manager = new VisionToolkitRuntimeManager(ctx, factory)
-    await manager.initialize({ ...config('first'), storageDir: '/tmp/active-storage' })
+    await manager.initialize({ ...config('first'), storageDir: activeStorage })
 
-    await expect(manager.reconfigure({ ...config('first'), storageDir: '/tmp/rejected-storage' }))
+    await expect(manager.reconfigure({ ...config('first'), storageDir: rejectedStorage }))
       .rejects.toThrow('fixture runtime unavailable')
 
-    expect(manager.currentConfig().storageDir).toBe('/tmp/active-storage')
+    expect(manager.currentConfig().storageDir).toBe(activeStorage)
+  })
+
+  it('rejects an unusable shared storage root before preparing or replacing the runtime', async () => {
+    const ctx = new Context()
+    contexts.push(ctx)
+    const factory = vi.fn(async (_ctx: Context, resolved: ResolvedVisionToolkitConfig) => fakeRuntime(resolved))
+    const manager = new VisionToolkitRuntimeManager(ctx, factory)
+    await manager.initialize(config('first'))
+    const first = manager.current()
+    const parent = await tempDir('invalid-storage')
+    const file = join(parent, 'not-a-directory')
+    await writeFile(file, 'fixture')
+
+    await expect(manager.reconfigure({ ...config('second'), storageDir: file }))
+      .rejects.toThrow(/configured storage directory/u)
+
+    expect(factory).toHaveBeenCalledTimes(1)
+    expect(manager.current()).toBe(first)
+    expect(manager.status()).toMatchObject({ ready: true, generation: 1 })
   })
 
   it('treats transparent-routing visibility as display-only so toggling it does not rebuild the runtime', async () => {

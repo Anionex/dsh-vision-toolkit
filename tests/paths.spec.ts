@@ -1,4 +1,4 @@
-import { chmod, lstat, mkdtemp, mkdir, readFile, realpath, symlink, writeFile } from 'node:fs/promises'
+import { chmod, lstat, mkdtemp, mkdir, readFile, readdir, realpath, symlink, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -10,6 +10,7 @@ import {
   createStagedOutput,
   normalizePlatformTempPath,
   platformTempDirectory,
+  preflightSharedStorageBase,
   resolveHtmlFile,
   resolveInputFile,
   resolveOutputDirectory,
@@ -38,6 +39,29 @@ afterEach(async () => {
 })
 
 describe('createPathPolicy', () => {
+  it('names shared workspace storage separately for each user identity', () => {
+    const workspace = '/fixture/workspace'
+
+    expect(workspaceStorageId(workspace, 'uid:1000')).not.toBe(workspaceStorageId(workspace, 'uid:1001'))
+    expect(workspaceStorageId(workspace, 'uid:1000')).toMatch(/^[a-f0-9]{20}$/u)
+  })
+
+  it('write-probes a shared base without leaving preflight directories behind', async () => {
+    const shared = join(await outsideTempDir('preflight-parent'), 'shared')
+
+    await expect(preflightSharedStorageBase(shared)).resolves.toBe(await realpath(shared))
+    expect((await readdir(shared)).filter(name => name.startsWith('.dsh-vision-toolkit-preflight-'))).toEqual([])
+  })
+
+  it('rejects relative or non-directory shared storage roots during preflight', async () => {
+    const parent = await outsideTempDir('preflight-invalid')
+    const file = join(parent, 'storage-file')
+    await writeFile(file, 'fixture')
+
+    await expect(preflightSharedStorageBase('relative/storage')).rejects.toMatchObject({ code: 'path' })
+    await expect(preflightSharedStorageBase(file)).rejects.toMatchObject({ code: 'path' })
+  })
+
   it('creates the plugin output directory inside the workspace', async () => {
     const workspace = await tempDir('workspace')
     const policy = await createPathPolicy(workspace, [])
