@@ -95,6 +95,18 @@ export function variantProviderId(upstream: string): string {
   return `${VARIANT_PROVIDER_PREFIX}${upstream}`
 }
 
+/** Stable semantic key for detecting a provider retry-policy replacement. */
+function retryPolicyKey(policy: ResolvedRetryPolicy): string {
+  const backoff = [policy.initialDelayMs, policy.maxDelayMs, policy.jitterRatio]
+  if (policy.mode === 'always') return JSON.stringify([policy.mode, ...backoff])
+  return JSON.stringify([
+    policy.mode,
+    policy.maxRetries,
+    [...policy.retryableCodes].sort(),
+    ...backoff,
+  ])
+}
+
 /**
  * Whether one model earns an image-input variant: the host must positively
  * declare it text-only. A model with unknown modalities is left alone — its
@@ -817,10 +829,9 @@ export function installImageInputVariants(
 ): { dispose: () => void; reconcile: () => void } {
   const evidenceStore = new SessionEvidenceStore(ctx)
   const evidenceCache = new EvidenceCache(EVIDENCE_CACHE_LIMIT, evidenceStore)
-  const registrations = new Map<string, () => void>()
-  // The host snapshots adapter provider metadata (including the group display
-  // name) at registration time, so a transparent-routing toggle must rebuild
-  // every wrapper for the new names to reach the model selector.
+  const registrations = new Map<string, { dispose: () => void; retryPolicyKey: string }>()
+  // The host snapshots adapter provider metadata and retry policy at registration
+  // time, so changes to either require rebuilding the wrapper route.
   let lastHidden = false
   // Upstream ids observed missing and the timestamp of the first missing
   // observation. A wrapper is only released after its upstream stays absent
@@ -837,12 +848,12 @@ export function installImageInputVariants(
   let sweepQueued = false
 
   const release = (upstream: string): void => {
-    const dispose = registrations.get(upstream)
-    if (dispose === undefined) return
+    const registration = registrations.get(upstream)
+    if (registration === undefined) return
     registrations.delete(upstream)
     stale.delete(upstream)
     try {
-      dispose()
+      registration.dispose()
     } catch (error) {
       ctx.logger.warn(
         'dsh-vision-toolkit: image-input variant release failed for "%s": %s',
@@ -921,18 +932,28 @@ export function installImageInputVariants(
           continue
         }
         const eligible = models.some(shouldWrapModel)
-        const registered = registrations.has(upstream)
-        if (registered && live.has(variantId)) {
+        let upstreamRetryPolicyKey: string
+        try {
+          upstreamRetryPolicyKey = retryPolicyKey(llm.providerRetryPolicy(upstream))
+        } catch {
+          // Preserve an existing wrapper through a transient upstream registry
+          // gap; the next topology event or periodic sweep will retry the probe.
+          continue
+        }
+        let registration = registrations.get(upstream)
+        if (registration !== undefined && live.has(variantId)) {
           // Re-read the live registry after the await: a rebuild inside the
           // probe window can drop our wrapper without touching our map.
           const liveNow = new Set(llm.listProviders().map(provider => provider.id))
           if (liveNow.has(variantId)) {
-            // Healthy handle: only react when the route lost every eligible model.
-            if (!eligible) release(upstream)
-            continue
+            if (eligible && registration.retryPolicyKey === upstreamRetryPolicyKey) continue
+            // Eligibility and retry policy are registration-time facts. Rebuild
+            // whenever either no longer matches the live upstream route.
+            release(upstream)
+            registration = undefined
           }
         }
-        if (registered) {
+        if (registration !== undefined) {
           // Dead handle from a registry rebuild/reset: drop it and register a
           // fresh wrapper below.
           release(upstream)
@@ -952,7 +973,7 @@ export function installImageInputVariants(
               () => getConfig().imageInputVariants.hidden,
             ),
           )
-          registrations.set(upstream, dispose)
+          registrations.set(upstream, { dispose, retryPolicyKey: upstreamRetryPolicyKey })
           stale.delete(upstream)
         } catch (error) {
           ctx.logger.warn(
