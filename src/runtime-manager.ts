@@ -27,6 +27,12 @@ export interface RuntimeManagerStatus {
   lastError?: string
 }
 
+/** Storage selection paired to the active or validated startup generation. */
+export interface RuntimeStorageGeneration {
+  generation: number
+  storageDir?: string
+}
+
 /** Test seam for preparing one generation. */
 export type RuntimeGenerationFactory = (
   ctx: Context,
@@ -58,6 +64,7 @@ export class VisionToolkitRuntimeManager {
   private generation = 0
   private reconfigureTicket = 0
   private lastError: string | undefined
+  private validatedStartupStorageDir: string | null | undefined
 
   constructor(
     private readonly ctx: Context,
@@ -81,16 +88,37 @@ export class VisionToolkitRuntimeManager {
     return this.active !== undefined
   }
 
-  /** Resolve and fully prepare a candidate without changing the active runtime. */
-  async prepareCandidate(raw: VisionToolkitConfig): Promise<PreparedRuntimeGeneration> {
-    const config = resolveConfig(raw)
-    if (config.storageDir !== undefined) await preflightSharedStorageBase(config.storageDir)
+  /** Storage config safe for paste writes even when initial runtime preparation failed. */
+  storageGeneration(): RuntimeStorageGeneration {
+    if (this.active !== undefined) {
+      return {
+        generation: this.generation,
+        ...(this.active.config.storageDir === undefined ? {} : { storageDir: this.active.config.storageDir }),
+      }
+    }
+    if (this.validatedStartupStorageDir === undefined) {
+      throw new Error('dsh-vision-toolkit storage configuration is not ready')
+    }
+    return {
+      generation: this.generation,
+      ...(this.validatedStartupStorageDir === null ? {} : { storageDir: this.validatedStartupStorageDir }),
+    }
+  }
+
+  private async prepareResolvedCandidate(config: ResolvedVisionToolkitConfig): Promise<PreparedRuntimeGeneration> {
     const resolvedFingerprint = fingerprint(config)
     if (this.active?.fingerprint === resolvedFingerprint) {
       return { ...this.active, config }
     }
     const runtime = await this.factory(this.ctx, config)
     return { config, fingerprint: resolvedFingerprint, runtime }
+  }
+
+  /** Resolve and fully prepare a candidate without changing the active runtime. */
+  async prepareCandidate(raw: VisionToolkitConfig): Promise<PreparedRuntimeGeneration> {
+    const config = resolveConfig(raw)
+    if (config.storageDir !== undefined) await preflightSharedStorageBase(config.storageDir)
+    return this.prepareResolvedCandidate(config)
   }
 
   /**
@@ -119,7 +147,10 @@ export class VisionToolkitRuntimeManager {
   /** Prepare and publish the initial or explicitly validated generation. */
   async initialize(raw: VisionToolkitConfig): Promise<void> {
     try {
-      this.activateCandidate(await this.prepareCandidate(raw))
+      const config = resolveConfig(raw)
+      if (config.storageDir !== undefined) await preflightSharedStorageBase(config.storageDir)
+      this.validatedStartupStorageDir = config.storageDir ?? null
+      this.activateCandidate(await this.prepareResolvedCandidate(config))
     } catch (error) {
       this.lastError = messageOf(error)
       throw error

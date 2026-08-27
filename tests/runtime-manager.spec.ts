@@ -101,6 +101,21 @@ describe('VisionToolkitRuntimeManager', () => {
     expect(manager.status()).toMatchObject({ ready: true, generation: 1 })
   })
 
+  it('keeps validated startup storage available when initial runtime preparation fails', async () => {
+    const ctx = new Context()
+    contexts.push(ctx)
+    const shared = await tempDir('startup-storage')
+    const manager = new VisionToolkitRuntimeManager(ctx, async () => {
+      throw new Error('fixture runtime unavailable')
+    })
+
+    await expect(manager.initialize({ ...config('broken'), storageDir: shared }))
+      .rejects.toThrow('fixture runtime unavailable')
+
+    expect(manager.ready).toBe(false)
+    expect(manager.storageGeneration()).toEqual({ generation: 0, storageDir: shared })
+  })
+
   it('treats transparent-routing visibility as display-only so toggling it does not rebuild the runtime', async () => {
     const ctx = new Context()
     contexts.push(ctx)

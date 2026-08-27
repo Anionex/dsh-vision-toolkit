@@ -22,6 +22,11 @@ export interface RuntimeManagerStatus {
     upstream?: UpstreamVersionInfo;
     lastError?: string;
 }
+/** Storage selection paired to the active or validated startup generation. */
+export interface RuntimeStorageGeneration {
+    generation: number;
+    storageDir?: string;
+}
 /** Test seam for preparing one generation. */
 export type RuntimeGenerationFactory = (ctx: Context, config: ResolvedVisionToolkitConfig) => Promise<VisionToolkitRuntime>;
 /** Internal runtime source with prepare-before-swap semantics. */
@@ -32,6 +37,7 @@ export declare class VisionToolkitRuntimeManager {
     private generation;
     private reconfigureTicket;
     private lastError;
+    private validatedStartupStorageDir;
     constructor(ctx: Context, factory?: RuntimeGenerationFactory);
     /** The currently serving runtime; unavailable until one generation prepares. */
     current(): VisionToolkitRuntime;
@@ -39,6 +45,9 @@ export declare class VisionToolkitRuntimeManager {
     currentConfig(): ResolvedVisionToolkitConfig;
     /** Whether at least one generation is available. */
     get ready(): boolean;
+    /** Storage config safe for paste writes even when initial runtime preparation failed. */
+    storageGeneration(): RuntimeStorageGeneration;
+    private prepareResolvedCandidate;
     /** Resolve and fully prepare a candidate without changing the active runtime. */
     prepareCandidate(raw: VisionToolkitConfig): Promise<PreparedRuntimeGeneration>;
     /**
