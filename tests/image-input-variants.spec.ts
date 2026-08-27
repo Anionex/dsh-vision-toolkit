@@ -623,7 +623,8 @@ describe('ImageInputVariantAdapter', () => {
     })) { /* drain */ }
 
     const text = delegated[0]?.messages[0]?.content.find(block => block.type === 'text' && block.text.includes('runtime is not ready'))
-    expect(text).toMatchObject({ type: 'text', text: expect.stringContaining(shared) })
+    const modelVisibleShared = JSON.stringify(shared).slice(1, -1)
+    expect(text).toMatchObject({ type: 'text', text: expect.stringContaining(modelVisibleShared) })
     await expect(readdir(workspace)).resolves.toEqual([])
   })
 
