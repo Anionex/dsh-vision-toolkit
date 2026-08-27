@@ -114,6 +114,25 @@ describe('VisionToolkitRuntimeManager', () => {
 
     expect(manager.ready).toBe(false)
     expect(manager.storageGeneration()).toEqual({ generation: 0, storageDir: shared })
+    expect(manager.validatedStorageDirectory()).toBe(shared)
+  })
+
+  it('keeps best-effort consumers usable when startup storage preflight fails', async () => {
+    const ctx = new Context()
+    contexts.push(ctx)
+    const parent = await tempDir('invalid-startup-storage')
+    const file = join(parent, 'not-a-directory')
+    await writeFile(file, 'fixture')
+    const factory = vi.fn(async (_ctx: Context, resolved: ResolvedVisionToolkitConfig) => fakeRuntime(resolved))
+    const manager = new VisionToolkitRuntimeManager(ctx, factory)
+
+    await expect(manager.initialize({ ...config('broken'), storageDir: file }))
+      .rejects.toThrow(/configured storage directory/u)
+
+    expect(manager.ready).toBe(false)
+    expect(manager.validatedStorageDirectory()).toBeUndefined()
+    expect(() => manager.storageGeneration()).toThrow('storage configuration is not ready')
+    expect(factory).not.toHaveBeenCalled()
   })
 
   it('treats transparent-routing visibility as display-only so toggling it does not rebuild the runtime', async () => {

@@ -105,6 +105,12 @@ export class VisionToolkitRuntimeManager {
     }
   }
 
+  /** Validated storage for best-effort consumers; undefined when startup preflight failed. */
+  validatedStorageDirectory(): string | undefined {
+    if (this.active !== undefined) return this.active.config.storageDir
+    return this.validatedStartupStorageDir ?? undefined
+  }
+
   private async prepareResolvedCandidate(config: ResolvedVisionToolkitConfig): Promise<PreparedRuntimeGeneration> {
     const resolvedFingerprint = fingerprint(config)
     if (this.active?.fingerprint === resolvedFingerprint) {

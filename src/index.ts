@@ -112,7 +112,7 @@ export async function apply(ctx: Context, config: VisionToolkitConfig = {}): Pro
     ctx,
     currentConfig,
     () => manager.ready ? manager.current() : undefined,
-    () => manager.storageGeneration().storageDir,
+    () => manager.validatedStorageDirectory(),
   )
   installVisionToolkitWeb(
     ctx,

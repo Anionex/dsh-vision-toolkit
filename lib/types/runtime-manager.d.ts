@@ -47,6 +47,8 @@ export declare class VisionToolkitRuntimeManager {
     get ready(): boolean;
     /** Storage config safe for paste writes even when initial runtime preparation failed. */
     storageGeneration(): RuntimeStorageGeneration;
+    /** Validated storage for best-effort consumers; undefined when startup preflight failed. */
+    validatedStorageDirectory(): string | undefined;
     private prepareResolvedCandidate;
     /** Resolve and fully prepare a candidate without changing the active runtime. */
     prepareCandidate(raw: VisionToolkitConfig): Promise<PreparedRuntimeGeneration>;
