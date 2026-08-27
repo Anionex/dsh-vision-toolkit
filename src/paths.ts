@@ -105,7 +105,7 @@ function currentPosixUid(): number {
 
 export function assertSecureWorkspaceStorage(info: Stats, requested: string): void {
   const currentUid = currentPosixUid()
-  if (info.uid !== currentUid || (info.mode & 0o077) !== 0) {
+  if (info.uid !== currentUid || (info.mode & 0o777) !== 0o700) {
     throw new VisionToolkitError('path', `workspace storage directory must be owned by the current user with mode 0700: ${requested}`)
   }
 }

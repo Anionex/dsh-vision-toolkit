@@ -141,6 +141,16 @@ describe('createPathPolicy', () => {
     await expect(createPathPolicy(workspace, [], shared)).rejects.toMatchObject({ code: 'path' })
   })
 
+  it.skipIf(typeof process.geteuid !== 'function')('rejects a pre-created shared workspace directory without owner write access', async () => {
+    const workspace = await tempDir('workspace')
+    const shared = await outsideTempDir('shared')
+    const child = join(shared, workspaceStorageId(await realpath(workspace)))
+    await mkdir(child, { mode: 0o700 })
+    await chmod(child, 0o500)
+
+    await expect(createPathPolicy(workspace, [], shared)).rejects.toMatchObject({ code: 'path' })
+  })
+
   it.skipIf(typeof process.geteuid !== 'function')('rejects a sticky shared base not owned by the current user or root', async () => {
     const workspace = await tempDir('workspace')
     const shared = await outsideTempDir('shared')
