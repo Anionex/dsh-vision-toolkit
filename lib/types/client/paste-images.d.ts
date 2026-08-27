@@ -24,6 +24,8 @@ interface PasteOccurrence {
     source: string;
     ref: string;
     offset: number;
+    /** DSH rc.8+ stores the full @label text; older releases used one placeholder. */
+    length?: number;
     label: string;
 }
 type PasteDockProps = PropsRuntime<'conversation.input.dock'> & {

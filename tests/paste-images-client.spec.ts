@@ -17,11 +17,14 @@ interface Occurrence {
   source: string
   ref: string
   offset: number
+  length?: number
   label: string
   clipboardText: string
 }
 
-function inputMachine(initial = '') {
+type ReferenceDraftMode = 'placeholder' | 'display-text'
+
+function inputMachine(initial = '', referenceDraftMode: ReferenceDraftMode = 'placeholder') {
   let state = {
     draft: initial,
     draftRev: 0,
@@ -44,16 +47,39 @@ function inputMachine(initial = '') {
       },
     },
     setDraft: vi.fn((draft: string) => {
-      const occurrences = state.occurrences.filter(occurrence => draft[occurrence.offset] === '\uFFFC')
+      let start = 0
+      while (start < state.draft.length && start < draft.length && state.draft[start] === draft[start]) start += 1
+      let oldEnd = state.draft.length
+      let newEnd = draft.length
+      while (oldEnd > start && newEnd > start && state.draft[oldEnd - 1] === draft[newEnd - 1]) {
+        oldEnd -= 1
+        newEnd -= 1
+      }
+      const insertedLength = newEnd - start
+      const delta = insertedLength - (oldEnd - start)
+      const occurrences = state.occurrences.flatMap((occurrence) => {
+        const end = occurrence.offset + (occurrence.length ?? 1)
+        if (end <= start) return [occurrence]
+        if (occurrence.offset >= oldEnd) return [{ ...occurrence, offset: occurrence.offset + delta }]
+        return []
+      })
       publish({ ...state, draft, draftRev: state.draftRev + 1, occurrences })
     }),
     insertReference: vi.fn((reference: Omit<Occurrence, 'occurrenceId' | 'offset'>, span: { start: number; end: number; draftRev: number }) => {
       if (span.draftRev !== state.draftRev || span.start !== span.end) return false
-      const occurrence = { ...reference, occurrenceId: state.occurrences.length + 1, offset: span.start }
-      const shifted = state.occurrences.map(row => row.offset >= span.start ? { ...row, offset: row.offset + 1 } : row)
+      const text = referenceDraftMode === 'display-text' ? `@${reference.label}` : '\uFFFC'
+      const tail = state.draft.slice(span.end)
+      const inserted = text + (tail === '' || tail[0] !== ' ' ? ' ' : '')
+      const occurrence = {
+        ...reference,
+        occurrenceId: state.occurrences.length + 1,
+        offset: span.start,
+        ...(referenceDraftMode === 'display-text' ? { length: text.length } : {}),
+      }
+      const shifted = state.occurrences.map(row => row.offset >= span.start ? { ...row, offset: row.offset + inserted.length } : row)
       publish({
         ...state,
-        draft: state.draft.slice(0, span.start) + '\uFFFC' + state.draft.slice(span.end),
+        draft: state.draft.slice(0, span.start) + inserted + tail,
         draftRev: state.draftRev + 1,
         occurrences: [...shifted, occurrence].sort((a, b) => a.offset - b.offset),
       })
@@ -80,8 +106,13 @@ function inputMachine(initial = '') {
 
 type TriggerService = 'slash' | 'inputTriggers'
 
-function fakeClient(initial = '', triggerServices: readonly TriggerService[] = ['slash'], aliasTriggers = false) {
-  const input = inputMachine(initial)
+function fakeClient(
+  initial = '',
+  triggerServices: readonly TriggerService[] = ['slash'],
+  aliasTriggers = false,
+  referenceDraftMode: ReferenceDraftMode = 'placeholder',
+) {
+  const input = inputMachine(initial, referenceDraftMode)
   const effects: Array<() => void> = []
   const registrations: Array<{
     options: Record<string, unknown>
@@ -357,6 +388,39 @@ describe('clipboard image client', () => {
     bench.dispose()
   })
 
+  it.each([
+    {
+      name: 'the legacy one-character placeholder draft',
+      mode: 'placeholder' as const,
+      files: [file('one.png', 'image/png', [1]), file('two.webp', 'image/webp', [2])],
+      expectedDraft: '\uFFFC \uFFFC ',
+      expectedCaret: 3,
+    },
+    {
+      name: 'the rc.8+ display-text draft',
+      mode: 'display-text' as const,
+      files: [file('one.png', 'image/png', [1]), file('two.webp', 'image/webp', [2])],
+      expectedDraft: '@one.png @two.webp ',
+      expectedCaret: 18,
+    },
+  ])('places every reference and the final caret correctly with $name', async ({ mode, files, expectedDraft, expectedCaret }) => {
+    const bench = fakeClient('', ['slash'], false, mode)
+    await confirmTakeover(bench)
+    const textarea = composer()
+
+    textarea.dispatchEvent(clipboardEvent('', files))
+
+    const snapshot = bench.input.state.getSnapshot()
+    expect(snapshot.draft).toBe(expectedDraft)
+    expect(snapshot.occurrences).toHaveLength(2)
+    textarea.value = snapshot.draft
+    await vi.waitFor(() => {
+      expect(textarea.selectionStart).toBe(expectedCaret)
+      expect(textarea.selectionEnd).toBe(expectedCaret)
+    })
+    bench.dispose()
+  })
+
   it('ignores non-image clipboard files so ordinary text paste remains native', () => {
     const bench = fakeClient('before ')
     const textarea = composer()
@@ -435,6 +499,34 @@ describe('clipboard image client', () => {
     })
     expect(bench.input.state.getSnapshot().occurrences.map(row => row.ref)).toEqual([original[1]?.ref])
     expect(injected.controller.recordsFor(original)).toHaveLength(1)
+    bench.dispose()
+  })
+
+  it('removes the complete rc.8+ display-text reference instead of only its @ marker', async () => {
+    const bench = fakeClient('', ['slash'], false, 'display-text')
+    await confirmTakeover(bench)
+    const textarea = composer()
+    textarea.dispatchEvent(clipboardEvent('', [file('one.png', 'image/png', [1])]))
+    const dock = bench.registrations.find(row => row.options.id === 'vision-toolkit-pasted-images')
+    if (dock === undefined) throw new Error('paste dock was not registered')
+    const injected = (dock.options.inject as ((sessionId: string) => {
+      controller: PasteImageController
+      remove: (row: Occurrence) => void
+    }))('session-1')
+    const occurrence = bench.input.state.getSnapshot().occurrences[0]
+    if (occurrence === undefined || occurrence.length === undefined) throw new Error('display-text occurrence was not inserted')
+    const revision = bench.input.state.getSnapshot().draftRev
+
+    injected.remove(occurrence)
+
+    expect(bench.input.insertText).toHaveBeenLastCalledWith('', {
+      start: occurrence.offset,
+      end: occurrence.offset + occurrence.length,
+      draftRev: revision,
+    })
+    expect(bench.input.state.getSnapshot().draft).toBe(' ')
+    expect(bench.input.state.getSnapshot().occurrences).toEqual([])
+    expect(injected.controller.recordsFor([occurrence])).toEqual([])
     bench.dispose()
   })
 
