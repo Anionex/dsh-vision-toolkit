@@ -2,6 +2,8 @@ import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { Context } from '@deepseek-ai/cordis'
+import LlmService, { LlmAdapter, resolveRetryPolicy } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, GenerateOptions, LlmModelInfo, Message, StreamChunk } from '@deepseek-ai/dsh-llm'
 import {
   abortableWait,
@@ -492,6 +494,37 @@ describe('ImageInputVariantAdapter', () => {
     const ctx = { llm: llmStub() } as never
     const adapter = new ImageInputVariantAdapter(ctx, ctx.llm, 'up', 'Upstream', () => undefined, new EvidenceCache(4))
     expect(adapter.providerInfo('vision-toolkit-up')).toEqual({ id: 'vision-toolkit-up', name: `Upstream${VARIANT_SUFFIX}` })
+  })
+
+  it('registers the variant route with the upstream provider retry policy', async () => {
+    const ctx = new Context()
+    await ctx.plugin(LlmService)
+    const retryPolicy = resolveRetryPolicy({
+      mode: 'normal',
+      maxRetries: 64,
+      retryableCodes: ['EMPTY_RESPONSE', 'RATE_LIMIT', 'SERVER', 'TIMEOUT', 'TRANSPORT'],
+      backoff: { initialDelayMs: 2_000, maxDelayMs: 60_000, jitterRatio: 0.1 },
+    }, 'test upstream retry policy')
+    class UpstreamAdapter extends LlmAdapter {
+      override providerRetryPolicy(_provider: string) {
+        return retryPolicy
+      }
+
+      override async *stream(): AsyncGenerator<StreamChunk> {
+        yield { type: 'finish', reason: { kind: 'stop' } }
+      }
+    }
+
+    try {
+      ctx.llm.registerAdapter(['up'], new UpstreamAdapter())
+      ctx.llm.registerAdapter(
+        ['vision-toolkit-up'],
+        new ImageInputVariantAdapter(ctx, ctx.llm, 'up', 'Upstream', () => undefined, new EvidenceCache(4)),
+      )
+      expect(ctx.llm.providerRetryPolicy('vision-toolkit-up')).toEqual(retryPolicy)
+    } finally {
+      await ctx.fiber.dispose()
+    }
   })
 
   it('keeps upstream provider and model display names in transparent (hidden) mode', async () => {
@@ -1094,6 +1127,8 @@ describe('installImageInputVariants', () => {
     const listeners: Array<() => void> = []
     const llmOverrides = (overrides.llm ?? {}) as Record<string, unknown>
     const upstreamProviders = (llmOverrides.listProviders ?? (() => [])) as () => Array<{ id: string; name: string }>
+    const providerRetryPolicy = (llmOverrides.providerRetryPolicy ?? vi.fn(() =>
+      resolveRetryPolicy(undefined, 'test provider retry policy'))) as (provider: string) => ReturnType<typeof resolveRetryPolicy>
     const listProviders = vi.fn(() => [
       ...upstreamProviders(),
       ...[...registrations.keys()].map(id => ({ id, name: id })),
@@ -1111,6 +1146,7 @@ describe('installImageInputVariants', () => {
       llm: {
         ...llmOverrides,
         listProviders,
+        providerRetryPolicy,
         registerAdapter,
       },
     }
@@ -1203,6 +1239,41 @@ describe('installImageInputVariants', () => {
       expect(registrations.has('vision-toolkit-deepseek-official')).toBe(true)
       expect(registrations.get('vision-toolkit-deepseek-official')).not.toBe(firstHandle)
     })
+    installer.dispose()
+    expect(registrations.size).toBe(0)
+  })
+
+  it('rebuilds a wrapper when the upstream retry policy changes', async () => {
+    let maxRetries = 5
+    const providerRetryPolicy = vi.fn(() => resolveRetryPolicy({
+      mode: 'normal',
+      maxRetries,
+      retryableCodes: ['SERVER'],
+      backoff: { initialDelayMs: 500, maxDelayMs: 10_000, jitterRatio: 0.1 },
+    }, 'test changing retry policy'))
+    const { ctx, registrations, listeners } = harness({
+      llm: {
+        listProviders: vi.fn(() => [{ id: 'deepseek-official', name: 'DeepSeek' }]),
+        listModels: vi.fn(async () => [
+          { provider: 'deepseek-official', id: 'plain', name: 'Plain', inputModalities: ['text'] },
+        ]),
+        providerRetryPolicy,
+      },
+    })
+    const installer = installImageInputVariants(ctx, () => config(), () => undefined)
+    await vi.waitFor(() => { expect(registrations.has('vision-toolkit-deepseek-official')).toBe(true) })
+    const firstHandle = registrations.get('vision-toolkit-deepseek-official')
+
+    listeners[0]?.()
+    await vi.waitFor(() => { expect(providerRetryPolicy).toHaveBeenCalledTimes(2) })
+    expect(registrations.get('vision-toolkit-deepseek-official')).toBe(firstHandle)
+
+    maxRetries = 64
+    listeners[0]?.()
+    await vi.waitFor(() => {
+      expect(registrations.get('vision-toolkit-deepseek-official')).not.toBe(firstHandle)
+    })
+    expect(providerRetryPolicy).toHaveBeenLastCalledWith('deepseek-official')
     installer.dispose()
     expect(registrations.size).toBe(0)
   })
