@@ -8,7 +8,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { constants as fsConstants } from 'node:fs'
 import type { Stats } from 'node:fs'
-import { chmod, lstat, mkdir, open, readFile, realpath, writeFile } from 'node:fs/promises'
+import { chmod, lstat, mkdir, open, readFile, realpath, stat, writeFile } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { basename, dirname, extname, isAbsolute, join, relative, sep } from 'node:path'
@@ -47,6 +47,7 @@ interface ArtifactPresentationEnvelope {
 const KEY_BYTES = 32
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/
 const MAX_TOKEN_LENGTH = 16 * 1024
+const SHARED_WORKSPACE_STORAGE_NAME = /^[a-f0-9]{20}$/
 
 const MIME_BY_EXTENSION = new Map<string, { mimeType: string; kind: ArtifactKind }>([
   ['.png', { mimeType: 'image/png', kind: 'image' }],
@@ -161,10 +162,42 @@ export async function prepareArtifactAccessKey(root = visionToolkitStateRoot()):
 function artifactRoot(path: string): string | undefined {
   let current = dirname(path)
   while (true) {
-    if (basename(current) === 'artifacts' && basename(dirname(current)) === '.dsh-vision-toolkit') return current
+    const storageName = basename(dirname(current))
+    if (
+      basename(current) === 'artifacts'
+      && (storageName === '.dsh-vision-toolkit' || SHARED_WORKSPACE_STORAGE_NAME.test(storageName))
+    ) return current
     const parent = dirname(current)
     if (parent === current) return undefined
     current = parent
+  }
+}
+
+async function assertManagedArtifactRoot(root: string): Promise<void> {
+  const storageRoot = dirname(root)
+  if (basename(storageRoot) === '.dsh-vision-toolkit') return
+  if (!SHARED_WORKSPACE_STORAGE_NAME.test(basename(storageRoot))) {
+    throw new Error('artifact root is outside a managed storage layout')
+  }
+  const storageInfo = await lstat(storageRoot)
+  if (storageInfo.isSymbolicLink() || !storageInfo.isDirectory()) {
+    throw new Error('shared workspace storage is not a real directory')
+  }
+  if (typeof process.geteuid === 'function') {
+    if (storageInfo.uid !== process.geteuid() || (storageInfo.mode & 0o077) !== 0) {
+      throw new Error('shared workspace storage is not private to the current user')
+    }
+    const base = dirname(storageRoot)
+    const baseEntry = await lstat(base)
+    if (baseEntry.isSymbolicLink() && baseEntry.uid !== 0) throw new Error('shared storage base is not trusted')
+    const baseInfo = baseEntry.isSymbolicLink() ? await stat(base) : baseEntry
+    const writableByOthers = (baseInfo.mode & 0o022) !== 0
+    const sticky = (baseInfo.mode & 0o1000) !== 0
+    if (
+      !baseInfo.isDirectory()
+      || (baseInfo.uid !== process.geteuid() && baseInfo.uid !== 0)
+      || (writableByOthers && !sticky)
+    ) throw new Error('shared storage base is not trusted')
   }
 }
 
@@ -198,6 +231,7 @@ function sameFile(opened: Stats, current: Stats): boolean {
 async function openVerifiedArtifact(payload: ArtifactTokenPayload): Promise<{ handle: FileHandle; info: Stats }> {
   const root = artifactRoot(payload.path)
   if (root === undefined) throw new Error('artifact path is outside the managed delivery tree')
+  await assertManagedArtifactRoot(root)
   await assertNoSymlinkPath(root, payload.path)
   const noFollow = typeof fsConstants.O_NOFOLLOW === 'number' ? fsConstants.O_NOFOLLOW : 0
   const handle = await open(payload.path, fsConstants.O_RDONLY | noFollow)

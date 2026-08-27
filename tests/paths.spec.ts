@@ -33,6 +33,7 @@ async function outsideTempDir(prefix: string): Promise<string> {
 }
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await Promise.all(tempDirs.splice(0).map(dir => import('node:fs/promises').then(fs => fs.rm(dir, { recursive: true, force: true }))))
 })
 
@@ -89,6 +90,15 @@ describe('createPathPolicy', () => {
     await symlink(target, sharedLink)
 
     await expect(createPathPolicy(workspace, [], sharedLink)).rejects.toMatchObject({ code: 'path' })
+  })
+
+  it('accepts the root-owned platform /tmp alias as a shared storage base', async () => {
+    if (typeof process.geteuid !== 'function') return
+    const workspace = await tempDir('workspace')
+    const policy = await createPathPolicy(workspace, [], '/tmp')
+    tempDirs.push(policy.storageRoot)
+
+    expect(policy.storageRoot).toBe(join(await realpath('/tmp'), workspaceStorageId(await realpath(workspace))))
   })
 
   it('resolves and realpaths allowedDirs', async () => {
