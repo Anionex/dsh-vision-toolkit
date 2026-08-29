@@ -64,6 +64,31 @@ describe('VisionToolkitRuntimeManager', () => {
     expect(prepared).toEqual(['first', 'broken'])
   })
 
+  it('runs durable commit prerequisites after preparation and before publication', async () => {
+    const ctx = new Context()
+    contexts.push(ctx)
+    const sequence: string[] = []
+    const factory: RuntimeGenerationFactory = async (_ctx, resolved) => {
+      sequence.push(`prepare:${resolved.provider.model}`)
+      return fakeRuntime(resolved)
+    }
+    const manager = new VisionToolkitRuntimeManager(ctx, factory)
+    await manager.initialize(config('first'))
+
+    await expect(manager.reconfigure(config('second'), async (candidate) => {
+      sequence.push(`persist:${candidate.config.provider.model}`)
+      throw new Error('storage history unavailable')
+    })).rejects.toThrow('storage history unavailable')
+
+    expect(sequence).toEqual(['prepare:first', 'prepare:second', 'persist:second'])
+    expect(manager.currentConfig().provider.model).toBe('first')
+    expect(manager.status()).toMatchObject({
+      ready: true,
+      generation: 1,
+      lastError: 'storage history unavailable',
+    })
+  })
+
   it.skipIf(typeof process.geteuid !== 'function')('keeps consumers on the active configuration while a candidate fails', async () => {
     const ctx = new Context()
     contexts.push(ctx)

@@ -133,6 +133,8 @@ export declare function retainedStorageHistory(next: VisionToolkitConfig, previo
 export interface WatchedSettingsGeneration {
     /** Configuration to activate now; omitted after a successful history writeback. */
     config?: VisionToolkitConfig;
+    /** Whether the derived history still needs plugin-owned durable persistence. */
+    requiresDurableStorageHistory?: boolean;
     /** Non-fatal internal-history persistence error. */
     persistenceError?: unknown;
 }

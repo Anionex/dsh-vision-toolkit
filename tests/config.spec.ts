@@ -64,7 +64,10 @@ describe('resolveConfig', () => {
     const readOnlyPersist = vi.fn(async () => {})
 
     await expect(prepareWatchedSettingsGeneration(next, previous, false, readOnlyPersist))
-      .resolves.toEqual({ config: { storageDir: '/storage/b', storageHistory: ['/storage/a'] } })
+      .resolves.toEqual({
+        config: { storageDir: '/storage/b', storageHistory: ['/storage/a'] },
+        requiresDurableStorageHistory: true,
+      })
     expect(readOnlyPersist).not.toHaveBeenCalled()
 
     const failure = new Error('read-only provider')
@@ -72,8 +75,21 @@ describe('resolveConfig', () => {
     await expect(prepareWatchedSettingsGeneration(next, previous, true, failedPersist))
       .resolves.toEqual({
         config: { storageDir: '/storage/b', storageHistory: ['/storage/a'] },
+        requiresDurableStorageHistory: true,
         persistenceError: failure,
       })
+  })
+
+  it('does not treat an omitted empty history as a writeback requirement', async () => {
+    const persist = vi.fn(async () => {})
+
+    await expect(prepareWatchedSettingsGeneration(
+      { storageDir: '/storage/a', concurrency: 2 },
+      { storageDir: '/storage/a', concurrency: 1 },
+      false,
+      persist,
+    )).resolves.toEqual({ config: { storageDir: '/storage/a', concurrency: 2 } })
+    expect(persist).not.toHaveBeenCalled()
   })
 
   it('waits for the persisted Settings generation after internal history writeback succeeds', async () => {

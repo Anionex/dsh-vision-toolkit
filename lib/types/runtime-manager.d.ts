@@ -29,6 +29,8 @@ export interface RuntimeStorageGeneration {
 }
 /** Test seam for preparing one generation. */
 export type RuntimeGenerationFactory = (ctx: Context, config: ResolvedVisionToolkitConfig, readableStorageDirs: readonly string[]) => Promise<VisionToolkitRuntime>;
+/** Async commit prerequisite run after preparation and before a generation becomes active. */
+export type RuntimeGenerationBeforePublish = (candidate: PreparedRuntimeGeneration) => Promise<void>;
 /** Internal runtime source with prepare-before-swap semantics. */
 export declare class VisionToolkitRuntimeManager {
     private readonly ctx;
@@ -60,14 +62,20 @@ export declare class VisionToolkitRuntimeManager {
      * @param candidate - generation returned by {@link prepareCandidate}.
      */
     activateCandidate(candidate: PreparedRuntimeGeneration): void;
-    /** Prepare and publish the initial or explicitly validated generation. */
-    initialize(raw: VisionToolkitConfig): Promise<void>;
+    /**
+     * Prepare and publish the initial or explicitly validated generation.
+     * @param raw - untrusted Settings generation to resolve and prepare.
+     * @param beforePublish - optional durable prerequisite run after preparation.
+     */
+    initialize(raw: VisionToolkitConfig, beforePublish?: RuntimeGenerationBeforePublish): Promise<void>;
     /**
      * Apply an externally committed Settings generation. Concurrent edits are
      * last-write-wins; a slower obsolete prepare can never overwrite a newer one.
+     * @param raw - externally committed Settings generation.
+     * @param beforePublish - optional durable prerequisite run after preparation.
      * @returns whether this call published a new active generation.
      */
-    reconfigure(raw: VisionToolkitConfig): Promise<boolean>;
+    reconfigure(raw: VisionToolkitConfig, beforePublish?: RuntimeGenerationBeforePublish): Promise<boolean>;
     /** Record a failed preflight while retaining the previous generation. */
     recordFailure(error: unknown): void;
     /** Secret-free status snapshot for health/configuration surfaces. */

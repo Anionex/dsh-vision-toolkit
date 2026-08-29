@@ -40,6 +40,9 @@ export type RuntimeGenerationFactory = (
   readableStorageDirs: readonly string[],
 ) => Promise<VisionToolkitRuntime>
 
+/** Async commit prerequisite run after preparation and before a generation becomes active. */
+export type RuntimeGenerationBeforePublish = (candidate: PreparedRuntimeGeneration) => Promise<void>
+
 async function defaultFactory(
   ctx: Context,
   config: ResolvedVisionToolkitConfig,
@@ -171,15 +174,21 @@ export class VisionToolkitRuntimeManager {
     )
   }
 
-  /** Prepare and publish the initial or explicitly validated generation. */
-  async initialize(raw: VisionToolkitConfig): Promise<void> {
+  /**
+   * Prepare and publish the initial or explicitly validated generation.
+   * @param raw - untrusted Settings generation to resolve and prepare.
+   * @param beforePublish - optional durable prerequisite run after preparation.
+   */
+  async initialize(raw: VisionToolkitConfig, beforePublish?: RuntimeGenerationBeforePublish): Promise<void> {
     try {
       const config = resolveConfig(raw)
       if (config.storageDir !== undefined) await preflightSharedStorageBase(config.storageDir)
       this.validatedStartupStorageDir = config.storageDir ?? null
       this.rememberStorageDirectories(config.storageHistory)
       this.rememberStorageDirectory(config.storageDir)
-      this.activateCandidate(await this.prepareResolvedCandidate(config))
+      const candidate = await this.prepareResolvedCandidate(config)
+      await beforePublish?.(candidate)
+      this.activateCandidate(candidate)
     } catch (error) {
       this.lastError = messageOf(error)
       throw error
@@ -189,13 +198,17 @@ export class VisionToolkitRuntimeManager {
   /**
    * Apply an externally committed Settings generation. Concurrent edits are
    * last-write-wins; a slower obsolete prepare can never overwrite a newer one.
+   * @param raw - externally committed Settings generation.
+   * @param beforePublish - optional durable prerequisite run after preparation.
    * @returns whether this call published a new active generation.
    */
-  async reconfigure(raw: VisionToolkitConfig): Promise<boolean> {
+  async reconfigure(raw: VisionToolkitConfig, beforePublish?: RuntimeGenerationBeforePublish): Promise<boolean> {
     const ticket = ++this.reconfigureTicket
     let candidate: PreparedRuntimeGeneration
     try {
       candidate = await this.prepareCandidate(raw)
+      if (ticket !== this.reconfigureTicket) return false
+      await beforePublish?.(candidate)
     } catch (error) {
       if (ticket === this.reconfigureTicket) this.lastError = messageOf(error)
       throw error

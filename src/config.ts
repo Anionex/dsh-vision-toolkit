@@ -316,6 +316,8 @@ export function retainedStorageHistory(
 export interface WatchedSettingsGeneration {
   /** Configuration to activate now; omitted after a successful history writeback. */
   config?: VisionToolkitConfig
+  /** Whether the derived history still needs plugin-owned durable persistence. */
+  requiresDurableStorageHistory?: boolean
   /** Non-fatal internal-history persistence error. */
   persistenceError?: unknown
 }
@@ -328,15 +330,15 @@ export async function prepareWatchedSettingsGeneration(
   persistStorageHistory: (storageHistory: string[]) => Promise<void>,
 ): Promise<WatchedSettingsGeneration> {
   const storageHistory = retainedStorageHistory(next, previous)
-  if (JSON.stringify(storageHistory) === JSON.stringify(next.storageHistory)) return { config: next }
+  if (JSON.stringify(storageHistory) === JSON.stringify(resolveConfig(next).storageHistory)) return { config: next }
 
   const config = { ...next, storageHistory }
-  if (!writable) return { config }
+  if (!writable) return { config, requiresDurableStorageHistory: true }
   try {
     await persistStorageHistory(storageHistory)
     return {}
   } catch (persistenceError) {
-    return { config, persistenceError }
+    return { config, requiresDurableStorageHistory: true, persistenceError }
   }
 }
 
