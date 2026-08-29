@@ -61,7 +61,8 @@ describe('createPathPolicy', () => {
   it.skipIf(typeof process.geteuid !== 'function')('write-probes a shared base without leaving preflight directories behind', async () => {
     const shared = join(await outsideTempDir('preflight-parent'), 'shared')
 
-    await expect(preflightSharedStorageBase(shared)).resolves.toBe(await realpath(shared))
+    const preflighted = await preflightSharedStorageBase(shared)
+    expect(preflighted).toBe(await realpath(shared))
     expect((await readdir(shared)).filter(name => name.startsWith('.dsh-vision-toolkit-preflight-'))).toEqual([])
   })
 
