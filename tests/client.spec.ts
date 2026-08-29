@@ -344,6 +344,8 @@ describe('Vision Toolkit client plugin', () => {
     expect(root?.lastElementChild).toBe(footer)
     expect(advanced).not.toBeNull()
     expect(advanced?.contains(screen.getByLabelText('credential'))).toBe(true)
+    expect(advanced?.contains(screen.getByLabelText('storageDir'))).toBe(true)
+    expect((screen.getByLabelText('storageDir') as HTMLInputElement).placeholder).toBe('/tmp/dsh-vision-toolkit')
     expect(view.container.querySelector('.dvt-settings-header')).toBeNull()
   })
 
@@ -693,6 +695,7 @@ describe('Vision Toolkit client plugin', () => {
 
     const keyInput = await screen.findByLabelText('apiKey') as HTMLInputElement
     fireEvent.change(keyInput, { target: { value: 'sk-browser-entry' } })
+    fireEvent.change(screen.getByLabelText('storageDir'), { target: { value: ' /tmp/dsh-vision-toolkit ' } })
     fireEvent.click(screen.getByRole('button', { name: 'save' }))
 
     await screen.findByText('saved')
@@ -701,6 +704,7 @@ describe('Vision Toolkit client plugin', () => {
     const credentialBody = JSON.parse(String((fetchMock.mock.calls[2]?.[1] as RequestInit | undefined)?.body)) as Record<string, unknown>
     expect(settingsBody.action).toBe('save')
     expect(JSON.stringify(settingsBody)).not.toContain('sk-browser-entry')
+    expect(settingsBody).toMatchObject({ value: { storageDir: '/tmp/dsh-vision-toolkit' } })
     expect(credentialBody).toEqual({
       action: 'credential', expectedRevision: 2, ref: 'VISION_API_KEY', value: 'sk-browser-entry',
     })

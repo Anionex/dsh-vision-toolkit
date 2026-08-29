@@ -4,6 +4,10 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+### Fixed
+
+- Retained configured shared-storage roots in a plugin-owned `storage-domain` sidecar, so persisted pasted-image and artifact paths remain readable after read-only Settings changes and Profile restarts.
+
 ## [0.1.39] - 2026-08-25
 
 ### Fixed

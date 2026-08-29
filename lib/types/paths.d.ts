@@ -5,6 +5,7 @@
  * link is allowed only when its real target stays inside the fence.
  * @module dsh-vision-toolkit/paths
  */
+import type { Stats } from 'node:fs';
 /** Supported input image extensions (the upstream client's allowlist). */
 export declare const SUPPORTED_IMAGE_EXTENSIONS: readonly [".png", ".jpg", ".jpeg", ".gif", ".webp"];
 /** Resolved path policy for one tool invocation. */
@@ -15,8 +16,19 @@ export interface PathPolicy {
     tempDir: string;
     /** Real allowed roots: workspace, platform temp, and configured directories. */
     allowedDirs: string[];
+    /** Real plugin-managed root containing artifacts and transient files. */
+    storageRoot: string;
     /** Real plugin-managed output directory inside the fence. */
     outputDir: string;
+}
+/** Resolved plugin storage for one workspace. */
+export interface WorkspaceStorage {
+    /** Real workspace root. */
+    workspace: string;
+    /** Real plugin-managed root for this workspace. */
+    root: string;
+    /** Absolute user-visible spelling of the same managed root. */
+    visibleRoot: string;
 }
 /** Whether `child` equals or lies under `parent` on the same path root. */
 export declare function isWithin(parent: string, child: string): boolean;
@@ -28,16 +40,30 @@ export declare function platformTempDirectory(platform?: NodeJS.Platform, enviro
  * unchanged, and the normal realpath fence still validates the result.
  */
 export declare function normalizePlatformTempPath(raw: string, platform?: NodeJS.Platform, tempDirectory?: string): string;
+/** Stable opaque per-user workspace id used below a shared storage root. */
+export declare function workspaceStorageId(workspace: string, userIdentity?: string): string;
+export declare function assertSecureWorkspaceStorage(info: Stats, requested: string): void;
+/** Resolve a shared base and prove every POSIX ancestor is protected from replacement. */
+export declare function assertSecureSharedStorageBase(requested: string): Promise<string>;
+/** Validate and write-probe a configured shared root before Settings activation. */
+export declare function preflightSharedStorageBase(storageDirRaw: string): Promise<string>;
 /**
- * Build the per-invocation path policy: realpath the workspace, resolve and
- * realpath the platform temp directory and allowed directories, and create
- * the output directory inside the fence.
+ * Resolve the plugin-managed root for one workspace. Blank configuration keeps
+ * the legacy workspace-local `.dsh-vision-toolkit` directory. A configured
+ * shared root receives one stable, automatically generated workspace child.
+ */
+export declare function resolveWorkspaceStorage(workspaceRaw: string, storageDirRaw?: string): Promise<WorkspaceStorage>;
+/**
+ * Build the per-invocation path policy: resolve workspace storage, realpath the
+ * platform temp directory and allowed directories, and create the artifact
+ * directory inside the managed root.
  * @param workspaceRaw - session workspace (or process cwd fallback).
  * @param allowedDirs - configured extra allowed roots.
- * @param outputDirRaw - configured output directory (default `.dsh-vision-toolkit/artifacts`).
+ * @param storageDirRaw - optional shared storage root.
+ * @param readableStorageDirs - previously validated shared roots retained for persisted input paths.
  * @returns the resolved policy.
  */
-export declare function createPathPolicy(workspaceRaw: string, allowedDirs: readonly string[], outputDirRaw?: string): Promise<PathPolicy>;
+export declare function createPathPolicy(workspaceRaw: string, allowedDirs: readonly string[], storageDirRaw?: string, readableStorageDirs?: readonly string[]): Promise<PathPolicy>;
 /**
  * Validate one input image path and return its fence-checked absolute path
  * and byte size.

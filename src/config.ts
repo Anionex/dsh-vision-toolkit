@@ -78,6 +78,14 @@ export interface VisionToolkitConfig {
     /** Optional Python 3.11+ bootstrap/interpreter override. */
     python?: string
   }
+  /**
+   * Optional shared storage root. When set, every workspace gets an isolated,
+   * automatically generated child directory below this root instead of writing
+   * `.dsh-vision-toolkit` into the workspace.
+   */
+  storageDir?: string
+  /** Internal read-only history used to keep persisted paths valid after storage moves. */
+  storageHistory?: string[]
   /** Extra directories (besides the workspace) inputs may come from. */
   allowedDirs?: string[]
   /**
@@ -132,6 +140,8 @@ export const Config: Schema<VisionToolkitConfig> = z.object({
     agentVisionToolkitPath: z.string(),
     python: z.string(),
   }),
+  storageDir: z.string(),
+  storageHistory: z.array(z.string()).default([]),
   allowedDirs: z.array(z.string()).default([]),
   imageInputVariants: z.object({
     enabled: z.boolean().default(true),
@@ -161,6 +171,8 @@ export interface ResolvedVisionToolkitConfig {
     agentVisionToolkitPath?: string
     python?: string
   }
+  storageDir?: string
+  storageHistory: string[]
   allowedDirs: string[]
   imageInputVariants: {
     enabled: boolean
@@ -254,6 +266,10 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
   if (python !== undefined && python.length === 0) {
     throw new VisionToolkitError('config', 'runtime.python must not be empty')
   }
+  const storageDir = config.storageDir?.trim()
+  const storageHistory = [...new Set((config.storageHistory ?? [])
+    .map(dir => dir.trim())
+    .filter(dir => dir.length > 0 && dir !== storageDir))]
   const allowedDirs = (config.allowedDirs ?? []).map(dir => dir.trim()).filter(dir => dir.length > 0)
   const imageInputVariants = config.imageInputVariants ?? {}
   const variantProviders = (imageInputVariants.providers ?? [])
@@ -271,6 +287,8 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
       ...(toolkitPath !== undefined ? { agentVisionToolkitPath: toolkitPath } : {}),
       ...(python !== undefined ? { python } : {}),
     },
+    ...(storageDir === undefined || storageDir.length === 0 ? {} : { storageDir }),
+    storageHistory,
     allowedDirs,
     imageInputVariants: {
       enabled: imageInputVariants.enabled ?? true,
@@ -278,6 +296,49 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
       autoSwitch: imageInputVariants.autoSwitch ?? true,
       hidden: imageInputVariants.hidden ?? true,
     },
+  }
+}
+
+/** Merge prior storage roots into the next resolved generation's read-only history. */
+export function retainedStorageHistory(
+  next: VisionToolkitConfig,
+  previous: VisionToolkitConfig,
+): string[] {
+  const resolvedNext = resolveConfig(next)
+  const resolvedPrevious = resolveConfig(previous)
+  return [...new Set([
+    ...resolvedPrevious.storageHistory,
+    ...resolvedNext.storageHistory,
+    ...(resolvedPrevious.storageDir === undefined ? [] : [resolvedPrevious.storageDir]),
+  ])].filter(storageDir => storageDir !== resolvedNext.storageDir)
+}
+
+export interface WatchedSettingsGeneration {
+  /** Configuration to activate now; omitted after a successful history writeback. */
+  config?: VisionToolkitConfig
+  /** Whether the derived history still needs plugin-owned durable persistence. */
+  requiresDurableStorageHistory?: boolean
+  /** Non-fatal internal-history persistence error. */
+  persistenceError?: unknown
+}
+
+/** Prepare one live Settings generation without letting internal history writeback block activation. */
+export async function prepareWatchedSettingsGeneration(
+  next: VisionToolkitConfig,
+  previous: VisionToolkitConfig,
+  writable: boolean,
+  persistStorageHistory: (storageHistory: string[]) => Promise<void>,
+): Promise<WatchedSettingsGeneration> {
+  const storageHistory = retainedStorageHistory(next, previous)
+  if (JSON.stringify(storageHistory) === JSON.stringify(resolveConfig(next).storageHistory)) return { config: next }
+
+  const config = { ...next, storageHistory }
+  if (!writable) return { config, requiresDurableStorageHistory: true }
+  try {
+    await persistStorageHistory(storageHistory)
+    return {}
+  } catch (persistenceError) {
+    return { config, requiresDurableStorageHistory: true, persistenceError }
   }
 }
 

@@ -14,7 +14,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { basename, dirname, extname, isAbsolute, join, relative, sep } from 'node:path'
 import type { JsonValue } from '@deepseek-ai/dsh-tools'
 import type { ArtifactDescriptor, ArtifactKind } from './artifacts.ts'
-import { isWithin } from './paths.ts'
+import { assertSecureSharedStorageBase, assertSecureWorkspaceStorage, isWithin } from './paths.ts'
 import { visionToolkitStateRoot } from './runtime-install.ts'
 
 /** Prefix owned by the plugin's artifact capability route. */
@@ -47,6 +47,7 @@ interface ArtifactPresentationEnvelope {
 const KEY_BYTES = 32
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/
 const MAX_TOKEN_LENGTH = 16 * 1024
+const SHARED_WORKSPACE_STORAGE_NAME = /^[a-f0-9]{20}$/
 
 const MIME_BY_EXTENSION = new Map<string, { mimeType: string; kind: ArtifactKind }>([
   ['.png', { mimeType: 'image/png', kind: 'image' }],
@@ -161,11 +162,29 @@ export async function prepareArtifactAccessKey(root = visionToolkitStateRoot()):
 function artifactRoot(path: string): string | undefined {
   let current = dirname(path)
   while (true) {
-    if (basename(current) === 'artifacts' && basename(dirname(current)) === '.dsh-vision-toolkit') return current
+    const storageName = basename(dirname(current))
+    if (
+      basename(current) === 'artifacts'
+      && (storageName === '.dsh-vision-toolkit' || SHARED_WORKSPACE_STORAGE_NAME.test(storageName))
+    ) return current
     const parent = dirname(current)
     if (parent === current) return undefined
     current = parent
   }
+}
+
+async function assertManagedArtifactRoot(root: string): Promise<void> {
+  const storageRoot = dirname(root)
+  if (basename(storageRoot) === '.dsh-vision-toolkit') return
+  if (!SHARED_WORKSPACE_STORAGE_NAME.test(basename(storageRoot))) {
+    throw new Error('artifact root is outside a managed storage layout')
+  }
+  const storageInfo = await lstat(storageRoot)
+  if (storageInfo.isSymbolicLink() || !storageInfo.isDirectory()) {
+    throw new Error('shared workspace storage is not a real directory')
+  }
+  assertSecureWorkspaceStorage(storageInfo, storageRoot)
+  await assertSecureSharedStorageBase(dirname(storageRoot))
 }
 
 async function assertNoSymlinkPath(root: string, path: string): Promise<void> {
@@ -198,6 +217,7 @@ function sameFile(opened: Stats, current: Stats): boolean {
 async function openVerifiedArtifact(payload: ArtifactTokenPayload): Promise<{ handle: FileHandle; info: Stats }> {
   const root = artifactRoot(payload.path)
   if (root === undefined) throw new Error('artifact path is outside the managed delivery tree')
+  await assertManagedArtifactRoot(root)
   await assertNoSymlinkPath(root, payload.path)
   const noFollow = typeof fsConstants.O_NOFOLLOW === 'number' ? fsConstants.O_NOFOLLOW : 0
   const handle = await open(payload.path, fsConstants.O_RDONLY | noFollow)
