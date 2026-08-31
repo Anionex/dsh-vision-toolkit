@@ -462,6 +462,7 @@ describe('persistent image evidence cache', () => {
     const otherLanguage = resolveConfig({ language: 'en' })
     const otherTimeout = resolveConfig({ timeoutMs: baseline.timeoutMs + 1 })
     const otherConcurrency = resolveConfig({ concurrency: baseline.concurrency + 1 })
+    const otherStorage = resolveConfig({ storageDir: '/tmp/dsh-vision-toolkit' })
     const firstCredential = 'a'.repeat(64)
     const secondCredential = 'b'.repeat(64)
 
@@ -471,6 +472,7 @@ describe('persistent image evidence cache', () => {
     expect(evidenceRuntimeFingerprint(otherLanguage)).not.toBe(evidenceRuntimeFingerprint(baseline))
     expect(evidenceRuntimeFingerprint(otherTimeout)).not.toBe(evidenceRuntimeFingerprint(baseline))
     expect(evidenceRuntimeFingerprint(otherConcurrency)).not.toBe(evidenceRuntimeFingerprint(baseline))
+    expect(evidenceRuntimeFingerprint(otherStorage)).not.toBe(evidenceRuntimeFingerprint(baseline))
     expect(evidenceRuntimeFingerprint(baseline, firstCredential, 'off'))
       .not.toBe(evidenceRuntimeFingerprint(baseline, firstCredential, 'on'))
     expect(evidenceRuntimeFingerprint(baseline, firstCredential))

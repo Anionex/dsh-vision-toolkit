@@ -7,9 +7,10 @@
  */
 import type Schema from '@deepseek-ai/schemastery';
 import { type CredentialRef } from '@deepseek-ai/dsh-credentials';
+import type { SettingsNamespace } from '@deepseek-ai/dsh-settings';
 export { BUILT_IN_FREE_VISION_BASE_URL, BUILT_IN_FREE_VISION_CREDENTIAL, BUILT_IN_FREE_VISION_KEY, BUILT_IN_FREE_VISION_MODEL, } from './defaults.ts';
 /** Settings document namespace owned by this plugin. */
-export declare const VISION_TOOLKIT_SETTINGS_NAMESPACE: import("@deepseek-ai/dsh-settings").SettingsNamespace;
+export declare const VISION_TOOLKIT_SETTINGS_NAMESPACE: SettingsNamespace;
 /** Browser-compatible default shared with the vendored Python client. */
 export declare const DEFAULT_VISION_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 /** Full user-facing configuration; every field defaults at the schema boundary. */
@@ -46,6 +47,14 @@ export interface VisionToolkitConfig {
         /** Optional Python 3.11+ bootstrap/interpreter override. */
         python?: string;
     };
+    /**
+     * Optional shared storage root. When set, every workspace gets an isolated,
+     * automatically generated child directory below this root instead of writing
+     * `.dsh-vision-toolkit` into the workspace.
+     */
+    storageDir?: string;
+    /** Internal read-only history used to keep persisted paths valid after storage moves. */
+    storageHistory?: string[];
     /** Extra directories (besides the workspace) inputs may come from. */
     allowedDirs?: string[];
     /**
@@ -101,6 +110,8 @@ export interface ResolvedVisionToolkitConfig {
         agentVisionToolkitPath?: string;
         python?: string;
     };
+    storageDir?: string;
+    storageHistory: string[];
     allowedDirs: string[];
     imageInputVariants: {
         enabled: boolean;
@@ -118,6 +129,18 @@ export interface ResolvedVisionToolkitConfig {
  * @returns the fully defaulted, validated configuration.
  */
 export declare function resolveConfig(config?: VisionToolkitConfig): ResolvedVisionToolkitConfig;
+/** Merge prior storage roots into the next resolved generation's read-only history. */
+export declare function retainedStorageHistory(next: VisionToolkitConfig, previous: VisionToolkitConfig): string[];
+export interface WatchedSettingsGeneration {
+    /** Configuration to activate now; omitted after a successful history writeback. */
+    config?: VisionToolkitConfig;
+    /** Whether the derived history still needs plugin-owned durable persistence. */
+    requiresDurableStorageHistory?: boolean;
+    /** Non-fatal internal-history persistence error. */
+    persistenceError?: unknown;
+}
+/** Prepare one live Settings generation without letting internal history writeback block activation. */
+export declare function prepareWatchedSettingsGeneration(next: VisionToolkitConfig, previous: VisionToolkitConfig, writable: boolean, persistStorageHistory: (storageHistory: string[]) => Promise<void>): Promise<WatchedSettingsGeneration>;
 /** Whether a resolved provider should use the bundled public key instead of DSH credentials. */
 export declare function isBuiltInFreeVisionProvider(provider: ResolvedVisionToolkitConfig['provider']): boolean;
 //# sourceMappingURL=config.d.ts.map

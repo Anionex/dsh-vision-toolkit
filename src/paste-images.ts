@@ -1,11 +1,13 @@
-/** Workspace-local storage for images pasted into the DSH Web composer. */
+/** Plugin-managed storage for images pasted into the DSH Web composer. */
 
 import { createHash, randomUUID } from 'node:crypto'
-import { lstat, mkdir, open, realpath, rename, rm } from 'node:fs/promises'
+import { constants as fsConstants } from 'node:fs'
+import { copyFile, lstat, mkdir, open, realpath, rename, rm } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { basename, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-session'
+import { resolveWorkspaceStorage } from './paths.ts'
 import { sameOriginPost } from './web-request.ts'
 
 /** Exact route used by the browser paste integration. */
@@ -51,6 +53,7 @@ export interface PasteVerdict {
 }
 
 const MAX_NAME_BYTES = 180
+const MAX_STORAGE_GENERATION_RETRIES = 4
 
 /**
  * Hard per-image upload ceiling for pastes. Files between the configured
@@ -151,7 +154,7 @@ export function safePastedImageName(raw: string, mediaType: string): string {
 export function ensurePathInside(root: string, target: string): void {
   const rel = relative(root, target)
   if (rel !== '' && (rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel))) {
-    throw new Error(`resolved pasted-image path escapes its workspace root: ${target}`)
+    throw new Error(`resolved pasted-image path escapes its managed root: ${target}`)
   }
 }
 
@@ -168,7 +171,7 @@ async function ensureManagedDirectory(workspace: string, path: string): Promise<
   }
   const entry = await lstat(path)
   if (entry.isSymbolicLink()) {
-    throw new Error(`resolved pasted-image path escapes its workspace root: symbolic link ${path}`)
+    throw new Error(`resolved pasted-image path escapes its managed root: symbolic link ${path}`)
   }
   if (!entry.isDirectory()) throw new Error(`pasted-image path is not a directory: ${path}`)
   const canonical = await realpath(path)
@@ -178,29 +181,33 @@ async function ensureManagedDirectory(workspace: string, path: string): Promise<
 
 /**
  * Resolve the managed per-session image directory used by both browser pastes
- * and native attachment bridging. Keeping both flows under the same workspace
- * root makes the resulting absolute path valid for the model's visual tools.
+ * and native attachment bridging. A configured shared storage root receives a
+ * stable workspace-specific child, keeping projects isolated without writing
+ * plugin files into the project directory.
  */
-export async function sessionPasteRoot(ctx: Context, sessionId: string): Promise<PasteRoot> {
+export async function sessionPasteRoot(
+  ctx: Context,
+  sessionId: string,
+  storageDir?: string,
+): Promise<PasteRoot> {
   const session = ctx.sessions.get(sessionId as never)
   if (session === undefined) throw new Error(`live Session not found: ${sessionId}`)
   const cwd = session.header.cwd
   if (cwd === undefined || !isAbsolute(cwd)) throw new Error(`Session has no absolute workspace: ${sessionId}`)
 
-  const visibleWorkspace = resolve(cwd)
-  const workspace = await realpath(visibleWorkspace)
-  const pluginRoot = join(visibleWorkspace, '.dsh-vision-toolkit')
-  await ensureManagedDirectory(workspace, pluginRoot)
+  const storage = await resolveWorkspaceStorage(resolve(cwd), storageDir)
+  const pluginRoot = storage.root
   const temporaryRoot = join(pluginRoot, 'tmp')
-  await ensureManagedDirectory(workspace, temporaryRoot)
+  await ensureManagedDirectory(pluginRoot, temporaryRoot)
   const requestedRoot = join(temporaryRoot, 'pasted-images')
-  const root = await ensureManagedDirectory(workspace, requestedRoot)
+  const root = await ensureManagedDirectory(temporaryRoot, requestedRoot)
+  const visibleRoot = join(storage.visibleRoot, 'tmp', 'pasted-images')
 
   const sessionKey = createHash('sha256').update(sessionId).digest('hex').slice(0, 20)
   const requestedSessionRoot = join(requestedRoot, sessionKey)
   const sessionRoot = await ensureManagedDirectory(root, requestedSessionRoot)
   ensurePathInside(root, sessionRoot)
-  return { writeRoot: sessionRoot, visibleRoot: requestedSessionRoot }
+  return { writeRoot: sessionRoot, visibleRoot: join(visibleRoot, sessionKey) }
 }
 
 async function writeImage(
@@ -240,9 +247,38 @@ async function writeImage(
   }
 }
 
+async function copyImage(
+  source: string,
+  directory: string,
+  filename: string,
+): Promise<string> {
+  const id = randomUUID()
+  const finalPath = join(directory, `${id}-${filename}`)
+  const stagingPath = join(directory, `.${id}.partial`)
+  ensurePathInside(directory, finalPath)
+  ensurePathInside(directory, stagingPath)
+  try {
+    await copyFile(source, stagingPath, fsConstants.COPYFILE_EXCL)
+    await rename(stagingPath, finalPath)
+    return finalPath
+  } catch (error) {
+    await rm(stagingPath, { force: true }).catch(() => {})
+    throw error
+  }
+}
+
+export interface PasteStorageGeneration {
+  generation: number
+  storageDir?: string
+}
+
+class PasteStorageChangedError extends Error {}
+
 /** Runtime limit face kept separate for focused backend tests. */
 export interface PasteImageRuntime {
   maxUploadBytes(): number
+  storageDirectory?(): string | undefined
+  storageGeneration?(): PasteStorageGeneration
 }
 
 /** Same-origin, live-Session-bound image upload endpoint. */
@@ -251,6 +287,16 @@ export class PastedImageBackend {
     private readonly ctx: Context,
     private readonly runtime: PasteImageRuntime,
   ) {}
+
+  private storageGeneration(): PasteStorageGeneration {
+    const current = this.runtime.storageGeneration?.()
+    if (current !== undefined) return current
+    const storageDir = this.runtime.storageDirectory?.()
+    return {
+      generation: 0,
+      ...(storageDir === undefined ? {} : { storageDir }),
+    }
+  }
 
   async handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
     if (req.method !== 'POST') {
@@ -263,6 +309,7 @@ export class PastedImageBackend {
       return
     }
 
+    let managedPath: string | undefined
     try {
       const url = new URL(req.url ?? PASTE_IMAGES_ROUTE, 'http://dsh.internal')
       const sessionId = singleQuery(url, 'sessionId')
@@ -273,12 +320,27 @@ export class PastedImageBackend {
       if (contentLength !== undefined && Number(contentLength) !== size) {
         throw new TypeError('Content-Length does not match the declared size')
       }
-      const directory = await sessionPasteRoot(this.ctx, sessionId)
-      const writtenPath = await writeImage(req, directory.writeRoot, filename, size, this.runtime.maxUploadBytes())
-      const absolutePath = join(directory.visibleRoot, basename(writtenPath))
-      responseJson(res, 201, { ok: true, value: { absolutePath, filename, bytes: size } })
+      let storage = this.storageGeneration()
+      let directory = await sessionPasteRoot(this.ctx, sessionId, storage.storageDir)
+      managedPath = await writeImage(req, directory.writeRoot, filename, size, this.runtime.maxUploadBytes())
+      for (let attempt = 0; attempt < MAX_STORAGE_GENERATION_RETRIES; attempt += 1) {
+        const current = this.storageGeneration()
+        if (current.generation === storage.generation && current.storageDir === storage.storageDir) {
+          const absolutePath = join(directory.visibleRoot, basename(managedPath))
+          responseJson(res, 201, { ok: true, value: { absolutePath, filename, bytes: size } })
+          return
+        }
+        const nextDirectory = await sessionPasteRoot(this.ctx, sessionId, current.storageDir)
+        const migratedPath = await copyImage(managedPath, nextDirectory.writeRoot, filename)
+        await rm(managedPath, { force: true }).catch(() => {})
+        managedPath = migratedPath
+        directory = nextDirectory
+        storage = current
+      }
+      throw new PasteStorageChangedError('Vision Toolkit settings changed repeatedly during image copy; retry the paste')
     } catch (error) {
-      const status = error instanceof RangeError ? 413 : 400
+      if (managedPath !== undefined) await rm(managedPath, { force: true }).catch(() => {})
+      const status = error instanceof PasteStorageChangedError ? 409 : error instanceof RangeError ? 413 : 400
       this.ctx.logger.warn('dsh-vision-toolkit pasted image rejected: %s', message(error))
       requestError(res, status, 'paste-image-rejected', message(error))
     }

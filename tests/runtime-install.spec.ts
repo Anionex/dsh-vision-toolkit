@@ -1,5 +1,5 @@
 import { statSync } from 'node:fs'
-import { cp, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { access, cp, mkdir, mkdtemp, readFile, realpath, rm, utimes, writeFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -10,9 +10,11 @@ import { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type { SubprocessHandle, SubprocessOutputRead, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import { c as createTar } from 'tar'
 import { resolveConfig } from '../src/config.ts'
+import { UPSTREAM_COMMIT } from '../src/version.ts'
 import {
   acquireBundledPython,
   bundledUpstreamRoot,
+  garbageCollectRuntimeCache,
   ignoreCleanupFailure,
   prepareUpstreamRuntime,
   pythonBootstrapTarget,
@@ -96,6 +98,20 @@ async function copiedSnapshot(): Promise<string> {
   const copy = join(root, 'agent-vision-toolkit')
   await cp(bundledUpstreamRoot(), copy, { recursive: true })
   return copy
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await access(path)
+    return true
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false
+    throw error
+  }
+}
+
+function runtimeGcToken(lockBase: string): string {
+  return createHash('sha256').update(lockBase).digest('hex').slice(0, 12)
 }
 
 async function setup(path: string) {
@@ -356,10 +372,18 @@ describe('bundled Python bootstrap', () => {
     const fiber = await ctx.plugin(BundledPythonSubprocessService)
     const stateRoot = visionToolkitStateRoot()
     await mkdir(join(stateRoot, 'home'), { recursive: true })
+    const target = pythonBootstrapTarget(process.platform, process.arch, false)
+    const orphan = join(
+      stateRoot,
+      'python-bootstrap',
+      `.python-bootstrap-${runtimeGcToken(`3.13.15-${target}`)}-ABC123`,
+    )
+    await mkdir(orphan, { recursive: true })
     const resolved = await resolveBootstrapPython(ctx, undefined, join(stateRoot, 'home'), manifest, requestMock)
     expect(resolved.version).toBe('3.13.15')
     expect(resolved.command.program).toContain(join('python-bootstrap', '3.13.15-'))
     expect(requestMock).toHaveBeenCalledTimes(1)
+    expect(await pathExists(orphan)).toBe(false)
   })
 
   it('does not auto-download when the user configured an interpreter', async () => {
@@ -447,5 +471,112 @@ describe('cleanup failure isolation', () => {
       'managed runtime quarantine',
       'busy',
     )
+  })
+})
+
+describe('runtime cache garbage collection', () => {
+  it('removes orphaned current-format trees while preserving active and recent legacy work', async () => {
+    const ctx = new Context()
+    contexts.push(ctx)
+    await ctx.plugin(BundledPythonSubprocessService)
+    const stateRoot = visionToolkitStateRoot()
+    const pythonRoot = join(stateRoot, 'python')
+    const bootstrapRoot = join(stateRoot, 'python-bootstrap')
+    await mkdir(pythonRoot, { recursive: true })
+    await mkdir(bootstrapRoot, { recursive: true })
+
+    const orphaned = [
+      join(pythonRoot, `.prepare-${runtimeGcToken('runtime-a')}-ABC123`),
+      join(bootstrapRoot, `.python-bootstrap-${runtimeGcToken('3.13.15-test-x64')}-ABC123`),
+    ]
+    const now = Date.now()
+    const staleMs = now - 25 * 60 * 60 * 1000
+    const recentQuarantine = join(pythonRoot, `runtime-a.replaced-${now}-recovery`)
+    const staleQuarantine = join(pythonRoot, `runtime-c.replaced-${staleMs}-stale`)
+    const legacyQuarantine = join(pythonRoot, 'runtime-d.replaced-legacy')
+    const activeQuarantine = join(pythonRoot, `runtime-b.replaced-${staleMs}-active`)
+    const activePrepare = join(pythonRoot, `.prepare-${runtimeGcToken('runtime-b')}-ABC123`)
+    const activeBootstrap = join(bootstrapRoot, `.python-bootstrap-${runtimeGcToken('3.14.0-test-x64')}-ABC123`)
+    const active = [activeQuarantine, activePrepare, activeBootstrap]
+    const recentLegacy = join(pythonRoot, '.prepare-ABC123')
+    const staleLegacy = [
+      join(pythonRoot, '.prepare-OLD123'),
+      join(bootstrapRoot, '.python-bootstrap-OLD123'),
+    ]
+    for (const path of [...orphaned, recentQuarantine, staleQuarantine, legacyQuarantine, ...active, recentLegacy, ...staleLegacy]) {
+      await mkdir(path, { recursive: true })
+      await writeFile(join(path, 'payload'), 'fixture')
+    }
+    await mkdir(join(pythonRoot, 'runtime-b.lock'), { recursive: true })
+    await mkdir(join(bootstrapRoot, '3.14.0-test-x64.lock'), { recursive: true })
+    const stale = new Date(now - 25 * 60 * 60 * 1000)
+    for (const path of staleLegacy) await utimes(path, stale, stale)
+
+    await garbageCollectRuntimeCache(ctx, stateRoot, now)
+
+    for (const path of [...orphaned, staleQuarantine]) expect(await pathExists(path)).toBe(false)
+    for (const path of [recentQuarantine, legacyQuarantine, ...active, recentLegacy, ...staleLegacy]) {
+      expect(await pathExists(path)).toBe(true)
+    }
+    expect(await pathExists(join(legacyQuarantine, '.dsh-vision-toolkit-gc-observed'))).toBe(true)
+
+    await rm(join(pythonRoot, 'runtime-b.lock'), { recursive: true, force: true })
+    await rm(join(bootstrapRoot, '3.14.0-test-x64.lock'), { recursive: true, force: true })
+    await garbageCollectRuntimeCache(ctx, stateRoot, now)
+
+    for (const path of [activePrepare, activeBootstrap, ...staleLegacy]) expect(await pathExists(path)).toBe(false)
+    expect(await pathExists(activeQuarantine)).toBe(false)
+    expect(await pathExists(recentQuarantine)).toBe(true)
+    expect(await pathExists(recentLegacy)).toBe(true)
+
+    await garbageCollectRuntimeCache(ctx, stateRoot, now + 25 * 60 * 60 * 1000)
+    expect(await pathExists(recentQuarantine)).toBe(false)
+    expect(await pathExists(legacyQuarantine)).toBe(false)
+  })
+
+  it('runs before a cached managed runtime is reused', async () => {
+    const ctx = new Context()
+    contexts.push(ctx)
+    const fiber = await ctx.plugin(ProbeSubprocessService)
+    const stateRoot = visionToolkitStateRoot()
+    const manifest = JSON.parse(
+      await readFile(join(bundledUpstreamRoot(), 'UPSTREAM_MANIFEST.json'), 'utf8'),
+    ) as { contentSha256: string }
+    const requirements = await readFile(join(process.cwd(), 'runtime', 'requirements.lock'))
+    const requirementsSha256 = createHash('sha256').update(requirements).digest('hex')
+    const runtimeId = [
+      manifest.contentSha256.slice(0, 16),
+      requirementsSha256.slice(0, 16),
+      'py312',
+      process.platform,
+      process.arch,
+    ].join('-')
+    const finalRoot = join(stateRoot, 'python', runtimeId)
+    const now = Date.now()
+    const quarantine = `${finalRoot}.replaced-${now - 25 * 60 * 60 * 1000}-stale`
+    const recovery = `${finalRoot}.replaced-${now}-recovery`
+    await mkdir(finalRoot, { recursive: true })
+    await mkdir(quarantine, { recursive: true })
+    await mkdir(recovery, { recursive: true })
+    await writeFile(join(finalRoot, 'runtime.json'), `${JSON.stringify({
+      schemaVersion: 1,
+      upstreamCommit: UPSTREAM_COMMIT,
+      upstreamContentSha256: manifest.contentSha256,
+      requirementsSha256,
+      pythonVersion: '3.12.0',
+      dependencies: { pillow: '12.3.0', numpy: '2.4.6', vtracer: '0.6.15' },
+      manager: 'uv',
+    })}\n`)
+    const config = resolveConfig({
+      runtime: { mode: 'managed', python: '/fixture/python' },
+    })
+
+    const prepared = await prepareUpstreamRuntime(ctx, config)
+
+    expect(prepared.pythonVersion).toBe('3.12.0')
+    expect((fiber.ctx.subprocess as ProbeSubprocessService).spawns.length).toBeGreaterThan(0)
+    expect(await pathExists(finalRoot)).toBe(true)
+    expect(await pathExists(quarantine)).toBe(false)
+    expect(await pathExists(recovery)).toBe(true)
   })
 })

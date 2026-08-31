@@ -10,7 +10,7 @@
  */
 import type { Context } from '@deepseek-ai/cordis';
 import LlmService, { LlmAdapter } from '@deepseek-ai/dsh-llm';
-import type { GenerateOptions, LlmModelInfo, LlmProviderInfo, LlmResolvedModelInfo, Message, StreamChunk } from '@deepseek-ai/dsh-llm';
+import type { GenerateOptions, LlmModelInfo, LlmProviderInfo, LlmResolvedModelInfo, Message, ResolvedRetryPolicy, StreamChunk } from '@deepseek-ai/dsh-llm';
 import type { ResolvedVisionToolkitConfig } from './config.ts';
 import { EvidenceCache } from './evidence-cache.ts';
 import { type PasteSelectionQuery, type PasteVerdict } from './paste-images.ts';
@@ -52,9 +52,10 @@ export declare function abortableWait<T>(promise: Promise<T>, signal: AbortSigna
  * @param signal - the caller's cancellation for this conversion pass.
  * @param sessionId - the live Session identity, when available.
  * @param runtimeHash - stable fingerprint of the vision provider and evidence runtime.
+ * @param storageDir - optional shared plugin storage root.
  * @returns the rewritten message list.
  */
-export declare function convertImagesToEvidence(ctx: Context, runtime: () => CapturedEvidenceRuntime | undefined, cache: EvidenceCache, messages: readonly Message[], signal?: AbortSignal, sessionId?: string, runtimeHash?: string): Promise<Message[]>;
+export declare function convertImagesToEvidence(ctx: Context, runtime: () => CapturedEvidenceRuntime | undefined, cache: EvidenceCache, messages: readonly Message[], signal?: AbortSignal, sessionId?: string, runtimeHash?: string, storageDir?: string): Promise<Message[]>;
 /**
  * The adapter behind one variant route: model metadata declares image input,
  * and every stream rewrites image blocks before delegating to the upstream
@@ -69,8 +70,10 @@ export declare class ImageInputVariantAdapter extends LlmAdapter {
     private readonly runtime;
     private readonly cache;
     private readonly hidden;
-    constructor(ctx: Context, llm: LlmService, upstream: string, upstreamName: string, runtime: () => VisionToolkitRuntime | undefined, cache: EvidenceCache, hidden?: () => boolean);
+    private readonly startupStorageDirectory;
+    constructor(ctx: Context, llm: LlmService, upstream: string, upstreamName: string, runtime: () => VisionToolkitRuntime | undefined, cache: EvidenceCache, hidden?: () => boolean, startupStorageDirectory?: () => string | undefined);
     providerInfo(provider: string): LlmProviderInfo;
+    providerRetryPolicy(_provider: string): ResolvedRetryPolicy;
     listModels(provider: string): Promise<readonly LlmModelInfo[]>;
     resolveModel(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;
     stream(options: GenerateOptions): AsyncGenerator<StreamChunk>;
@@ -131,7 +134,7 @@ export declare function createPasteTakeoverResolver(ctx: Context, getConfig: () 
  * @param getRuntime - the currently serving Vision Toolkit runtime, if ready.
  * @returns the disposer and a manual re-sweep trigger (settings changes).
  */
-export declare function installImageInputVariants(ctx: Context, getConfig: () => ResolvedVisionToolkitConfig, getRuntime: () => VisionToolkitRuntime | undefined): {
+export declare function installImageInputVariants(ctx: Context, getConfig: () => ResolvedVisionToolkitConfig, getRuntime: () => VisionToolkitRuntime | undefined, getStartupStorageDirectory?: () => string | undefined): {
     dispose: () => void;
     reconcile: () => void;
 };

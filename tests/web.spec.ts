@@ -203,6 +203,39 @@ describe('VisionToolkitWebBackend', () => {
     expect(manager.status().activeConfig?.concurrency).toBe(2)
   })
 
+  it('persists prior storage roots when the default save directory changes', async () => {
+    const { manager, post } = await setup()
+    const value = {
+      provider: { baseUrl: 'https://vision.example/v1', credential: 'VISION_API_KEY', model: 'next-model' },
+      language: 'en' as const, timeoutMs: 45000, maxImageBytes: 1000000, maxImagePixels: 2000000,
+      concurrency: 2, runtime: { mode: 'managed' as const }, allowedDirs: [],
+    }
+    const firstStorage = '/fixture/storage-first'
+    const secondStorage = '/fixture/storage-second'
+    const first = await post({ action: 'save', expectedRevision: 0, value: { ...value, storageDir: firstStorage } })
+    const firstBody = await first.json() as { ok: true; value: { settings: { revision: number } } }
+
+    const second = await post({
+      action: 'save',
+      expectedRevision: firstBody.value.settings.revision,
+      value: { ...value, storageDir: secondStorage },
+    })
+    const secondBody = await second.json() as {
+      ok: true
+      value: { settings: { value: { storageDir?: string; storageHistory?: string[] } } }
+    }
+
+    expect(second.status).toBe(200)
+    expect(secondBody.value.settings.value).toMatchObject({
+      storageDir: secondStorage,
+      storageHistory: [firstStorage],
+    })
+    expect(manager.status().activeConfig).toMatchObject({
+      storageDir: secondStorage,
+      storageHistory: [firstStorage],
+    })
+  })
+
   it('stores a write-only API key only after the saved credential reference is current', async () => {
     const { credentialService, post } = await setup()
     const value = {

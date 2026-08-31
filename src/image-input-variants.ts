@@ -23,6 +23,7 @@ import type {
   LlmProviderInfo,
   LlmResolvedModelInfo,
   Message,
+  ResolvedRetryPolicy,
   StreamChunk,
 } from '@deepseek-ai/dsh-llm'
 // Type-only imports activate the host service declarations on Context.
@@ -94,6 +95,18 @@ export function variantProviderId(upstream: string): string {
   return `${VARIANT_PROVIDER_PREFIX}${upstream}`
 }
 
+/** Stable semantic key for detecting a provider retry-policy replacement. */
+function retryPolicyKey(policy: ResolvedRetryPolicy): string {
+  const backoff = [policy.initialDelayMs, policy.maxDelayMs, policy.jitterRatio]
+  if (policy.mode === 'always') return JSON.stringify([policy.mode, ...backoff])
+  return JSON.stringify([
+    policy.mode,
+    policy.maxRetries,
+    [...policy.retryableCodes].sort(),
+    ...backoff,
+  ])
+}
+
 /**
  * Whether one model earns an image-input variant: the host must positively
  * declare it text-only. A model with unknown modalities is left alone — its
@@ -129,18 +142,21 @@ async function materializeImage(
   data: Uint8Array,
   extension: string,
   sessionId: string | undefined,
+  storageDir: string | undefined,
 ): Promise<MaterializedImage> {
   const session = sessionId === undefined ? undefined : ctx.sessions.get(sessionId as never)
   const cwd = session?.header.cwd
   if (sessionId !== undefined && cwd !== undefined && isAbsolute(cwd)) {
-    const root = await sessionPasteRoot(ctx, sessionId)
+    const root = await sessionPasteRoot(ctx, sessionId, storageDir)
     const identity = createHash('sha256')
       .update(`${sessionId}\u0000${String(block.attachment.attachmentId)}`)
       .digest('hex')
       .slice(0, 32)
-    const file = join(root.visibleRoot, `attachment-${identity}${extension}`)
+    const filename = `attachment-${identity}${extension}`
+    const writePath = join(root.writeRoot, filename)
+    const file = join(root.visibleRoot, filename)
     try {
-      await writeFile(file, Buffer.from(data), { mode: 0o600, flag: 'wx' })
+      await writeFile(writePath, Buffer.from(data), { mode: 0o600, flag: 'wx' })
     } catch (error) {
       if (!(error instanceof Error && 'code' in error && error.code === 'EEXIST')) throw error
     }
@@ -344,6 +360,7 @@ async function readImageBlock(
   block: ImageBlock,
   query: string,
   sessionId?: string,
+  storageDir?: string,
 ): Promise<ContentBlock> {
   const attachments = ctx.get('attachments')
   const current = runtime()
@@ -358,7 +375,7 @@ async function readImageBlock(
   let pathEvidence = ''
   try {
     const stored = await attachments.readImage(block.attachment)
-    const materialized = await materializeImage(ctx, block, stored.data, extension, sessionId)
+    const materialized = await materializeImage(ctx, block, stored.data, extension, sessionId, storageDir)
     temporaryDirectory = materialized.temporaryDirectory
     if (materialized.persistent) pathEvidence = imagePathEvidence(materialized.file)
 
@@ -401,6 +418,7 @@ async function readImageBlock(
  * @param signal - the caller's cancellation for this conversion pass.
  * @param sessionId - the live Session identity, when available.
  * @param runtimeHash - stable fingerprint of the vision provider and evidence runtime.
+ * @param storageDir - optional shared plugin storage root.
  * @returns the rewritten message list.
  */
 export async function convertImagesToEvidence(
@@ -411,6 +429,7 @@ export async function convertImagesToEvidence(
   signal?: AbortSignal,
   sessionId?: string,
   runtimeHash = 'process-only-runtime',
+  storageDir?: string,
 ): Promise<Message[]> {
   const session = sessionId === undefined ? undefined : ctx.sessions.get(sessionId as never)
   const sessionIdentity = session === undefined
@@ -467,7 +486,7 @@ export async function convertImagesToEvidence(
           prompt: query,
           runtimeHash,
         }), () =>
-          readImageBlock(ctx, runtime, block, query, sessionId)),
+          readImageBlock(ctx, runtime, block, query, sessionId, storageDir)),
         signal,
       ),
       signal,
@@ -504,6 +523,7 @@ export class ImageInputVariantAdapter extends LlmAdapter {
     private readonly runtime: () => VisionToolkitRuntime | undefined,
     private readonly cache: EvidenceCache,
     private readonly hidden: () => boolean = () => false,
+    private readonly startupStorageDirectory: () => string | undefined = () => undefined,
   ) {
     super()
   }
@@ -513,6 +533,10 @@ export class ImageInputVariantAdapter extends LlmAdapter {
       id: provider,
       name: this.hidden() ? this.upstreamName : `${this.upstreamName}${VARIANT_SUFFIX}`,
     }
+  }
+
+  override providerRetryPolicy(_provider: string): ResolvedRetryPolicy {
+    return this.llm.providerRetryPolicy(this.upstream)
   }
 
   override async listModels(provider: string): Promise<readonly LlmModelInfo[]> {
@@ -552,6 +576,7 @@ export class ImageInputVariantAdapter extends LlmAdapter {
 
   override async *stream(options: GenerateOptions): AsyncGenerator<StreamChunk> {
     const current = this.runtime()
+    const storageDir = current === undefined ? this.startupStorageDirectory() : current.storageDirectory
     let captured: CapturedEvidenceRuntime | undefined
     if (current !== undefined && options.messages.some(message => contentHasImage(message.content))) {
       try {
@@ -573,7 +598,12 @@ export class ImageInputVariantAdapter extends LlmAdapter {
       options.messages,
       options.signal,
       options.sessionId === undefined ? undefined : String(options.sessionId),
-      captured?.evidenceFingerprint ?? 'process-only-runtime',
+      captured?.evidenceFingerprint ?? createHash('sha256')
+        .update('process-only-runtime')
+        .update('\0')
+        .update(storageDir ?? '')
+        .digest('hex'),
+      storageDir,
     )
     // Delegate through the host service under the upstream route: the variant
     // is a wire-only facade, and the upstream route owns retry and replay.
@@ -809,13 +839,13 @@ export function installImageInputVariants(
   ctx: Context,
   getConfig: () => ResolvedVisionToolkitConfig,
   getRuntime: () => VisionToolkitRuntime | undefined,
+  getStartupStorageDirectory: () => string | undefined = () => undefined,
 ): { dispose: () => void; reconcile: () => void } {
   const evidenceStore = new SessionEvidenceStore(ctx)
   const evidenceCache = new EvidenceCache(EVIDENCE_CACHE_LIMIT, evidenceStore)
-  const registrations = new Map<string, () => void>()
-  // The host snapshots adapter provider metadata (including the group display
-  // name) at registration time, so a transparent-routing toggle must rebuild
-  // every wrapper for the new names to reach the model selector.
+  const registrations = new Map<string, { dispose: () => void; retryPolicyKey: string }>()
+  // The host snapshots adapter provider metadata and retry policy at registration
+  // time, so changes to either require rebuilding the wrapper route.
   let lastHidden = false
   // Upstream ids observed missing and the timestamp of the first missing
   // observation. A wrapper is only released after its upstream stays absent
@@ -832,12 +862,12 @@ export function installImageInputVariants(
   let sweepQueued = false
 
   const release = (upstream: string): void => {
-    const dispose = registrations.get(upstream)
-    if (dispose === undefined) return
+    const registration = registrations.get(upstream)
+    if (registration === undefined) return
     registrations.delete(upstream)
     stale.delete(upstream)
     try {
-      dispose()
+      registration.dispose()
     } catch (error) {
       ctx.logger.warn(
         'dsh-vision-toolkit: image-input variant release failed for "%s": %s',
@@ -916,18 +946,28 @@ export function installImageInputVariants(
           continue
         }
         const eligible = models.some(shouldWrapModel)
-        const registered = registrations.has(upstream)
-        if (registered && live.has(variantId)) {
+        let upstreamRetryPolicyKey: string
+        try {
+          upstreamRetryPolicyKey = retryPolicyKey(llm.providerRetryPolicy(upstream))
+        } catch {
+          // Preserve an existing wrapper through a transient upstream registry
+          // gap; the next topology event or periodic sweep will retry the probe.
+          continue
+        }
+        let registration = registrations.get(upstream)
+        if (registration !== undefined && live.has(variantId)) {
           // Re-read the live registry after the await: a rebuild inside the
           // probe window can drop our wrapper without touching our map.
           const liveNow = new Set(llm.listProviders().map(provider => provider.id))
           if (liveNow.has(variantId)) {
-            // Healthy handle: only react when the route lost every eligible model.
-            if (!eligible) release(upstream)
-            continue
+            if (eligible && registration.retryPolicyKey === upstreamRetryPolicyKey) continue
+            // Eligibility and retry policy are registration-time facts. Rebuild
+            // whenever either no longer matches the live upstream route.
+            release(upstream)
+            registration = undefined
           }
         }
-        if (registered) {
+        if (registration !== undefined) {
           // Dead handle from a registry rebuild/reset: drop it and register a
           // fresh wrapper below.
           release(upstream)
@@ -945,9 +985,10 @@ export function installImageInputVariants(
               getRuntime,
               evidenceCache,
               () => getConfig().imageInputVariants.hidden,
+              getStartupStorageDirectory,
             ),
           )
-          registrations.set(upstream, dispose)
+          registrations.set(upstream, { dispose, retryPolicyKey: upstreamRetryPolicyKey })
           stale.delete(upstream)
         } catch (error) {
           ctx.logger.warn(
