@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import worker from '../src/index'
 import {
   GROQ_CHAT_COMPLETIONS_URL,
+  VisionUpstreamScheduler,
   __test__ as providerTest,
 } from '../src/groq'
 import { CANONICAL_MODEL, QWEN_MODEL } from '../src/protocol'
@@ -18,6 +19,7 @@ interface FakeKeyState {
   keySlot: number
   lastSelectedAt: number
   leaseExpiresAt: number
+  reapGeneration: number
 }
 
 class FakeStatement {
@@ -44,7 +46,7 @@ class FakeStatement {
       selected.activeRequests += 1
       selected.lastSelectedAt = now
       selected.leaseExpiresAt = Math.max(selected.leaseExpiresAt, leaseExpiresAt)
-      return { key_slot: selected.keySlot } as T
+      return { key_slot: selected.keySlot, reap_generation: selected.reapGeneration } as T
     }
     if (this.sql.includes('MIN(cooldown_until)')) {
       const now = Number(this.values.at(-1))
@@ -73,6 +75,7 @@ class FakeStatement {
         if (state.activeRequests > 0 && state.leaseExpiresAt <= now) {
           state.activeRequests = 0
           state.leaseExpiresAt = 0
+          state.reapGeneration += 1
         }
       }
     }
@@ -80,8 +83,10 @@ class FakeStatement {
       if (this.database.failSchedulerRelease) throw new Error('scheduler release unavailable')
       const cooldownUntil = Number(this.values[1])
       const slot = Number(this.values[2])
+      const generation = Number(this.values[3])
       const state = this.database.keyStates.get(slot)
-      if (state !== undefined) {
+      // Scoped by reap_generation: a stale release for a reaped lease affects no rows.
+      if (state !== undefined && state.reapGeneration === generation) {
         state.activeRequests = Math.max(0, state.activeRequests - 1)
         state.cooldownUntil = Math.max(state.cooldownUntil, cooldownUntil)
         if (state.activeRequests === 0) state.leaseExpiresAt = 0
@@ -109,7 +114,7 @@ class FakeD1 {
   failSchedulerRelease = false
   readonly keyStates = new Map<number, FakeKeyState>(Array.from({ length: 6 }, (_, keySlot) => [
     keySlot,
-    { activeRequests: 0, cooldownUntil: 0, keySlot, lastSelectedAt: 0, leaseExpiresAt: 0 },
+    { activeRequests: 0, cooldownUntil: 0, keySlot, lastSelectedAt: 0, leaseExpiresAt: 0, reapGeneration: 0 },
   ]))
 
   prepare(sql: string): FakeStatement {
@@ -602,5 +607,52 @@ describe('Worker request accounting', () => {
     )
     expect(response.status).toBe(400)
     expect(database.counts.size).toBe(0)
+  })
+})
+
+describe('VisionUpstreamScheduler', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('does not let a stale release corrupt a slot re-leased after its lease expired', async () => {
+    const database = new FakeD1()
+    const slot0 = database.keyStates.get(0)!
+    // Request A is mid-flight on slot 0 but has run past its lease expiry.
+    slot0.activeRequests = 1
+    slot0.leaseExpiresAt = 100
+    vi.spyOn(Date, 'now').mockReturnValue(200)
+    const scheduler = new VisionUpstreamScheduler(database)
+
+    // Request B arrives: the reaper reaps A's expired lease and B leases slot 0.
+    const leaseB = await scheduler.acquire([0])
+    expect(leaseB).toEqual({ generation: 1, slot: 0 })
+    expect(slot0.activeRequests).toBe(1)
+
+    // A finally finishes and releases its stale (generation-0) lease. It must not
+    // touch B's active count.
+    await scheduler.release(0, 0, 0)
+    expect(slot0.activeRequests).toBe(1)
+
+    // B releases with the generation it was handed; the counter returns to zero.
+    await scheduler.release(0, leaseB!.generation, 0)
+    expect(slot0.activeRequests).toBe(0)
+  })
+
+  it('keeps concurrent leases on the same slot releasing independently within one generation', async () => {
+    const database = new FakeD1()
+    vi.spyOn(Date, 'now').mockReturnValue(500)
+    const scheduler = new VisionUpstreamScheduler(database)
+
+    // Two requests land on the same slot before either lease is reaped.
+    const leaseA = await scheduler.acquire([0])
+    const leaseC = await scheduler.acquire([0])
+    expect(leaseA).toEqual({ generation: 0, slot: 0 })
+    expect(leaseC).toEqual({ generation: 0, slot: 0 })
+    expect(database.keyStates.get(0)?.activeRequests).toBe(2)
+
+    // Both releases carry the same generation and must both decrement.
+    await scheduler.release(0, leaseA!.generation, 0)
+    expect(database.keyStates.get(0)?.activeRequests).toBe(1)
+    await scheduler.release(0, leaseC!.generation, 0)
+    expect(database.keyStates.get(0)?.activeRequests).toBe(0)
   })
 })
