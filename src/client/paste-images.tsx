@@ -58,6 +58,8 @@ interface PasteOccurrence {
   source: string
   ref: string
   offset: number
+  /** DSH rc.8+ stores the full @label text; older releases used one placeholder. */
+  length?: number
   label: string
 }
 
@@ -166,6 +168,10 @@ function pasteLabel(file: File, index: number): string {
   return file.name.trim() || `clipboard-image-${index + 1}`
 }
 
+function occurrenceEnd(occurrence: PasteOccurrence): number {
+  return occurrence.offset + (occurrence.length ?? 1)
+}
+
 /** Owns browser File objects until DSH serializes the corresponding text references. */
 export class PasteImageController {
   private readonly records = new Map<string, PasteRecord>()
@@ -241,6 +247,7 @@ export class PasteImageController {
       if (before !== '' && !/\s$/u.test(before)) cursor = this.insertText(input, ' ', cursor)
       for (const [index, file] of files.entries()) {
         const ref = id()
+        const label = pasteLabel(file, index)
         const record: PasteRecord = { ref, file, batch, status: 'ready' }
         batch.records.push(record)
         this.records.set(ref, record)
@@ -248,11 +255,14 @@ export class PasteImageController {
         const accepted = input.insertReference({
           source: SOURCE,
           ref,
-          label: pasteLabel(file, index),
-          clipboardText: `[pasted image: ${pasteLabel(file, index)}]`,
+          label,
+          clipboardText: `[pasted image: ${label}]`,
         }, { start: cursor, end: cursor, draftRev: snapshot.draftRev })
         if (!accepted) throw new Error('The composer changed before pasted images could be inserted')
-        cursor += 1
+        const inserted = input.state.getSnapshot().occurrences.find(occurrence =>
+          occurrence.source === SOURCE && occurrence.ref === ref)
+        if (inserted === undefined) throw new Error('The pasted image reference was not present after insertion')
+        cursor = occurrenceEnd(inserted)
         const hasNext = index + 1 < files.length
         const suffix = input.state.getSnapshot().draft.slice(cursor)
         if (hasNext || (suffix !== '' && !/^\s/u.test(suffix))) cursor = this.insertText(input, ' ', cursor)
@@ -594,7 +604,7 @@ export class PasteImageController {
       insertText: (text: string, span: { start: number; end: number; draftRev: number }) => boolean
     }).insertText('', {
       start: current.offset,
-      end: current.offset + 1,
+      end: occurrenceEnd(current),
       draftRev: snapshot.draftRev,
     })
     if (!accepted) return
