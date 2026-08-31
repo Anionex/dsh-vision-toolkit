@@ -31,7 +31,7 @@ export interface EvidencePersistence {
     read(key: EvidenceCacheKey): Promise<ContentBlock | undefined>;
     write(key: EvidenceCacheKey, block: ContentBlock): Promise<void>;
 }
-/** Fingerprint every runtime setting that can change the generated description. */
+/** Fingerprint every runtime setting that can change generated evidence or its embedded path. */
 export declare function evidenceRuntimeFingerprint(config: ResolvedVisionToolkitConfig, credentialSha256?: string, sslVerify?: string): string;
 /** Build a non-secret cache key from the Session, attachment, focus, and runtime contract. */
 export declare function createEvidenceCacheKey(input: {

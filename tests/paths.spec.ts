@@ -1,7 +1,7 @@
-import { lstat, mkdtemp, mkdir, readFile, realpath, symlink, writeFile } from 'node:fs/promises'
+import { chmod, lstat, mkdtemp, mkdir, readFile, readdir, realpath, symlink, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   commitStagedOutput,
   commitStagedDirectory,
@@ -10,11 +10,13 @@ import {
   createStagedOutput,
   normalizePlatformTempPath,
   platformTempDirectory,
+  preflightSharedStorageBase,
   resolveHtmlFile,
   resolveInputFile,
   resolveOutputDirectory,
   resolveOutputFile,
   seedStagedDirectory,
+  workspaceStorageId,
 } from '../src/paths.ts'
 import { VisionToolkitError } from '../src/errors.ts'
 
@@ -32,22 +34,170 @@ async function outsideTempDir(prefix: string): Promise<string> {
 }
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await Promise.all(tempDirs.splice(0).map(dir => import('node:fs/promises').then(fs => fs.rm(dir, { recursive: true, force: true }))))
 })
 
 describe('createPathPolicy', () => {
+  it('names shared workspace storage separately for each user identity', () => {
+    const workspace = '/fixture/workspace'
+
+    expect(workspaceStorageId(workspace, 'uid:1000')).not.toBe(workspaceStorageId(workspace, 'uid:1001'))
+    expect(workspaceStorageId(workspace, 'uid:1000')).toMatch(/^[a-f0-9]{20}$/u)
+  })
+
+  it('rejects configured shared storage when POSIX ownership checks are unavailable', async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(process, 'geteuid')
+    Object.defineProperty(process, 'geteuid', { configurable: true, value: undefined })
+    try {
+      await expect(preflightSharedStorageBase(join(tmpdir(), 'dsh-vision-toolkit-unsupported')))
+        .rejects.toThrow('ownership and permissions cannot be verified')
+    } finally {
+      if (descriptor === undefined) delete (process as { geteuid?: unknown }).geteuid
+      else Object.defineProperty(process, 'geteuid', descriptor)
+    }
+  })
+
+  it.skipIf(typeof process.geteuid !== 'function')('write-probes a shared base without leaving preflight directories behind', async () => {
+    const shared = join(await outsideTempDir('preflight-parent'), 'shared')
+
+    const preflighted = await preflightSharedStorageBase(shared)
+    expect(preflighted).toBe(await realpath(shared))
+    expect((await readdir(shared)).filter(name => name.startsWith('.dsh-vision-toolkit-preflight-'))).toEqual([])
+  })
+
+  it.skipIf(typeof process.geteuid !== 'function')('rejects relative or non-directory shared storage roots during preflight', async () => {
+    const parent = await outsideTempDir('preflight-invalid')
+    const file = join(parent, 'storage-file')
+    await writeFile(file, 'fixture')
+
+    await expect(preflightSharedStorageBase('relative/storage')).rejects.toMatchObject({ code: 'path' })
+    await expect(preflightSharedStorageBase(file)).rejects.toMatchObject({ code: 'path' })
+  })
+
   it('creates the plugin output directory inside the workspace', async () => {
     const workspace = await tempDir('workspace')
     const policy = await createPathPolicy(workspace, [])
     expect(policy.workspace).toBe(await realpath(workspace))
+    expect(policy.storageRoot).toBe(await realpath(join(workspace, '.dsh-vision-toolkit')))
     expect(policy.outputDir).toBe(await realpath(join(workspace, '.dsh-vision-toolkit', 'artifacts')))
   })
 
-  it('rejects an output directory outside the fence', async () => {
+  it.skipIf(typeof process.geteuid !== 'function')('uses a stable workspace-specific child below a configured shared root', async () => {
     const workspace = await tempDir('workspace')
-    const outside = await outsideTempDir('outside')
-    await expect(createPathPolicy(workspace, [], join(outside, 'out')))
-      .rejects.toMatchObject({ code: 'path' })
+    const shared = await outsideTempDir('shared')
+    const policy = await createPathPolicy(workspace, [], shared)
+    const canonicalWorkspace = await realpath(workspace)
+    const expectedRoot = join(await realpath(shared), workspaceStorageId(canonicalWorkspace))
+
+    expect(policy.storageRoot).toBe(expectedRoot)
+    expect(policy.outputDir).toBe(join(expectedRoot, 'artifacts'))
+    expect(policy.allowedDirs).toContain(expectedRoot)
+    await expect(lstat(join(workspace, '.dsh-vision-toolkit'))).rejects.toMatchObject({ code: 'ENOENT' })
+    expect((await createPathPolicy(workspace, [], shared)).storageRoot).toBe(expectedRoot)
+  })
+
+  it.skipIf(typeof process.geteuid !== 'function')('retains only the same workspace child from a previous shared storage root', async () => {
+    const workspace = await tempDir('workspace')
+    const previousShared = await outsideTempDir('previous-shared')
+    const currentShared = await outsideTempDir('current-shared')
+    const previousPolicy = await createPathPolicy(workspace, [], previousShared)
+    const persisted = join(previousPolicy.storageRoot, 'persisted.png')
+    await writeFile(persisted, 'fixture')
+    const sibling = join(previousShared, 'another-workspace')
+    await mkdir(sibling, { mode: 0o700 })
+    const siblingImage = join(sibling, 'private.png')
+    await writeFile(siblingImage, 'fixture')
+
+    const policy = await createPathPolicy(workspace, [], currentShared, [previousShared])
+
+    await expect(resolveInputFile(persisted, policy)).resolves.toMatchObject({ path: await realpath(persisted) })
+    await expect(resolveInputFile(siblingImage, policy)).rejects.toMatchObject({ code: 'path' })
+    expect(policy.allowedDirs).toContain(previousPolicy.storageRoot)
+    expect(policy.allowedDirs).not.toContain(await realpath(previousShared))
+  })
+
+  it.skipIf(typeof process.geteuid !== 'function')('drops a previous workspace storage child that becomes unsafe', async () => {
+    const workspace = await tempDir('workspace')
+    const previousShared = await outsideTempDir('previous-unsafe')
+    const currentShared = await outsideTempDir('current-safe')
+    const previousPolicy = await createPathPolicy(workspace, [], previousShared)
+    const persisted = join(previousPolicy.storageRoot, 'persisted.png')
+    await writeFile(persisted, 'fixture')
+    await chmod(previousPolicy.storageRoot, 0o777)
+
+    const policy = await createPathPolicy(workspace, [], currentShared, [previousShared])
+
+    expect(policy.allowedDirs).not.toContain(previousPolicy.storageRoot)
+    await expect(resolveInputFile(persisted, policy)).rejects.toMatchObject({ code: 'path' })
+  })
+
+  it.skipIf(typeof process.geteuid !== 'function')('rejects a pre-created shared workspace directory with unsafe permissions', async () => {
+    const workspace = await tempDir('workspace')
+    const shared = await outsideTempDir('shared')
+    const child = join(shared, workspaceStorageId(await realpath(workspace)))
+    await mkdir(child, { mode: 0o700 })
+    await chmod(child, 0o777)
+
+    await expect(createPathPolicy(workspace, [], shared)).rejects.toMatchObject({ code: 'path' })
+  })
+
+  it.skipIf(typeof process.geteuid !== 'function')('rejects a pre-created shared workspace directory without owner write access', async () => {
+    const workspace = await tempDir('workspace')
+    const shared = await outsideTempDir('shared')
+    const child = join(shared, workspaceStorageId(await realpath(workspace)))
+    await mkdir(child, { mode: 0o700 })
+    await chmod(child, 0o500)
+
+    await expect(createPathPolicy(workspace, [], shared)).rejects.toMatchObject({ code: 'path' })
+  })
+
+  it.skipIf(typeof process.geteuid !== 'function')('rejects a sticky shared base not owned by the current user or root', async () => {
+    const workspace = await tempDir('workspace')
+    const shared = await outsideTempDir('shared')
+    await chmod(shared, 0o1777)
+    const actualUid = process.geteuid()
+    vi.spyOn(process, 'geteuid').mockReturnValue(actualUid + 1)
+
+    await expect(createPathPolicy(workspace, [], shared)).rejects.toMatchObject({ code: 'path' })
+  })
+
+  it.skipIf(typeof process.geteuid !== 'function')('rejects a configured shared storage base that is a symbolic link', async () => {
+    const workspace = await tempDir('workspace')
+    const target = await outsideTempDir('shared-target')
+    const parent = await outsideTempDir('shared-link-parent')
+    const sharedLink = join(parent, 'shared-link')
+    await symlink(target, sharedLink)
+
+    await expect(createPathPolicy(workspace, [], sharedLink)).rejects.toMatchObject({ code: 'path' })
+  })
+
+  it.skipIf(typeof process.geteuid !== 'function')('rejects an intermediate user-controlled symbolic link in the configured path', async () => {
+    const workspace = await tempDir('workspace')
+    const target = await outsideTempDir('shared-target')
+    const parent = await outsideTempDir('shared-alias-parent')
+    const alias = join(parent, 'alias')
+    await symlink(target, alias)
+
+    await expect(createPathPolicy(workspace, [], join(alias, 'shared'))).rejects.toMatchObject({ code: 'path' })
+  })
+
+  it.skipIf(typeof process.geteuid !== 'function')('accepts the root-owned platform /tmp alias as a shared storage base', async () => {
+    const workspace = await tempDir('workspace')
+    const policy = await createPathPolicy(workspace, [], '/tmp')
+    tempDirs.push(policy.storageRoot)
+
+    expect(policy.storageRoot).toBe(join(await realpath('/tmp'), workspaceStorageId(await realpath(workspace))))
+  })
+
+  it.skipIf(typeof process.geteuid !== 'function')('rejects a private shared base below a replaceable parent directory', async () => {
+    const workspace = await tempDir('workspace')
+    const parent = await outsideTempDir('replaceable-parent')
+    const shared = join(parent, 'shared')
+    await mkdir(shared, { mode: 0o700 })
+    await chmod(parent, 0o777)
+
+    await expect(createPathPolicy(workspace, [], shared)).rejects.toMatchObject({ code: 'path' })
   })
 
   it('resolves and realpaths allowedDirs', async () => {

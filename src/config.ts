@@ -9,7 +9,7 @@
 import z from '@deepseek-ai/schemastery'
 import type Schema from '@deepseek-ai/schemastery'
 import { credentialRef, type CredentialRef } from '@deepseek-ai/dsh-credentials'
-import { settingsNamespace } from '@deepseek-ai/dsh-settings'
+import type { SettingsNamespace } from '@deepseek-ai/dsh-settings'
 import { VisionToolkitError } from './errors.ts'
 import {
   BUILT_IN_FREE_VISION_BASE_URL,
@@ -24,8 +24,21 @@ export {
   BUILT_IN_FREE_VISION_MODEL,
 } from './defaults.ts'
 
+/**
+ * The namespace pattern the removed `settingsNamespace` helper enforced.
+ * dsh 0.1.2-alpha dropped that export; importing a missing named export is a
+ * module-evaluation error that stops the host from booting, so the check is
+ * inlined here instead of imported. The namespace is a static string, so no
+ * runtime dependency on `@deepseek-ai/dsh-settings` is needed.
+ */
+const SETTINGS_NAMESPACE_PATTERN = /^[a-z][a-z0-9-]*$/
+
 /** Settings document namespace owned by this plugin. */
-export const VISION_TOOLKIT_SETTINGS_NAMESPACE = settingsNamespace('vision-toolkit')
+export const VISION_TOOLKIT_SETTINGS_NAMESPACE = 'vision-toolkit' as SettingsNamespace
+
+if (!SETTINGS_NAMESPACE_PATTERN.test(VISION_TOOLKIT_SETTINGS_NAMESPACE)) {
+  throw new TypeError(`settings namespace "${VISION_TOOLKIT_SETTINGS_NAMESPACE}" must match ${String(SETTINGS_NAMESPACE_PATTERN)}`)
+}
 
 /** Browser-compatible default shared with the vendored Python client. */
 export const DEFAULT_VISION_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
@@ -78,6 +91,14 @@ export interface VisionToolkitConfig {
     /** Optional Python 3.11+ bootstrap/interpreter override. */
     python?: string
   }
+  /**
+   * Optional shared storage root. When set, every workspace gets an isolated,
+   * automatically generated child directory below this root instead of writing
+   * `.dsh-vision-toolkit` into the workspace.
+   */
+  storageDir?: string
+  /** Internal read-only history used to keep persisted paths valid after storage moves. */
+  storageHistory?: string[]
   /** Extra directories (besides the workspace) inputs may come from. */
   allowedDirs?: string[]
   /**
@@ -132,6 +153,8 @@ export const Config: Schema<VisionToolkitConfig> = z.object({
     agentVisionToolkitPath: z.string(),
     python: z.string(),
   }),
+  storageDir: z.string(),
+  storageHistory: z.array(z.string()).default([]),
   allowedDirs: z.array(z.string()).default([]),
   imageInputVariants: z.object({
     enabled: z.boolean().default(true),
@@ -161,6 +184,8 @@ export interface ResolvedVisionToolkitConfig {
     agentVisionToolkitPath?: string
     python?: string
   }
+  storageDir?: string
+  storageHistory: string[]
   allowedDirs: string[]
   imageInputVariants: {
     enabled: boolean
@@ -254,6 +279,10 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
   if (python !== undefined && python.length === 0) {
     throw new VisionToolkitError('config', 'runtime.python must not be empty')
   }
+  const storageDir = config.storageDir?.trim()
+  const storageHistory = [...new Set((config.storageHistory ?? [])
+    .map(dir => dir.trim())
+    .filter(dir => dir.length > 0 && dir !== storageDir))]
   const allowedDirs = (config.allowedDirs ?? []).map(dir => dir.trim()).filter(dir => dir.length > 0)
   const imageInputVariants = config.imageInputVariants ?? {}
   const variantProviders = (imageInputVariants.providers ?? [])
@@ -271,6 +300,8 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
       ...(toolkitPath !== undefined ? { agentVisionToolkitPath: toolkitPath } : {}),
       ...(python !== undefined ? { python } : {}),
     },
+    ...(storageDir === undefined || storageDir.length === 0 ? {} : { storageDir }),
+    storageHistory,
     allowedDirs,
     imageInputVariants: {
       enabled: imageInputVariants.enabled ?? true,
@@ -278,6 +309,49 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
       autoSwitch: imageInputVariants.autoSwitch ?? true,
       hidden: imageInputVariants.hidden ?? true,
     },
+  }
+}
+
+/** Merge prior storage roots into the next resolved generation's read-only history. */
+export function retainedStorageHistory(
+  next: VisionToolkitConfig,
+  previous: VisionToolkitConfig,
+): string[] {
+  const resolvedNext = resolveConfig(next)
+  const resolvedPrevious = resolveConfig(previous)
+  return [...new Set([
+    ...resolvedPrevious.storageHistory,
+    ...resolvedNext.storageHistory,
+    ...(resolvedPrevious.storageDir === undefined ? [] : [resolvedPrevious.storageDir]),
+  ])].filter(storageDir => storageDir !== resolvedNext.storageDir)
+}
+
+export interface WatchedSettingsGeneration {
+  /** Configuration to activate now; omitted after a successful history writeback. */
+  config?: VisionToolkitConfig
+  /** Whether the derived history still needs plugin-owned durable persistence. */
+  requiresDurableStorageHistory?: boolean
+  /** Non-fatal internal-history persistence error. */
+  persistenceError?: unknown
+}
+
+/** Prepare one live Settings generation without letting internal history writeback block activation. */
+export async function prepareWatchedSettingsGeneration(
+  next: VisionToolkitConfig,
+  previous: VisionToolkitConfig,
+  writable: boolean,
+  persistStorageHistory: (storageHistory: string[]) => Promise<void>,
+): Promise<WatchedSettingsGeneration> {
+  const storageHistory = retainedStorageHistory(next, previous)
+  if (JSON.stringify(storageHistory) === JSON.stringify(resolveConfig(next).storageHistory)) return { config: next }
+
+  const config = { ...next, storageHistory }
+  if (!writable) return { config, requiresDurableStorageHistory: true }
+  try {
+    await persistStorageHistory(storageHistory)
+    return {}
+  } catch (persistenceError) {
+    return { config, requiresDurableStorageHistory: true, persistenceError }
   }
 }
 

@@ -38,6 +38,27 @@ interface UpstreamManifest {
 export declare function bundledUpstreamRoot(): string;
 /** Convert one command into a user-facing executable string. */
 export declare function displayCommand(command: RuntimeCommand): string;
+/**
+ * Windows Defender/antivirus real-time scanning briefly locks freshly written
+ * Python DLLs, so recursive removal and directory replacement can fail with
+ * EBUSY/EPERM immediately after installation. Retry those transient Windows
+ * errors before surfacing them; non-Windows platforms pass through unchanged.
+ */
+export declare function withWindowsTransientRetry<T>(operation: () => Promise<T>): Promise<T>;
+/**
+ * Best-effort removal used after the primary runtime path has already
+ * succeeded or failed. Transient Windows locks must not turn a usable runtime
+ * into an error, but leaving the directory behind should still be audible.
+ */
+export declare function ignoreCleanupFailure(ctx: Context, label: string, path: string): Promise<void>;
+/**
+ * Opportunistically remove abandoned runtime staging and quarantine trees.
+ * Current names encode their owning runtime lock, so live preparation is
+ * skipped. Quarantines retain a 24-hour recovery window; legacy names use the
+ * same grace period and are collected only when no runtime lock is active
+ * because they cannot be associated with a specific lock.
+ */
+export declare function garbageCollectRuntimeCache(ctx: Context, stateRoot: string, now?: number): Promise<void>;
 export declare function isolatedPythonEnvironment(home: string): NodeJS.ProcessEnv;
 /** Verify every packaged upstream file against the committed content manifest. */
 export declare function verifyBundledUpstream(): Promise<UpstreamManifest>;

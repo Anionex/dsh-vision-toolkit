@@ -12,7 +12,7 @@
 
 ## 1. 打开申请入口并注册
 
-打开 [Inferera 国内申请入口](https://inferera.com/?aff=5wj6sgx8)，页面会跳转到 AIHubMix；点击右上角 **注册**，也可以点击页面中的 **立即体验**。
+打开 [Inferera 国内申请入口](https://inferera.com/?aff=sinZ)，页面会跳转到 AIHubMix；点击右上角 **注册**，也可以点击页面中的 **立即体验**。
 
 这个入口带有本项目的推荐参数；如果不想使用推荐链接，也可以直接访问 [Inferera](https://inferera.com/)。
 
@@ -132,7 +132,7 @@ gemini-3.7-flash-free
 
 ## 官方资料
 
-- [Inferera 国内申请入口](https://inferera.com/?aff=5wj6sgx8)
+- [Inferera 国内申请入口](https://inferera.com/?aff=sinZ)
 - [AIHubMix API Keys](https://console.aihubmix.com/token)
 - [AIHubMix 中文文档](https://docs.aihubmix.com/cn)
 - [Gemini 3.7 Flash (free) 模型页](https://aihubmix.com/model/gemini-3.7-flash-free)

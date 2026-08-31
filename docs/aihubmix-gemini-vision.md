@@ -12,7 +12,7 @@ This tutorial completes three tasks:
 
 ## 1. Open the signup entry and register
 
-Open the [Inferera signup entry](https://inferera.com/?aff=5wj6sgx8), which redirects to AIHubMix, then select **Sign up** in the upper-right corner or **Get API Key** on the page.
+Open the [Inferera signup entry](https://inferera.com/?aff=sinZ), which redirects to AIHubMix, then select **Sign up** in the upper-right corner or **Get API Key** on the page.
 
 This URL includes the project's referral parameter. You can instead open [Inferera](https://inferera.com/) directly if you prefer not to use a referral link.
 
@@ -132,7 +132,7 @@ The same provider can be stored in a Profile patch. Keep the key value in DSH Cr
 
 ## Official resources
 
-- [Inferera signup entry](https://inferera.com/?aff=5wj6sgx8)
+- [Inferera signup entry](https://inferera.com/?aff=sinZ)
 - [AIHubMix API Keys](https://console.aihubmix.com/token)
 - [AIHubMix documentation](https://docs.aihubmix.com/en)
 - [Gemini 3.7 Flash (free) model page](https://aihubmix.com/model/gemini-3.7-flash-free)

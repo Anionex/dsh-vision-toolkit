@@ -1,7 +1,7 @@
 import { createServer, type Server } from 'node:http'
-import { mkdtemp, mkdir, readFile, rm, symlink, unlink, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, mkdir, readFile, rm, symlink, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   ArtifactAccessController,
@@ -18,11 +18,19 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })))
 })
 
-async function fixture(filename: string, bytes: Buffer | string, facts: Pick<ArtifactDescriptor, 'mimeType' | 'kind' | 'previewIntent'>) {
+async function fixture(
+  filename: string,
+  bytes: Buffer | string,
+  facts: Pick<ArtifactDescriptor, 'mimeType' | 'kind' | 'previewIntent'>,
+  layout: 'legacy' | 'shared' = 'legacy',
+) {
   const root = await mkdtemp(join(tmpdir(), 'dsh-vision-access-'))
   roots.push(root)
-  const artifacts = join(root, 'workspace', '.dsh-vision-toolkit', 'artifacts')
-  await mkdir(artifacts, { recursive: true })
+  const storageRoot = layout === 'legacy'
+    ? join(root, 'workspace', '.dsh-vision-toolkit')
+    : join(root, 'shared', 'a'.repeat(20))
+  const artifacts = join(storageRoot, 'artifacts')
+  await mkdir(artifacts, { recursive: true, mode: 0o700 })
   const path = join(artifacts, filename)
   await writeFile(path, bytes)
   const size = (await readFile(path)).length
@@ -36,7 +44,7 @@ async function fixture(filename: string, bytes: Buffer | string, facts: Pick<Art
     previewIntent: facts.previewIntent,
     bytes: size,
   }
-  return { root, path, descriptor }
+  return { root, path, descriptor, storageRoot }
 }
 
 async function listen(controller: ArtifactAccessController): Promise<string> {
@@ -97,6 +105,62 @@ describe('ArtifactAccessController', () => {
     const response = await fetch(`${base}${grant.previewUrl}`)
     expect(response.status).toBe(200)
     expect(await response.text()).toBe('{"ok":true}\n')
+  })
+
+  it.skipIf(typeof process.geteuid !== 'function')('serves artifacts from a private workspace directory below shared storage', async () => {
+    const { root, descriptor } = await fixture('shared.png', 'shared-artifact', {
+      mimeType: 'image/png', kind: 'image', previewIntent: 'image',
+    }, 'shared')
+    const controller = new ArtifactAccessController(await prepareArtifactAccessKey(join(root, 'state')))
+    const grant = grantOf(controller, descriptor)
+    const base = await listen(controller)
+
+    const response = await fetch(`${base}${grant.previewUrl}`)
+    expect(response.status).toBe(200)
+    expect(await response.text()).toBe('shared-artifact')
+  })
+
+  it('rejects shared artifacts when POSIX ownership checks are unavailable', async () => {
+    const { root, descriptor } = await fixture('shared.png', 'shared-artifact', {
+      mimeType: 'image/png', kind: 'image', previewIntent: 'image',
+    }, 'shared')
+    const controller = new ArtifactAccessController(await prepareArtifactAccessKey(join(root, 'state')))
+    const grant = grantOf(controller, descriptor)
+    const base = await listen(controller)
+    const descriptorBefore = Object.getOwnPropertyDescriptor(process, 'geteuid')
+    Object.defineProperty(process, 'geteuid', { configurable: true, value: undefined })
+    try {
+      expect((await fetch(`${base}${grant.previewUrl}`)).status).toBe(404)
+    } finally {
+      if (descriptorBefore === undefined) delete (process as { geteuid?: unknown }).geteuid
+      else Object.defineProperty(process, 'geteuid', descriptorBefore)
+    }
+  })
+
+  it('rejects a shared workspace artifact directory with permissive storage permissions', async () => {
+    if (typeof process.geteuid !== 'function') return
+    const { root, descriptor, storageRoot } = await fixture('shared.png', 'shared-artifact', {
+      mimeType: 'image/png', kind: 'image', previewIntent: 'image',
+    }, 'shared')
+    await chmod(storageRoot, 0o755)
+    const controller = new ArtifactAccessController(await prepareArtifactAccessKey(join(root, 'state')))
+    const grant = grantOf(controller, descriptor)
+    const base = await listen(controller)
+
+    expect((await fetch(`${base}${grant.previewUrl}`)).status).toBe(404)
+  })
+
+  it('rejects shared artifacts when the configured base can be replaced through its parent', async () => {
+    if (typeof process.geteuid !== 'function') return
+    const { root, descriptor, storageRoot } = await fixture('shared.png', 'shared-artifact', {
+      mimeType: 'image/png', kind: 'image', previewIntent: 'image',
+    }, 'shared')
+    await chmod(dirname(dirname(storageRoot)), 0o777)
+    const controller = new ArtifactAccessController(await prepareArtifactAccessKey(join(root, 'state')))
+    const grant = grantOf(controller, descriptor)
+    const base = await listen(controller)
+
+    expect((await fetch(`${base}${grant.previewUrl}`)).status).toBe(404)
   })
 
   it('rejects forged tokens and a delivered file replaced by a symlink', async () => {

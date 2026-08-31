@@ -18,13 +18,16 @@ import { ArtifactAccessController, prepareArtifactAccessKey } from './artifact-a
 import {
   Config,
   VISION_TOOLKIT_SETTINGS_NAMESPACE,
+  prepareWatchedSettingsGeneration,
   resolveConfig,
+  type ResolvedVisionToolkitConfig,
   type VisionToolkitConfig,
 } from './config.ts'
 import { VisionToolExposure } from './exposure.ts'
 import { createPasteTakeoverResolver, installImageInputVariants } from './image-input-variants.ts'
 import { VisionToolkitRuntimeManager } from './runtime-manager.ts'
 import { VISION_SKILLS_SKILL } from './skill.ts'
+import { StorageHistoryStore } from './storage-history.ts'
 import { createVisionTools } from './tools.ts'
 import { PLUGIN_VERSION } from './version.ts'
 import { installVisionToolkitWeb, VisionToolkitWebBackend } from './web.ts'
@@ -51,7 +54,32 @@ export async function apply(ctx: Context, config: VisionToolkitConfig = {}): Pro
   const artifacts = new ArtifactAccessController(await prepareArtifactAccessKey())
   const lifecycle = new AbortController()
   const disposers: Array<() => void> = []
+  const storageHistory = new StorageHistoryStore(ctx)
+  disposers.push(() => { storageHistory.dispose() })
+  let storageHistoryWarningReported = false
   let operationalDisposers: { activationTool: () => void; exposure: () => void; skill: () => void } | undefined
+
+  const persistStorageHistory = async (candidate: VisionToolkitConfig, required: boolean): Promise<void> => {
+    try {
+      const persisted = await storageHistory.persist(candidate)
+      if (persisted) return
+      const error = new Error(
+        'configured storage history requires @deepseek-ai/dsh-storage-domain when Settings cannot persist it',
+      )
+      if (required) throw error
+      if (!storageHistoryWarningReported) {
+        storageHistoryWarningReported = true
+        ctx.logger.warn('dsh-vision-toolkit: %s', error.message)
+      }
+    } catch (error) {
+      if (required) throw error
+      if (!storageHistoryWarningReported) {
+        storageHistoryWarningReported = true
+        const message = error instanceof Error ? error.message : String(error)
+        ctx.logger.warn('dsh-vision-toolkit: configured storage history was not persisted. %s', message)
+      }
+    }
+  }
 
   const ensureOperational = (): void => {
     if (!manager.ready || operationalDisposers !== undefined) return
@@ -84,10 +112,16 @@ export async function apply(ctx: Context, config: VisionToolkitConfig = {}): Pro
     }
   }
 
+  const initialConfig = await storageHistory.restore(settings.get())
   try {
-    await manager.initialize(settings.get())
+    await manager.initialize(initialConfig, candidate => persistStorageHistory(candidate.config, false))
     ensureOperational()
   } catch (error) {
+    const resolvedInitial = resolveConfig(initialConfig)
+    if (resolvedInitial.storageDir === undefined
+      || manager.validatedStorageDirectory() === resolvedInitial.storageDir) {
+      await persistStorageHistory(initialConfig, false)
+    }
     const message = error instanceof Error ? error.message : String(error)
     ctx.logger.error(
       'dsh-vision-toolkit %s: runtime not ready; the vision-skills skill, activation bootstrap, and Agent-scoped visual tools are NOT registered. Settings remain available for repair. %s',
@@ -97,29 +131,54 @@ export async function apply(ctx: Context, config: VisionToolkitConfig = {}): Pro
   }
 
   const backend = new VisionToolkitWebBackend(ctx, manager, artifacts, ensureOperational)
+  const currentConfig = (): ResolvedVisionToolkitConfig => manager.ready
+    ? manager.currentConfig()
+    : resolveConfig(settings.get())
   const pastedImages = new PastedImageBackend(ctx, {
     maxUploadBytes: () => MAX_PASTE_IMAGE_BYTES,
+    storageGeneration: () => manager.storageGeneration(),
   })
   // Image-input variants register asynchronously once eligible routes exist;
   // the runtime getter stays lazy so variants appear even when the runtime
   // becomes ready after the first sweep.
   const variants = installImageInputVariants(
     ctx,
-    () => resolveConfig(settings.get()),
+    currentConfig,
     () => manager.ready ? manager.current() : undefined,
+    () => manager.validatedStorageDirectory(),
   )
   installVisionToolkitWeb(
     ctx,
     backend,
     artifacts,
     pastedImages,
-    createPasteTakeoverResolver(ctx, () => resolveConfig(settings.get())),
-    () => ({ hidden: resolveConfig(settings.get()).imageInputVariants.hidden }),
+    createPasteTakeoverResolver(ctx, currentConfig),
+    () => ({ hidden: currentConfig().imageInputVariants.hidden }),
   )
   disposers.push(variants.dispose)
-  disposers.push(settings.watch(async (next) => {
+  disposers.push(settings.watch(async (next, previous) => {
     try {
-      await manager.reconfigure(next)
+      const prepared = await prepareWatchedSettingsGeneration(
+        next,
+        previous,
+        ctx.settings.writable,
+        storageHistory => settings.update({ storageHistory }),
+      )
+      if (prepared.persistenceError !== undefined) {
+        const message = prepared.persistenceError instanceof Error
+          ? prepared.persistenceError.message
+          : String(prepared.persistenceError)
+        ctx.logger.warn('dsh-vision-toolkit: activating Settings without persisting internal storage history. %s', message)
+      }
+      if (prepared.config === undefined) return
+      const candidate = await storageHistory.restore(prepared.config)
+      await manager.reconfigure(
+        candidate,
+        generation => persistStorageHistory(
+          generation.config,
+          prepared.requiresDurableStorageHistory === true,
+        ),
+      )
       ensureOperational()
       variants.reconcile()
     } catch (error) {
