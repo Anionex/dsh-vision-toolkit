@@ -1,6 +1,6 @@
 {
   "name": "@anionex/dsh-vision-toolkit",
-  "version": "0.1.40",
+  "version": "0.1.41",
   "description": "DeepSeek Harness-native integration for agent-vision-toolkit: image Q&A, OCR, grounding, UI restoration, pixel diff, Artifacts, and Web UI.",
   "keywords": [
     "deepseek",
@@ -92,6 +92,21 @@
       "upstreamVersion": "v0.1.0+snapshot.bc9803d",
       "upstreamCommit": "bc9803d7d6300c864d17460ecbb33540b26638e0",
       "upstreamSkillCommit": "77c24ad5b5d7a123119862893129f939307f1d3f"
+    },
+    "compatibility": {
+      "dsh": ">=0.1.0-rc.8 <0.2.0",
+      "dshReleases": {
+        "0.1.0-rc.8": "compatible",
+        "0.1.1-rc.1": "compatible",
+        "0.1.1-rc.2": "compatible",
+        "0.1.2-alpha.3": "compatible",
+        "0.1.2-alpha.4": "compatible",
+        "0.1.2-alpha.5": "compatible"
+      },
+      "profiles": [
+        "web",
+        "headless"
+      ]
     }
   },
   "dependencies": {
