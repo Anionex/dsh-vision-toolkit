@@ -4,6 +4,16 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+## [0.1.42] - 2026-09-05
+
+### Changed
+
+- Declared exact compatibility with DSH `0.1.2-rc.1` after clean Headless Profile install, startup, visual-tool execution, disable/re-enable, and uninstall acceptance.
+
+### Fixed
+
+- Kept Agent-scoped visual-tool exposure working on DSH `0.1.2` prereleases by reading Session history through the public `snapshotEvents()` API when available.
+
 ## [0.1.40] - 2026-08-31
 
 ### Fixed
@@ -416,7 +426,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 - Runtime teardown cancels in-flight operations before removing Agent-scoped tools, the activation bootstrap, and the Skill.
 - The Web client is published through the current nested `dsh.client` manifest and loader-compatible built artifact required by DSH snapshot0810.
 
-[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.40...HEAD
+[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.42...HEAD
+[0.1.42]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.40...v0.1.42
 [0.1.40]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.39...v0.1.40
 [0.1.39]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.38...v0.1.39
 [0.1.38]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.37...v0.1.38

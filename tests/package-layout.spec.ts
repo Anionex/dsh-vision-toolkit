@@ -11,10 +11,16 @@ const PACKAGE = JSON.parse(await readFile(join(ROOT, 'package.json'), 'utf8')) a
   exports: Record<string, unknown>
   files: string[]
   scripts: Record<string, string>
+  engines?: { node?: string }
   dsh?: {
     bundle?: { patch?: string }
     client?: { platform?: string; inject?: string[] }
     visionToolkit?: { upstreamSkillCommit?: string }
+    compatibility?: {
+      dsh?: string
+      dshReleases?: Record<string, 'compatible' | 'incompatible' | 'unknown'>
+      profiles?: string[]
+    }
   }
   dependencies?: Record<string, string>
   peerDependencies?: Record<string, string>
@@ -55,6 +61,13 @@ describe('package layout contract', () => {
       '@deepseek-ai/dsh-client-ui-settings',
       '@deepseek-ai/dsh-client-locale',
     ]))
+  })
+
+  it('declares the exact DSH rc.1 and runtime compatibility contract', () => {
+    expect(PACKAGE.engines?.node).toBe('^22.19.0 || >=24.0.0')
+    expect(PACKAGE.dsh?.compatibility?.dsh).toBe('>=0.1.0-rc.8 <0.2.0')
+    expect(PACKAGE.dsh?.compatibility?.dshReleases?.['0.1.2-rc.1']).toBe('compatible')
+    expect(PACKAGE.dsh?.compatibility?.profiles).toEqual(['web', 'headless'])
   })
 
   it('ships runtime, pinned upstream, adapted Skill resources, lib, src, patch, and docs in files', async () => {
