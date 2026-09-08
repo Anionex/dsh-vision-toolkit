@@ -4,6 +4,14 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+## [0.1.43] - 2026-09-08
+
+### Changed
+
+- Declared exact compatibility for the official DSH release window `0.1.2-rc.1`, `0.1.3-alpha.1`, and `0.1.3-alpha.2` under `dsh.compatibility.dshReleases`, so the DSH STORE Catalog can read a per-release verdict instead of `unknown`.
+- Verified DSH `0.1.3-alpha.2` with a clean disposable Headless Profile install, boot, visual-tool execution, and uninstall acceptance.
+- Recorded DSH `0.1.3-alpha.1` as `unknown`: the official GitHub release has no npm artifact, so there is no installable build to accept.
+
 ## [0.1.42] - 2026-09-05
 
 ### Changed
@@ -426,7 +434,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 - Runtime teardown cancels in-flight operations before removing Agent-scoped tools, the activation bootstrap, and the Skill.
 - The Web client is published through the current nested `dsh.client` manifest and loader-compatible built artifact required by DSH snapshot0810.
 
-[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.42...HEAD
+[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.43...HEAD
+[0.1.43]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.42...v0.1.43
 [0.1.42]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.40...v0.1.42
 [0.1.40]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.39...v0.1.40
 [0.1.39]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.38...v0.1.39
