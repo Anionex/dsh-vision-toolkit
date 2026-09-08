@@ -63,11 +63,17 @@ describe('package layout contract', () => {
     ]))
   })
 
-  it('declares the exact DSH rc.1 and runtime compatibility contract', () => {
+  it('declares the exact DSH release window and runtime compatibility contract', () => {
     expect(PACKAGE.engines?.node).toBe('^22.19.0 || >=24.0.0')
     expect(PACKAGE.dsh?.compatibility?.dsh).toBe('>=0.1.0-rc.8 <0.2.0')
-    expect(PACKAGE.dsh?.compatibility?.dshReleases?.['0.1.2-rc.1']).toBe('compatible')
     expect(PACKAGE.dsh?.compatibility?.profiles).toEqual(['web', 'headless'])
+    // DSH STORE reads the official latest-three window per release and needs at
+    // least one exact `compatible` verdict; a range alone is not installable evidence.
+    expect(PACKAGE.dsh?.compatibility?.dshReleases?.['0.1.2-rc.1']).toBe('compatible')
+    expect(PACKAGE.dsh?.compatibility?.dshReleases?.['0.1.3-alpha.1']).toBe('unknown')
+    expect(PACKAGE.dsh?.compatibility?.dshReleases?.['0.1.3-alpha.2']).toBe('compatible')
+    const window = ['0.1.2-rc.1', '0.1.3-alpha.1', '0.1.3-alpha.2']
+    expect(window.filter(release => PACKAGE.dsh?.compatibility?.dshReleases?.[release] === 'compatible')).not.toHaveLength(0)
   })
 
   it('ships runtime, pinned upstream, adapted Skill resources, lib, src, patch, and docs in files', async () => {
