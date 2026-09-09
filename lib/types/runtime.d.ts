@@ -9,6 +9,16 @@ import type { Context } from '@deepseek-ai/cordis';
 import { type ArtifactDescriptor } from './artifacts.ts';
 import { type ResolvedVisionToolkitConfig } from './config.ts';
 import { UpstreamAdapter, type DominantColorsOutput, type UpstreamEnvironment, type UpstreamVersionInfo } from './upstream.ts';
+/**
+ * Provider headers for one request: the configured static entries plus each
+ * configured session header, filled with an opaque per-session id. The id is a
+ * digest, never the key itself, because a sessionless caller keys by workspace
+ * path and that path must not reach the provider.
+ * @param provider - resolved provider configuration.
+ * @param sessionKey - the operation's session key, when one exists.
+ * @returns headers to merge into the provider request.
+ */
+export declare function visionProviderHeaders(provider: ResolvedVisionToolkitConfig['provider'], sessionKey: string | undefined): Record<string, string>;
 /** Per-invocation cancellation and timeout facts. */
 export interface Deadline {
     signal: AbortSignal;

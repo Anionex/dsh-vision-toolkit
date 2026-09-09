@@ -72,6 +72,19 @@ export interface VisionToolkitConfig {
     anthropicThinking?: 'omit' | 'disabled' | 'adaptive'
     /** Outbound User-Agent for provider requests and connection tests. */
     userAgent?: string
+    /**
+     * Extra headers sent with every vision request and the connection test.
+     * Reserved names the client already owns (`Content-Type`, `User-Agent`,
+     * `Authorization`, `x-api-key`, `anthropic-version`) stay owned by it.
+     */
+    headers?: Record<string, string>
+    /**
+     * Header names filled with an opaque per-session id. A gateway that routes
+     * by conversation requires one — OpenCode Zen rejects a request without
+     * `x-opencode-session` — and only the runtime knows the value, so it cannot
+     * be written as a static {@link headers} entry.
+     */
+    sessionHeaders?: string[]
   }
   /** Vision output language (`zh` or `en`). */
   language?: 'zh' | 'en'
@@ -142,6 +155,8 @@ export const Config: Schema<VisionToolkitConfig> = z.object({
     protocol: z.union(['openai', 'anthropic'] as const).default('openai'),
     anthropicThinking: z.union(['omit', 'disabled', 'adaptive'] as const).default('omit'),
     userAgent: z.string().default(DEFAULT_VISION_USER_AGENT),
+    headers: z.dict(z.string()).default({}),
+    sessionHeaders: z.array(z.string()).default([]),
   }),
   language: z.union(['zh', 'en'] as const).default('zh'),
   timeoutMs: z.number().default(30000),
@@ -173,6 +188,8 @@ export interface ResolvedVisionToolkitConfig {
     protocol: 'openai' | 'anthropic'
     anthropicThinking: 'omit' | 'disabled' | 'adaptive'
     userAgent: string
+    headers: Record<string, string>
+    sessionHeaders: string[]
   }
   language: 'zh' | 'en'
   timeoutMs: number
@@ -199,6 +216,28 @@ const MAX_TIMEOUT_MS = 600000
 const MAX_IMAGE_BYTES = 268435456
 const MAX_IMAGE_PIXELS = 268435456
 const MAX_CONCURRENCY = 16
+
+/** Header names the vendored vision client sets itself; configuration cannot take them over. */
+const RESERVED_HEADER_NAMES = new Set([
+  'content-type',
+  'user-agent',
+  'authorization',
+  'x-api-key',
+  'anthropic-version',
+])
+
+/** Reject a header Fetch and `urllib` cannot put on a provider request. */
+function assertSendableHeader(field: string, name: string, value: string): void {
+  try {
+    new Headers([[name, value]])
+  } catch {
+    throw new VisionToolkitError(
+      'config',
+      `${field} entry "${name}" is not a valid HTTP header;`
+      + ' use a valid field name and a single-line value representable as bytes',
+    )
+  }
+}
 
 /**
  * Validate and normalize a config object (partial inputs receive the same
@@ -241,6 +280,29 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
   if (userAgent.length === 0) {
     throw new VisionToolkitError('config', 'provider.userAgent must not be empty')
   }
+  const headers = Object.fromEntries(Object.entries(provider.headers ?? {}).map(([name, value]) => {
+    const header = name.trim()
+    if (header.length === 0) {
+      throw new VisionToolkitError('config', 'provider.headers has an entry with an empty name')
+    }
+    if (RESERVED_HEADER_NAMES.has(header.toLowerCase())) {
+      throw new VisionToolkitError('config', `provider.headers must not set "${header}"; the vision client owns it`)
+    }
+    assertSendableHeader('provider.headers', header, value)
+    return [header, value]
+  }))
+  const sessionHeaders = (provider.sessionHeaders ?? []).map((name) => {
+    const header = name.trim()
+    if (header.length === 0) {
+      throw new VisionToolkitError('config', 'provider.sessionHeaders has an empty entry')
+    }
+    if (RESERVED_HEADER_NAMES.has(header.toLowerCase())) {
+      throw new VisionToolkitError('config', `provider.sessionHeaders must not name "${header}"; the vision client owns it`)
+    }
+    // The value is generated, so only the name can be unsendable here.
+    assertSendableHeader('provider.sessionHeaders', header, 'session')
+    return header
+  })
   const language = config.language ?? 'zh'
   if (language !== 'zh' && language !== 'en') {
     throw new VisionToolkitError('config', 'language must be "zh" or "en"')
@@ -289,7 +351,7 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
     .map(provider => provider.trim())
     .filter(provider => provider.length > 0)
   return {
-    provider: { baseUrl, credential, model, protocol, anthropicThinking, userAgent },
+    provider: { baseUrl, credential, model, protocol, anthropicThinking, userAgent, headers, sessionHeaders },
     language,
     timeoutMs,
     maxImageBytes,

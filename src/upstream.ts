@@ -43,6 +43,8 @@ export interface UpstreamEnvironment {
   VISION_SSL_VERIFY?: string
   VISION_USER_AGENT: string
   LANG: 'zh' | 'en'
+  /** Configured provider headers, JSON-encoded; the vision-model guard merges them into every request. */
+  DSH_VISION_EXTRA_HEADERS?: string
 }
 
 /** Pinned upstream identity plus prepared runtime facts. */
@@ -531,6 +533,19 @@ const VISION_MODEL_GUARD = [
   'script=sys.argv[1]',
   'sys.argv=[script,*sys.argv[2:]]',
   'sys.path.insert(0,str(Path(script).resolve().parents[1]))',
+  // Configured provider headers reach the vendored client here rather than in
+  // the pinned snapshot, which the content manifest verifies byte for byte.
+  // Both branches below need them: a checkout without `vision_client` still
+  // issues the request from the script itself.
+  'import json,os,urllib.request',
+  'extra_headers=json.loads(os.environ.get("DSH_VISION_EXTRA_HEADERS") or "{}")',
+  'if extra_headers:',
+  '    original_request=urllib.request.Request',
+  '    class ExtraHeaderRequest(original_request):',
+  '        def __init__(self,*args,**kwargs):',
+  '            super().__init__(*args,**kwargs)',
+  '            for name,value in extra_headers.items(): self.add_header(name,value)',
+  '    urllib.request.Request=ExtraHeaderRequest',
   'if importlib.util.find_spec("vision_client") is None:',
   '    runpy.run_path(script,run_name="__main__")',
   'else:',
@@ -761,6 +776,9 @@ export class UpstreamAdapter {
             : { VISION_SSL_VERIFY: options.env.VISION_SSL_VERIFY }),
           VISION_USER_AGENT: options.env.VISION_USER_AGENT,
           LANG: options.env.LANG,
+          ...(options.env.DSH_VISION_EXTRA_HEADERS === undefined
+            ? {}
+            : { DSH_VISION_EXTRA_HEADERS: options.env.DSH_VISION_EXTRA_HEADERS }),
           VISION_ENV_FILE: join(prepared.cleanHome, 'vision.env'),
         }),
     }

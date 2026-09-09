@@ -4,6 +4,10 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+### Added
+
+- `provider.headers` sends deployment-owned headers with every vision request and the connection test, and `provider.sessionHeaders` names the headers that carry an opaque per-session id. Gateways that route by conversation need the latter — OpenCode Zen answers `400 MissingSessionID` for a request without `x-opencode-session` — and neither could be expressed before ([#144](https://github.com/Anionex/dsh-vision-toolkit/issues/144)). Names the vision client owns (`Content-Type`, `User-Agent`, `Authorization`, `x-api-key`, `anthropic-version`) are refused where they are configured, and the headers reach the client through the vision-model guard, leaving the manifest-verified upstream snapshot untouched.
+
 ## [0.1.43] - 2026-09-08
 
 ### Changed
