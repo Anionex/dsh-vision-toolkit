@@ -53,6 +53,29 @@ import {
 import { PLUGIN_VERSION } from './version.ts'
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
+/** Stands in for the session key of a request that names no operation (the connection test). */
+const SESSIONLESS_KEY = randomUUID()
+
+/**
+ * Provider headers for one request: the configured static entries plus each
+ * configured session header, filled with an opaque per-session id. The id is a
+ * digest, never the key itself, because a sessionless caller keys by workspace
+ * path and that path must not reach the provider.
+ * @param provider - resolved provider configuration.
+ * @param sessionKey - the operation's session key, when one exists.
+ * @returns headers to merge into the provider request.
+ */
+export function visionProviderHeaders(
+  provider: ResolvedVisionToolkitConfig['provider'],
+  sessionKey: string | undefined,
+): Record<string, string> {
+  if (provider.sessionHeaders.length === 0) return { ...provider.headers }
+  const id = createHash('sha256').update(sessionKey ?? SESSIONLESS_KEY).digest('hex').slice(0, 32)
+  return {
+    ...provider.headers,
+    ...Object.fromEntries(provider.sessionHeaders.map(name => [name, id])),
+  }
+}
 const VISION_MODEL_TEST_IMAGE = fileURLToPath(new URL('../assets/vision-model-test.png', import.meta.url))
 const VISION_MODEL_TEST_PROMPT = 'This is an explicit service readiness test. Reply with one short sentence confirming that you received the image.'
 
@@ -506,6 +529,8 @@ interface OperationMetrics {
 interface OperationContext {
   signal: AbortSignal
   metrics: OperationMetrics
+  /** Session id when the caller named one, else the workspace key; identifies the conversation to a gateway. */
+  sessionKey: string
 }
 
 const REGION_PATTERN = /^\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)\s*$/
@@ -820,7 +845,7 @@ export class VisionToolkitRuntime {
     const executionDeadline = createDeadline(options.signal, timeoutMs)
     try {
       if (executionDeadline.signal.aborted) throw this.operationError(tool, undefined, executionDeadline)
-      const value = await action({ signal: executionDeadline.signal, metrics })
+      const value = await action({ signal: executionDeadline.signal, metrics, sessionKey: semaphore.key })
       if (executionDeadline.signal.aborted) throw this.operationError(tool, undefined, executionDeadline)
       this.ctx.logger.info(
         'dsh-vision-toolkit tool=%s outcome=ok totalMs=%d queueMs=%d upstreamMs=%d images=%d imageBytes=%d imagePixels=%d cacheHits=%d model=%s',
@@ -1176,9 +1201,16 @@ export class VisionToolkitRuntime {
   ): Promise<UpstreamRunResult> {
     const started = Date.now()
     if (env !== undefined) operation.metrics.usedVisionService = true
+    const headers = visionProviderHeaders(this.config.provider, operation.sessionKey)
     const result = await this.adapter.run(tool, args, {
       signal: operation.signal,
-      ...(env === undefined ? {} : { env }),
+      ...(env === undefined
+        ? {}
+        : {
+            env: Object.keys(headers).length === 0
+              ? env
+              : { ...env, DSH_VISION_EXTRA_HEADERS: JSON.stringify(headers) },
+          }),
     })
     operation.metrics.upstreamMs += Date.now() - started
     if (result.outcome.exitCode !== 0) {
@@ -2109,6 +2141,7 @@ export class VisionToolkitRuntime {
             const headers: Record<string, string> = {
               Accept: 'application/json',
               'User-Agent': this.config.provider.userAgent,
+              ...visionProviderHeaders(this.config.provider, undefined),
             }
             if (this.config.provider.protocol === 'anthropic') {
               headers['x-api-key'] = resolvedCredential.value

@@ -28,6 +28,19 @@ export interface VisionToolkitConfig {
         anthropicThinking?: 'omit' | 'disabled' | 'adaptive';
         /** Outbound User-Agent for provider requests and connection tests. */
         userAgent?: string;
+        /**
+         * Extra headers sent with every vision request and the connection test.
+         * Reserved names the client already owns (`Content-Type`, `User-Agent`,
+         * `Authorization`, `x-api-key`, `anthropic-version`) stay owned by it.
+         */
+        headers?: Record<string, string>;
+        /**
+         * Header names filled with an opaque per-session id. A gateway that routes
+         * by conversation requires one — OpenCode Zen rejects a request without
+         * `x-opencode-session` — and only the runtime knows the value, so it cannot
+         * be written as a static {@link headers} entry.
+         */
+        sessionHeaders?: string[];
     };
     /** Vision output language (`zh` or `en`). */
     language?: 'zh' | 'en';
@@ -99,6 +112,8 @@ export interface ResolvedVisionToolkitConfig {
         protocol: 'openai' | 'anthropic';
         anthropicThinking: 'omit' | 'disabled' | 'adaptive';
         userAgent: string;
+        headers: Record<string, string>;
+        sessionHeaders: string[];
     };
     language: 'zh' | 'en';
     timeoutMs: number;

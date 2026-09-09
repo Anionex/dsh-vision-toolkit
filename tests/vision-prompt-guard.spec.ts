@@ -88,6 +88,94 @@ describe.skipIf(process.platform === 'win32')('vision-model prompt guard', () =>
     }
   })
 
+  it('merges configured provider headers into the requests the vision client builds', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-vt-extra-headers-'))
+    roots.push(root)
+    const cleanHome = join(root, 'home')
+    await mkdir(join(root, 'bin'), { recursive: true })
+    await mkdir(cleanHome, { recursive: true })
+    // Stands in for the vendored client: it builds the request the same way and
+    // reports the headers that would go on the wire.
+    await writeFile(join(root, 'vision_client.py'), [
+      'import json,urllib.request',
+      'DEFAULT_PROMPT="default description"',
+      'def describe_image(image_url,prompt=None,*args,**kwargs):',
+      '    request=urllib.request.Request("https://vision.example/v1/chat/completions",',
+      '        data=b"{}",headers={"Content-Type":"application/json"})',
+      '    return json.dumps(dict(request.header_items()),sort_keys=True)',
+      '',
+    ].join('\n'))
+    await writeVisionScript(root, 'glance', undefined)
+    const ctx = new Context()
+    contexts.push(ctx)
+    await ctx.plugin(LocalSubprocessService)
+    const config = resolveConfig({ runtime: { mode: 'managed' } })
+    const prepared: PreparedUpstreamRuntime = {
+      source: 'managed',
+      root,
+      python: { program: 'python3', prefix: [], display: 'python3' },
+      cleanHome,
+      pythonVersion: '3.11+',
+      dependencies: {},
+    }
+    const adapter = new UpstreamAdapter(ctx, config, prepared)
+    const signal = new AbortController().signal
+
+    const result = await adapter.run('glance', [], {
+      signal,
+      env: {
+        VISION_API_KEY: 'test-key',
+        VISION_BASE_URL: 'https://vision.example/v1',
+        VISION_MODEL: 'fixture-model',
+        VISION_API_PROTOCOL: 'chat_completions',
+        VISION_ANTHROPIC_THINKING: 'omit',
+        VISION_USER_AGENT: 'fixture-agent',
+        LANG: 'en',
+        DSH_VISION_EXTRA_HEADERS: JSON.stringify({ 'x-opencode-session': 'session-digest' }),
+      },
+    })
+
+    expect(result.outcome.exitCode).toBe(0)
+    // urllib title-cases field names; HTTP field names are case-insensitive.
+    expect(JSON.parse(result.stdout.trim()) as Record<string, string>)
+      .toMatchObject({ 'Content-type': 'application/json', 'X-opencode-session': 'session-digest' })
+  })
+
+  it('leaves requests untouched when no provider headers are configured', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-vt-no-extra-headers-'))
+    roots.push(root)
+    const cleanHome = join(root, 'home')
+    await mkdir(join(root, 'bin'), { recursive: true })
+    await mkdir(cleanHome, { recursive: true })
+    await writeFile(join(root, 'vision_client.py'), [
+      'import json,urllib.request',
+      'DEFAULT_PROMPT="default description"',
+      'def describe_image(image_url,prompt=None,*args,**kwargs):',
+      '    request=urllib.request.Request("https://vision.example/v1/chat/completions",',
+      '        data=b"{}",headers={"Content-Type":"application/json"})',
+      '    return json.dumps(dict(request.header_items()),sort_keys=True)',
+      '',
+    ].join('\n'))
+    await writeVisionScript(root, 'glance', undefined)
+    const ctx = new Context()
+    contexts.push(ctx)
+    await ctx.plugin(LocalSubprocessService)
+    const config = resolveConfig({ runtime: { mode: 'managed' } })
+    const adapter = new UpstreamAdapter(ctx, config, {
+      source: 'managed',
+      root,
+      python: { program: 'python3', prefix: [], display: 'python3' },
+      cleanHome,
+      pythonVersion: '3.11+',
+      dependencies: {},
+    })
+
+    const result = await adapter.run('glance', [], { signal: new AbortController().signal })
+
+    expect(result.outcome.exitCode).toBe(0)
+    expect(Object.keys(JSON.parse(result.stdout.trim()) as Record<string, string>)).toEqual(['Content-type'])
+  })
+
   it('normalizes model-provided location labels before line-oriented CLI serialization', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-vt-location-label-'))
     roots.push(root)

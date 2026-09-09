@@ -22,6 +22,8 @@ export interface UpstreamEnvironment {
     VISION_SSL_VERIFY?: string;
     VISION_USER_AGENT: string;
     LANG: 'zh' | 'en';
+    /** Configured provider headers, JSON-encoded; the vision-model guard merges them into every request. */
+    DSH_VISION_EXTRA_HEADERS?: string;
 }
 /** Pinned upstream identity plus prepared runtime facts. */
 export interface UpstreamVersionInfo {

@@ -21,6 +21,8 @@ describe('resolveConfig', () => {
     expect(config.provider.protocol).toBe('openai')
     expect(config.provider.anthropicThinking).toBe('omit')
     expect(config.provider.userAgent).toBe(DEFAULT_VISION_USER_AGENT)
+    expect(config.provider.headers).toEqual({})
+    expect(config.provider.sessionHeaders).toEqual([])
     expect(config.language).toBe('zh')
     expect(config.timeoutMs).toBe(30000)
     expect(config.maxImageBytes).toBe(4194304)
@@ -33,6 +35,41 @@ describe('resolveConfig', () => {
     expect(config.storageHistory).toEqual([])
     expect(config.allowedDirs).toEqual([])
     expect(config.imageInputVariants).toEqual({ enabled: true, providers: [], autoSwitch: true, hidden: true })
+  })
+
+  it('keeps configured provider headers and session-header names', () => {
+    const config = resolveConfig({
+      provider: { headers: { ' x-tenant ': 'acme' }, sessionHeaders: [' x-opencode-session '] },
+    })
+    expect(config.provider.headers).toEqual({ 'x-tenant': 'acme' })
+    expect(config.provider.sessionHeaders).toEqual(['x-opencode-session'])
+  })
+
+  it.each([
+    ['bad header name', 'value'],
+    ['x-tenant', 'line\nbreak'],
+  ])('rejects provider header %j that cannot be sent', (name, value) => {
+    expect(() => resolveConfig({ provider: { headers: { [name]: value } } }))
+      .toThrow(`provider.headers entry "${name}" is not a valid HTTP header`)
+  })
+
+  it.each(['authorization', 'X-Api-Key', 'User-Agent'])('refuses %s, which the vision client owns', (name) => {
+    expect(() => resolveConfig({ provider: { headers: { [name]: 'x' } } }))
+      .toThrow(`provider.headers must not set "${name}"`)
+    expect(() => resolveConfig({ provider: { sessionHeaders: [name] } }))
+      .toThrow(`provider.sessionHeaders must not name "${name}"`)
+  })
+
+  it('refuses an empty header name and an empty session-header entry', () => {
+    expect(() => resolveConfig({ provider: { headers: { '  ': 'x' } } }))
+      .toThrow('provider.headers has an entry with an empty name')
+    expect(() => resolveConfig({ provider: { sessionHeaders: ['  '] } }))
+      .toThrow('provider.sessionHeaders has an empty entry')
+  })
+
+  it('rejects a session-header name that is not a valid field name', () => {
+    expect(() => resolveConfig({ provider: { sessionHeaders: ['bad header name'] } }))
+      .toThrow('provider.sessionHeaders entry "bad header name" is not a valid HTTP header')
   })
 
   it('normalizes image-input variant settings', () => {

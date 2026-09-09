@@ -10,7 +10,7 @@ import type { Credentials } from '@deepseek-ai/dsh-credentials'
 import { resolveConfig, type VisionToolkitConfig } from '../src/config.ts'
 import { VisionToolkitError } from '../src/errors.ts'
 import { createPathPolicy, workspaceStorageId } from '../src/paths.ts'
-import { createDeadline, Semaphore, VisionToolkitRuntime } from '../src/runtime.ts'
+import { createDeadline, Semaphore, visionProviderHeaders, VisionToolkitRuntime } from '../src/runtime.ts'
 import {
   UpstreamAdapter,
   type UpstreamEnvironment,
@@ -198,6 +198,38 @@ describe('VisionToolkitRuntime', () => {
     const next = await runtime.captureEvidenceRuntime()
     expect(resolve).toHaveBeenCalledTimes(2)
     expect(next.evidenceFingerprint).not.toBe(captured.evidenceFingerprint)
+  })
+
+  it('sends configured provider headers, filling session headers per session', async () => {
+    const { runtime, adapter } = await setup({
+      provider: { headers: { 'x-tenant': 'acme' }, sessionHeaders: ['x-opencode-session'] },
+    })
+    const workspace = await tempWorkspace()
+    await copyFile(SAMPLE_IMAGE, join(workspace, 'sample.png'))
+    const run = vi.spyOn(adapter, 'run')
+
+    await runtime.glance({ images: ['sample.png'] }, { signal, workspace, sessionId: 'session-a' })
+    await runtime.glance({ images: ['sample.png'] }, { signal, workspace, sessionId: 'session-b' })
+
+    const headersOf = (call: number): Record<string, string> => JSON.parse(
+      (run.mock.calls[call]?.[2] as { env: UpstreamEnvironment }).env.DSH_VISION_EXTRA_HEADERS ?? '{}',
+    ) as Record<string, string>
+    expect(headersOf(0)['x-tenant']).toBe('acme')
+    // Opaque and stable per session: a gateway routes by it, and it is never the key itself.
+    expect(headersOf(0)['x-opencode-session']).toMatch(/^[0-9a-f]{32}$/)
+    expect(headersOf(1)['x-opencode-session']).not.toBe(headersOf(0)['x-opencode-session'])
+  })
+
+  it('omits the header payload when no provider headers are configured', async () => {
+    const { runtime, adapter } = await setup()
+    const workspace = await tempWorkspace()
+    await copyFile(SAMPLE_IMAGE, join(workspace, 'sample.png'))
+    const run = vi.spyOn(adapter, 'run')
+
+    await runtime.glance({ images: ['sample.png'] }, { signal, workspace })
+
+    const env = (run.mock.calls[0]?.[2] as { env: UpstreamEnvironment }).env
+    expect(env.DSH_VISION_EXTRA_HEADERS).toBeUndefined()
   })
 
   it('glance answers a question, OCRs, and zooms into a region', async () => {

@@ -274,6 +274,18 @@ flowchart LR
 
 支持 OpenAI Chat Completions 兼容端点和 Anthropic Messages。Web Settings 页面还可以调整超时、图片限制、并发、运行时和图片输入变体。
 
+端点需要自定义请求头时写在 `provider.headers`；按会话路由的网关把所需的请求头名写在 `provider.sessionHeaders`，每个名称都会带上不透明的按会话标识发送——OpenCode Zen 的 `x-opencode-session` 正是这种要求（缺失时返回 `400 MissingSessionID`）。视觉客户端自有的名称（`Content-Type`、`User-Agent`、`Authorization`、`x-api-key`、`anthropic-version`）会在配置处被拒绝。
+
+```yaml
+- id: vision-toolkit
+  config:
+    provider:
+      headers:
+        x-tenant: acme
+      sessionHeaders:
+        - x-opencode-session
+```
+
 高级设置中的 **默认保存目录** 可以把产物、粘贴图片和缓存放到 `/tmp/dsh-vision-toolkit` 等 POSIX 绝对共享根目录下；插件会为当前用户和工作区创建权限为 0700 的私有子目录。留空时继续使用工作区内原有的 `.dsh-vision-toolkit` 目录。Windows 目前会拒绝配置共享根目录，因为插件尚不能安全校验其所有权和访问控制列表。
 
 配置的保存目录变更后，插件会把之前验证过的根目录保留为只读输入位置。Web Profile 会把这段历史保存在插件自有的 `vision_toolkit_storage` storage-domain sidecar 中；即使当前 Settings 提供方只读，Profile 重启后原有粘贴图片路径仍可继续使用。使用配置共享存储的自定义 Profile 应组合 `@deepseek-ai/dsh-storage-domain`。
