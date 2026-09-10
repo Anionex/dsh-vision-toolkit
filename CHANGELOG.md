@@ -4,6 +4,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+## [0.1.44] - 2026-09-10
+
 ### Fixed
 
 - Kept pasted-image drafts working on DSH 0.1.5, which renamed the composer's draft snapshot field from `imageIds` to `attachmentIds`. The plugin now reads the new name and keeps the old one only as a fallback, so the post-replay probe no longer throws on an undefined list.
@@ -447,7 +449,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 - Runtime teardown cancels in-flight operations before removing Agent-scoped tools, the activation bootstrap, and the Skill.
 - The Web client is published through the current nested `dsh.client` manifest and loader-compatible built artifact required by DSH snapshot0810.
 
-[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.43...HEAD
+[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.44...HEAD
+[0.1.44]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.43...v0.1.44
 [0.1.43]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.42...v0.1.43
 [0.1.42]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.40...v0.1.42
 [0.1.40]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.39...v0.1.40
