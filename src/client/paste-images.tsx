@@ -1,9 +1,10 @@
 /** Clipboard-only multi-image input for DSH Web. */
 
 import { useSyncExternalStore, type ReactNode } from 'react'
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
-import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { Context as ClientContext } from '@deepseek-ai/cordis'
+import type { DraftAttachmentId } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { InputTriggerSource } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { readDisplayConfig } from './display-config.ts'
 
@@ -16,6 +17,47 @@ const MAX_IMAGE_BYTES = 20 * 1024 * 1024
 const MAX_BATCH_BYTES = 80 * 1024 * 1024
 /** A confirmed paste verdict older than this is unknown again, even while a refresh is in flight. */
 const VERDICT_MAX_AGE_MS = 15000
+
+/**
+ * Count the draft attachment ids in an InputState snapshot across DSH
+ * generations. DSH 0.1.5 renamed the field to `attachmentIds` and widened its
+ * meaning from image-only ids to every draft attachment id; the older
+ * `imageIds` name survives only as a compatibility fallback for hosts that
+ * still publish it, and never crashes when it is absent.
+ * @param snapshot - the `input.state.getSnapshot()` value (either generation).
+ * @returns the draft attachment count, 0 when neither field is published.
+ */
+function draftAttachmentCount(snapshot: unknown): number {
+  if (snapshot === null || typeof snapshot !== 'object') return 0
+  const row = snapshot as {
+    attachmentIds?: readonly DraftAttachmentId[]
+    imageIds?: readonly string[]
+  }
+  if (Array.isArray(row.attachmentIds)) return row.attachmentIds.length
+  return Array.isArray(row.imageIds) ? row.imageIds.length : 0
+}
+
+/**
+ * The Client Session registry face this controller reads. DSH 0.1.5 publishes
+ * it as `Context.sessions` from `@deepseek-ai/dsh-api-session-controller/client`,
+ * whose peer set spans the whole host package graph and therefore cannot be a
+ * peer of a Web-only plugin; only these two members are used, so the face is
+ * declared structurally instead of importing that package.
+ */
+interface ClientSessionRegistry {
+  /** Resolve the Session-scoped Context; undefined once the Session has closed. */
+  scope(sessionId: never): ClientContext | undefined
+  /** Live Session list projection; `current` is the focused Session id. */
+  readonly list: { getSnapshot(): { readonly current?: string | undefined } }
+}
+
+/**
+ * @param ctx - the browser plugin Context.
+ * @returns the host's Session registry through the structural face above.
+ */
+function sessionRegistry(ctx: ClientContext): ClientSessionRegistry {
+  return (ctx as unknown as { readonly sessions: ClientSessionRegistry }).sessions
+}
 
 interface PasteRecord {
   ref: string
@@ -222,7 +264,7 @@ export class PasteImageController {
   }
 
   private inputFor(sessionId: string) {
-    const actx = this.ctx.sessions.scope(sessionId as never)
+    const actx = sessionRegistry(this.ctx).scope(sessionId as never)
     if (actx === undefined) throw new Error('Open a live session before pasting images')
     return this.ctx.conversation.input.for(actx)
   }
@@ -482,7 +524,9 @@ export class PasteImageController {
    * Auto-switch flow: switch the Session to the image-input variant, announce
    * it, then replay the paste into the composer's native intake. A failed
    * switch, or an environment that cannot replay clipboard bytes, degrades to
-   * the path takeover with the same files.
+   * the path takeover with the same files. The post-replay probe compares the
+   * draft attachment count before and after, so it observes any attachment the
+   * native intake admitted rather than images alone.
    * @param sessionId - the live Session id.
    * @param target - the composer textarea the paste landed on.
    * @param files - the captured image files.
@@ -511,10 +555,10 @@ export class PasteImageController {
     // Replaying lets the composer's own intake run (thumbnail, limits,
     // keyboard); if the environment cannot replay clipboard bytes, the
     // images still land as workspace paths.
-    const before = input.state.getSnapshot().imageIds.length
+    const attachmentsBefore = draftAttachmentCount(input.state.getSnapshot())
     const replayed = this.replayPaste(target, files, text)
-    const after = input.state.getSnapshot().imageIds.length
-    if (!replayed || after <= before) {
+    const attachmentsAfter = draftAttachmentCount(input.state.getSnapshot())
+    if (!replayed || attachmentsAfter <= attachmentsBefore) {
       this.takeoverPaste(sessionId, target, files, text)
     }
   }
@@ -558,7 +602,7 @@ export class PasteImageController {
     const target = event.target
     if (!(target instanceof HTMLTextAreaElement) || target.closest('[data-composer-card]') === null) return false
 
-    const sessionId = this.ctx.sessions.list.getSnapshot().current
+    const sessionId = sessionRegistry(this.ctx).list.getSnapshot().current
     if (sessionId === undefined) return false
     const modelLabel = currentModelLabel()
     this.refreshVerdict(sessionId, modelLabel)
@@ -735,7 +779,7 @@ export function installPasteImages(ctx: ClientContext): void {
     const listener = (event: ClipboardEvent): void => { controller.handlePaste(event) }
     // A focus-time prefetch has the verdict ready before the first paste can land.
     const onFocusIn = (): void => {
-      const sessionId = ctx.sessions.list.getSnapshot().current
+      const sessionId = sessionRegistry(ctx).list.getSnapshot().current
       if (sessionId !== undefined) controller.refreshVerdict(String(sessionId), currentModelLabel())
     }
     document.addEventListener('paste', listener, true)

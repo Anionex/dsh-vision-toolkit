@@ -10,12 +10,24 @@ import {
   type ReactNode,
 } from 'react'
 import { Button, Input } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { ClientContext, ToolCallBlock } from '@deepseek-ai/dsh-client-runtime/client'
+import type { Context as ClientContext } from '@deepseek-ai/cordis'
+/**
+ * `ToolCallBlock` is the one DSH type this bundle consumes by name. DSH 0.1.5
+ * publishes it from `@deepseek-ai/dsh-client-ui-conversation/client`; its
+ * earlier home, `@deepseek-ai/dsh-client-runtime/client`, stopped publishing
+ * after 0.1.1-rc.2 and has no member of the 0.1.5 family at all, so importing
+ * the old specifier would leave an unresolvable peer on a real host. The
+ * `paths` row in tsconfig.client.json and the peerDependency in package.json
+ * name the same package, and both must move together. A type-only import costs
+ * nothing at runtime and emits no `require()` in lib/client.js.
+ */
+import type { ToolCallBlock } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
+import type {} from '@deepseek-ai/dsh-client-connection/client'
 import type {} from '@deepseek-ai/dsh-credentials/types'
 import type {} from '@deepseek-ai/dsh-settings/types'
-import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-input-trigger/client'
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -1572,7 +1584,12 @@ export function apply(ctx: ClientContext): void {
     const disposers = typeof legacyRemote.$on === 'function'
       ? [
         legacyRemote.$on('settings/document-updated', refreshSettings),
-        legacyRemote.$on('credentials/updated', refreshCredential),
+        // DSH forwards `credentials/reference-updated` (payload: the credential
+        // ref whose stored value committed) and never `credentials/updated`;
+        // `$on` accepts unknown names silently, so the wrong key was a dead
+        // subscription. Both the 0.1.2-alpha.1 and 0.1.5 allowlists carry this
+        // exact name, so one key covers every supported host.
+        legacyRemote.$on('credentials/reference-updated', refreshCredential),
       ]
       : [
         currentEvents.on('settings/changed', (namespace) => {

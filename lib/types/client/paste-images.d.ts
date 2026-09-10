@@ -1,6 +1,6 @@
 /** Clipboard-only multi-image input for DSH Web. */
 import { type ReactNode } from 'react';
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client';
+import type { Context as ClientContext } from '@deepseek-ai/cordis';
 import type { InputTriggerSource } from '@deepseek-ai/dsh-client-ui-input-trigger/client';
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots';
 export declare const PASTE_IMAGES_ROUTE = "/_dsh/vision-toolkit/paste-images";
@@ -98,7 +98,9 @@ export declare class PasteImageController {
      * Auto-switch flow: switch the Session to the image-input variant, announce
      * it, then replay the paste into the composer's native intake. A failed
      * switch, or an environment that cannot replay clipboard bytes, degrades to
-     * the path takeover with the same files.
+     * the path takeover with the same files. The post-replay probe compares the
+     * draft attachment count before and after, so it observes any attachment the
+     * native intake admitted rather than images alone.
      * @param sessionId - the live Session id.
      * @param target - the composer textarea the paste landed on.
      * @param files - the captured image files.

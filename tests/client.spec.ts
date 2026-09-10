@@ -3,9 +3,15 @@
 import { createElement, type ComponentType } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ToolCallBlock } from '@deepseek-ai/dsh-client-runtime/client'
 import { apply, decodeVisionResult, inject, VisionSettingsController } from '../src/client/index.tsx'
 import { readDisplayConfig, resetDisplayConfigCache } from '../src/client/display-config.ts'
+
+/**
+ * Fixtures target whatever Tool block the plugin's public decoder accepts, so
+ * the suite tracks the plugin contract instead of naming the DSH package that
+ * currently declares the type.
+ */
+type ToolCallBlock = Parameters<typeof decodeVisionResult>[0]
 
 afterEach(() => {
   cleanup()
@@ -156,7 +162,12 @@ describe('Vision Toolkit client plugin', () => {
     apply(ctx as never)
     const remote = ctx.remote as { $on: ReturnType<typeof vi.fn> }
     expect(remote.$on).toHaveBeenCalledWith('settings/document-updated', expect.any(Function))
-    expect(remote.$on).toHaveBeenCalledWith('credentials/updated', expect.any(Function))
+    // The forwarded-event allowlist carries `credentials/reference-updated`;
+    // `credentials/updated` is not in it, and `$on` accepts unknown names
+    // silently, so asserting the dead name certified a subscription that could
+    // never fire.
+    expect(remote.$on).toHaveBeenCalledWith('credentials/reference-updated', expect.any(Function))
+    expect(remote.$on).not.toHaveBeenCalledWith('credentials/updated', expect.any(Function))
 
     const toolKeys = registrations
       .filter(entry => entry.options.name === 'tool.call.toolview')

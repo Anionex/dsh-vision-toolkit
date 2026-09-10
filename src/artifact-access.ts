@@ -12,10 +12,10 @@ import { chmod, lstat, mkdir, open, readFile, realpath, writeFile } from 'node:f
 import type { FileHandle } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { basename, dirname, extname, isAbsolute, join, relative, sep } from 'node:path'
-import type { JsonValue } from '@deepseek-ai/dsh-tools'
 import type { ArtifactDescriptor, ArtifactKind } from './artifacts.ts'
 import { assertSecureSharedStorageBase, assertSecureWorkspaceStorage, isWithin } from './paths.ts'
 import { visionToolkitStateRoot } from './runtime-install.ts'
+import type { JsonValue } from './tools.ts'
 
 /** Prefix owned by the plugin's artifact capability route. */
 export const ARTIFACT_ROUTE_PREFIX = '/_dsh/vision-toolkit/artifacts'

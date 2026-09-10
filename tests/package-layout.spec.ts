@@ -53,14 +53,27 @@ describe('package layout contract', () => {
 
   it('declares a loader-compatible Web client and its slot dependencies', () => {
     expect(PACKAGE.dsh?.client?.platform).toBe('web')
+    // One row per real client dependency of this bundle: the services the
+    // client's `inject` array requires, the package that declares each slot it
+    // registers into, and the remaining type-contract packages.
     expect(PACKAGE.dsh?.client?.inject).toEqual(expect.arrayContaining([
-      '@deepseek-ai/dsh-api-remotes',
-      '@deepseek-ai/dsh-client-runtime',
-      '@deepseek-ai/dsh-client-ui-input-trigger',
-      '@deepseek-ai/dsh-client-ui-tool',
-      '@deepseek-ai/dsh-client-ui-settings',
+      '@deepseek-ai/dsh-client-ui-renderer',
       '@deepseek-ai/dsh-client-locale',
+      '@deepseek-ai/dsh-api-gateway',
+      '@deepseek-ai/dsh-client-ui-conversation',
+      '@deepseek-ai/dsh-api-session-controller',
+      '@deepseek-ai/dsh-client-ui-settings-general',
+      '@deepseek-ai/dsh-client-ui-tool',
+      '@deepseek-ai/dsh-api-remotes',
+      '@deepseek-ai/dsh-client-ui-input-trigger',
     ]))
+    // Every runtime `require()` in lib/client.js is a platform seed word, so the
+    // bundle declares no non-baseline module request.
+    expect(PACKAGE.dsh?.client?.external).toBeUndefined()
+    // `@deepseek-ai/dsh-client-runtime` stopped publishing at 0.1.1-rc.2. It must
+    // not come back into either the install-time or the client metadata.
+    expect(PACKAGE.peerDependencies).not.toHaveProperty('@deepseek-ai/dsh-client-runtime')
+    expect(PACKAGE.dsh?.client?.inject).not.toContain('@deepseek-ai/dsh-client-runtime')
   })
 
   it('declares the exact DSH release window and runtime compatibility contract', () => {
@@ -69,10 +82,12 @@ describe('package layout contract', () => {
     expect(PACKAGE.dsh?.compatibility?.profiles).toEqual(['web', 'headless'])
     // DSH STORE reads the official latest-three window per release and needs at
     // least one exact `compatible` verdict; a range alone is not installable evidence.
-    expect(PACKAGE.dsh?.compatibility?.dshReleases?.['0.1.2-rc.1']).toBe('compatible')
     expect(PACKAGE.dsh?.compatibility?.dshReleases?.['0.1.3-alpha.1']).toBe('unknown')
     expect(PACKAGE.dsh?.compatibility?.dshReleases?.['0.1.3-alpha.2']).toBe('compatible')
-    const window = ['0.1.2-rc.1', '0.1.3-alpha.1', '0.1.3-alpha.2']
+    expect(PACKAGE.dsh?.compatibility?.dshReleases?.['0.1.5-rc.1']).toBe('compatible')
+    // Historical verdicts stay recorded even after they leave the window.
+    expect(PACKAGE.dsh?.compatibility?.dshReleases?.['0.1.2-rc.1']).toBe('compatible')
+    const window = ['0.1.5-alpha.1', '0.1.5-alpha.2', '0.1.5-rc.1']
     expect(window.filter(release => PACKAGE.dsh?.compatibility?.dshReleases?.[release] === 'compatible')).not.toHaveLength(0)
   })
 
@@ -106,8 +121,9 @@ describe('package layout contract', () => {
 
   it('pins the dependency install scripts allowed in standalone CI', async () => {
     const workspace = await readFile(join(ROOT, 'pnpm-workspace.yaml'), 'utf8')
-    expect(workspace).toContain("'@deepseek-ai/dsh-subprocess-local@0.1.0-rc.6': true")
-    expect(workspace).toContain("'node-pty@1.1.0': true")
+    expect(workspace).toContain("'@deepseek-ai/dsh-subprocess-local@0.1.5-rc.1': true")
+    expect(workspace).toContain("'koffi@3.2.1': true")
+    expect(workspace).toContain("'node-pty@1.2.0-beta.15': true")
     expect(workspace).not.toMatch(/^\s{2}(?:'@deepseek-ai\/dsh-subprocess-local'|node-pty):/mu)
   })
 
@@ -128,14 +144,27 @@ describe('package layout contract', () => {
 
   it('targets the published DSH prerelease line without retired package names', () => {
     const peers = PACKAGE.peerDependencies ?? {}
+    // One union line per declared DSH release line. A prerelease comparator
+    // matches only its own major.minor.patch tuple, so a single range cannot
+    // cover 0.1.0-rc.*, 0.1.1-rc.*, 0.1.2-*, and 0.1.5-rc.* at once; without the
+    // union a user on 0.1.5-rc.1 has an unsatisfied peer and `pnpm` (which
+    // auto-installs peers by default) silently materializes a stale older copy
+    // next to the real host.
     for (const [name, spec] of Object.entries(peers)) {
-      if (name.startsWith('@deepseek-ai/dsh-')) expect(spec, name).toBe('^0.1.0-rc.6')
+      if (name.startsWith('@deepseek-ai/dsh-')) {
+        expect(spec, name).toBe('>=0.1.0-rc.8 <0.2.0 || ^0.1.1-rc.1 || ^0.1.2-alpha.1 || ^0.1.5-rc.1')
+      }
     }
     expect(peers).toHaveProperty('@deepseek-ai/dsh-client-ui-input-trigger')
     expect(peers).not.toHaveProperty('@deepseek-ai/dsh-client-ui-slash')
     expect(peers).not.toHaveProperty('@deepseek-ai/dsh-host-apiproxy')
     expect(PACKAGE.peerDependenciesMeta?.['@deepseek-ai/dsh-host-webserver']?.optional).toBe(true)
     expect(PACKAGE.dsh?.client?.inject).not.toContain('@deepseek-ai/dsh-client-ui-slash')
+    // Retired package: last published at 0.1.1-rc.2 and absent from the whole
+    // 0.1.5 family. The client's `ToolCallBlock` import now names
+    // `@deepseek-ai/dsh-client-ui-conversation/client` instead.
+    expect(peers).not.toHaveProperty('@deepseek-ai/dsh-client-runtime')
+    expect(PACKAGE.dsh?.client?.inject).not.toContain('@deepseek-ai/dsh-client-runtime')
   })
 
   it('emits no raw .ts relative imports in built JavaScript', async () => {

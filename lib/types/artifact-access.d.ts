@@ -5,8 +5,8 @@
  * @module dsh-vision-toolkit/artifact-access
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { JsonValue } from '@deepseek-ai/dsh-tools';
 import type { ArtifactDescriptor, ArtifactKind } from './artifacts.ts';
+import type { JsonValue } from './tools.ts';
 /** Prefix owned by the plugin's artifact capability route. */
 export declare const ARTIFACT_ROUTE_PREFIX = "/_dsh/vision-toolkit/artifacts";
 /** Presentation metadata key reserved by the browser half of this package. */
