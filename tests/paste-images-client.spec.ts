@@ -24,12 +24,17 @@ interface Occurrence {
 
 type ReferenceDraftMode = 'placeholder' | 'display-text'
 
+/**
+ * DSH 0.1.5 publishes the draft's admitted attachment ids as `attachmentIds`;
+ * the older `imageIds` name is gone. The stand-in mirrors the 0.1.5 snapshot
+ * shape so the suite certifies the contract the runtime actually ships.
+ */
 function inputMachine(initial = '', referenceDraftMode: ReferenceDraftMode = 'placeholder') {
   let state = {
     draft: initial,
     draftRev: 0,
     phase: 'plain' as const,
-    imageIds: [] as string[],
+    attachmentIds: [] as string[],
     occurrences: [] as Occurrence[],
     queue: [],
   }
@@ -95,9 +100,10 @@ function inputMachine(initial = '', referenceDraftMode: ReferenceDraftMode = 'pl
       publish({ ...state, draft, draftRev: state.draftRev + 1, occurrences })
       return true
     }),
-    addImages: vi.fn((files: File[]) => {
-      const next = [...state.imageIds, ...files.map((_, index) => `draft-image-${state.imageIds.length + index}`)]
-      publish({ ...state, imageIds: next })
+    /** Mirrors the 0.1.5 `InputActions.addAttachments` admission verb. */
+    addAttachments: vi.fn((files: File[]) => {
+      const next = [...state.attachmentIds, ...files.map((_, index) => `draft-image-${state.attachmentIds.length + index}`)]
+      publish({ ...state, attachmentIds: next })
       return true
     }),
     notify: vi.fn(),
@@ -373,7 +379,7 @@ describe('clipboard image client', () => {
     expect(bench.input.state.getSnapshot().draft).toContain('prefix caption')
     expect(bench.input.state.getSnapshot().draft.match(/\uFFFC/gu)).toHaveLength(2)
     expect(bench.input.state.getSnapshot().occurrences).toHaveLength(2)
-    expect(bench.input.state.getSnapshot().imageIds).toEqual([])
+    expect(bench.input.state.getSnapshot().attachmentIds).toEqual([])
 
     const codec = bench.source()?.codec
     if (codec === undefined) throw new Error('paste source was not registered')
@@ -798,10 +804,10 @@ describe('clipboard image client', () => {
     await new Promise(resolve => setTimeout(resolve, 0))
 
     const textarea = composer()
-    // Mimic the composer's own intake: files on a paste become draft images.
+    // Mimic the composer's own intake: files on a paste become draft attachments.
     textarea.addEventListener('paste', (event) => {
       const files = Array.from((event as ClipboardEvent).clipboardData?.files ?? [])
-      if (files.length > 0) bench.input.addImages(files)
+      if (files.length > 0) bench.input.addAttachments(files)
     })
     const nativePaste = vi.fn()
     textarea.addEventListener('paste', nativePaste)
@@ -820,7 +826,7 @@ describe('clipboard image client', () => {
       expect(bench.input.notify).toHaveBeenCalledWith('info', expect.stringContaining('Switched to'))
     })
     await vi.waitFor(() => {
-      expect(bench.input.state.getSnapshot().imageIds).toHaveLength(2)
+      expect(bench.input.state.getSnapshot().attachmentIds).toHaveLength(2)
     })
     expect(bench.input.state.getSnapshot().occurrences).toEqual([])
     expect(nativePaste).toHaveBeenCalledTimes(1)
@@ -862,7 +868,7 @@ describe('clipboard image client', () => {
     const textarea = composer()
     textarea.addEventListener('paste', (event) => {
       const files = Array.from((event as ClipboardEvent).clipboardData?.files ?? [])
-      if (files.length > 0) bench.input.addImages(files)
+      if (files.length > 0) bench.input.addAttachments(files)
     })
     textarea.dispatchEvent(clipboardEvent('', [file('one.png', 'image/png', [1])]))
 
@@ -873,6 +879,52 @@ describe('clipboard image client', () => {
         reasoningEffort: 'high',
       })
     })
+    bench.dispose()
+  })
+
+  it('reads the 0.1.5 attachmentIds count and falls back to the takeover when the replay admits nothing', async () => {
+    const bench = fakeClient('')
+    bench.ctx.modelDirectories = { directoryFor: vi.fn(() => ({ select: vi.fn(async () => {}) })) }
+    const policy = vi.fn(async () => policyResponse(false, {
+      provider: 'vision-toolkit-deepseek-official',
+      model: 'deepseek-v4-flash',
+    }))
+    vi.stubGlobal('fetch', policy)
+    // jsdom constructs neither DataTransfer nor ClipboardEvent init data, so
+    // both are faked exactly as the replay path needs them.
+    class FakeDataTransfer {
+      private stored: File[] = []
+      items = { add: (file: File) => { this.stored.push(file) } }
+      setData(): void {}
+      get files(): File[] { return this.stored }
+    }
+    class FakeClipboardEvent extends Event {
+      readonly clipboardData: { files: File[]; items: Array<{ kind: string; getAsFile: () => File }> }
+      constructor(type: string, init: { clipboardData?: { files: File[] } } = {}) {
+        super(type, init)
+        const files = init.clipboardData?.files ?? []
+        this.clipboardData = {
+          files,
+          items: files.map(file => ({ kind: 'file', getAsFile: () => file })),
+        }
+      }
+    }
+    vi.stubGlobal('DataTransfer', FakeDataTransfer)
+    vi.stubGlobal('ClipboardEvent', FakeClipboardEvent as unknown as typeof ClipboardEvent)
+    document.dispatchEvent(new Event('focusin'))
+    await vi.waitFor(() => { expect(policy).toHaveBeenCalledTimes(1) })
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    const textarea = composer()
+    // The replay succeeds, but the composer's native intake admits nothing:
+    // the before/after attachment count is unchanged, so the controller must
+    // fall through to the path takeover rather than assume the images landed.
+    textarea.dispatchEvent(clipboardEvent('', [file('one.png', 'image/png', [1])]))
+
+    await vi.waitFor(() => {
+      expect(bench.input.state.getSnapshot().occurrences).toHaveLength(1)
+    })
+    expect(bench.input.state.getSnapshot().attachmentIds).toEqual([])
     bench.dispose()
   })
 
@@ -895,7 +947,7 @@ describe('clipboard image client', () => {
     await vi.waitFor(() => {
       expect(bench.input.state.getSnapshot().occurrences).toHaveLength(1)
     })
-    expect(bench.input.state.getSnapshot().imageIds).toEqual([])
+    expect(bench.input.state.getSnapshot().attachmentIds).toEqual([])
     expect(bench.input.notify).toHaveBeenCalledWith('error', expect.stringContaining('switch rejected'))
     expect(bench.input.notify).not.toHaveBeenCalledWith('info', expect.anything())
     bench.dispose()

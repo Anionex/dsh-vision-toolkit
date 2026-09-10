@@ -9,6 +9,7 @@
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { Session } from '@deepseek-ai/dsh-session'
+import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
 import type { Context } from '@deepseek-ai/cordis'
 import { VISION_SKILLS_CONTENT, VISION_SKILLS_NAME } from './skill.ts'
@@ -78,12 +79,49 @@ function isBundledSkillResult(value: unknown): boolean {
     && isBundledSkillContent(value.content)
 }
 
+/** Event names for one settled programmatic (PTC) Tool dispatch. */
+const PTC_DISPATCH_EVENT_TYPES: readonly string[] = ['tool/ptc-dispatch', 'tool/code-dispatch']
+
+/**
+ * Whether one PTC dispatch event records a successful load of the bundled
+ * Skill. The event is `tool/code-dispatch` through 0.1.2 and `tool/ptc-dispatch`
+ * from 0.1.5, so the name is compared outside the typed union and the payload is
+ * read structurally instead of narrowing on the installed host's literal.
+ * @param event - one durable Session event.
+ * @returns true when this dispatch ran the bundled Skill and returned its content.
+ */
+function isBundledSkillPtcDispatch(event: SessionEvent): boolean {
+  const type: string = event.type
+  if (!PTC_DISPATCH_EVENT_TYPES.includes(type)) return false
+  const data = (event as { data?: unknown }).data
+  return isRecord(data)
+    && data.name === 'skill'
+    && data.isError === false
+    && isVisionSkillArguments(data.arguments)
+    && containsBundledSkillContent(Array.isArray(data.content) ? data.content : [])
+}
+
+/**
+ * Read a Session's durable event log across both published accessors: 0.1.1 and
+ * earlier expose the `events` getter, while 0.1.2 replaced it with
+ * `snapshotEvents()` and dropped the property from the type. Probing
+ * structurally keeps every release line this package declares working at
+ * runtime and still compiles against the installed 0.1.5 typings.
+ * @param session - the Session whose durable history is inspected.
+ * @returns the event log in log order, empty when neither accessor is present.
+ */
+function sessionEvents(session: Session): readonly SessionEvent[] {
+  const adapter = session as unknown as {
+    snapshotEvents?: () => readonly SessionEvent[]
+    events?: readonly SessionEvent[]
+  }
+  return typeof adapter.snapshotEvents === 'function' ? adapter.snapshotEvents() : adapter.events ?? []
+}
+
 /** Whether durable history proves that this Session loaded the bundled Skill. */
 function hasLoadedVisionSkill(session: Session): boolean {
   const nativeCalls = new Set<string>()
-  const events = typeof (session as any).snapshotEvents === 'function'
-    ? (session as any).snapshotEvents()
-    : session.events ?? []
+  const events = sessionEvents(session)
   for (const event of events) {
     if (event.type === 'user/message') {
       const source = event.data.source
@@ -106,11 +144,7 @@ function hasLoadedVisionSkill(session: Session): boolean {
         && containsBundledSkillContent(block.content)) return true
       continue
     }
-    if (event.type === 'tool/code-dispatch'
-      && event.data.name === 'skill'
-      && event.data.isError === false
-      && isVisionSkillArguments(event.data.arguments)
-      && containsBundledSkillContent(event.data.content)) return true
+    if (isBundledSkillPtcDispatch(event)) return true
   }
   return false
 }

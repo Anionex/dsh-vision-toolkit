@@ -2,7 +2,18 @@
  * DSH Vision Toolkit browser plugin: dedicated Tool cards plus the Settings,
  * health, connection-test, and safe Artifact preview experience.
  */
-import type { ClientContext, ToolCallBlock } from '@deepseek-ai/dsh-client-runtime/client';
+import type { Context as ClientContext } from '@deepseek-ai/cordis';
+/**
+ * `ToolCallBlock` is the one DSH type this bundle consumes by name. DSH 0.1.5
+ * publishes it from `@deepseek-ai/dsh-client-ui-conversation/client`; its
+ * earlier home, `@deepseek-ai/dsh-client-runtime/client`, stopped publishing
+ * after 0.1.1-rc.2 and has no member of the 0.1.5 family at all, so importing
+ * the old specifier would leave an unresolvable peer on a real host. The
+ * `paths` row in tsconfig.client.json and the peerDependency in package.json
+ * name the same package, and both must move together. A type-only import costs
+ * nothing at runtime and emits no `require()` in lib/client.js.
+ */
+import type { ToolCallBlock } from '@deepseek-ai/dsh-client-ui-conversation/client';
 declare const en: {
     readonly nav: "Vision";
     readonly settingsTitle: "Vision Toolkit";

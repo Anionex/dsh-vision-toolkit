@@ -4,6 +4,19 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+### Fixed
+
+- Kept pasted-image drafts working on DSH 0.1.5, which renamed the composer's draft snapshot field from `imageIds` to `attachmentIds`. The plugin now reads the new name and keeps the old one only as a fallback, so the post-replay probe no longer throws on an undefined list.
+- Restored Skill re-exposure after resuming a Session on DSH 0.1.5. The PTC sub-dispatch Session event was renamed from `tool/code-dispatch` to `tool/ptc-dispatch`; both names are now accepted, because Sessions written by earlier releases still carry the old one.
+- Refreshed the Settings snapshot when a credential changes. The client subscribed to `credentials/updated`, which is not a forwarded Host event and therefore never fired; the real name is `credentials/reference-updated`.
+
+### Changed
+
+- Moved the dependency family to DSH `0.1.5-rc.1` and removed `@deepseek-ai/dsh-client-runtime`, which stopped publishing at `0.1.1-rc.2`. The client's type-only imports now follow the packages that own those contracts in 0.1.5 (`Context` from `@deepseek-ai/cordis`, `ToolCallBlock` from `@deepseek-ai/dsh-client-ui-conversation/client`), so a stale local copy can no longer stand in for the real host API.
+- Peer ranges now name each supported DSH release line explicitly. A single range such as `>=0.1.0-rc.8 <0.2.0` does not match `0.1.5-rc.1` under strict semver prerelease rules, so a user on 0.1.5 had an unsatisfied peer and pnpm — which auto-installs peers by default — silently materialized a stale older copy next to the real host.
+- `dsh.client.inject` now lists the packages that actually serve this plugin's browser half instead of the retired `dsh-client-runtime` name.
+- Declared exact compatibility for the official DSH release window `0.1.5-alpha.1`, `0.1.5-alpha.2`, and `0.1.5-rc.1`, each verified by a clean Profile install, boot, and host-route acceptance.
+
 ## [0.1.43] - 2026-09-08
 
 ### Changed

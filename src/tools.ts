@@ -7,7 +7,7 @@
  */
 
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
-import { defineTool, type JsonValue, type ToolRunContext, type ValueSchemaSpec } from '@deepseek-ai/dsh-tools'
+import { defineTool, type ToolRunContext, type ValueSchemaSpec } from '@deepseek-ai/dsh-tools'
 import {
   VisionToolkitRuntime,
   type CropRequest,
@@ -22,6 +22,17 @@ import {
   type TraceRequest,
 } from './runtime.ts'
 import { platformTempDirectory } from './paths.ts'
+
+/**
+ * A value that round-trips through JSON without loss, as the host transports it
+ * through `presentationMeta`. DSH 0.1.2 stopped exporting this type from
+ * `@deepseek-ai/dsh-tools`, and 0.1.5 keeps it in `@deepseek-ai/dsh-util-values`,
+ * a package that does not exist before 0.1.2-alpha.2, so no single specifier
+ * covers every release line this package declares. Both homes declare the
+ * identical structural union, so redeclaring it here costs nothing and lets old
+ * and new hosts compile against the same contract.
+ */
+export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue }
 
 const renderJson = (_args: unknown, value: unknown): ContentBlock[] => [{
   type: 'text',

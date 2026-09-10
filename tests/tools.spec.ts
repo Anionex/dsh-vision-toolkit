@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
-import { CallId, createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { ToolCallId, createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
 import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -142,7 +142,7 @@ function recordNativeSkillInvocation(
   content = VISION_SKILLS_CONTENT,
   name = VISION_SKILLS_NAME,
 ): void {
-  const callId = CallId(`restored-skill-${turn}`)
+  const callId = ToolCallId(`restored-skill-${turn}`)
   session.append('turn/start', { turn })
   session.append('step/start', { turn, step: 1 })
   session.append('tool/call', {
@@ -170,11 +170,13 @@ function recordCodeSkillInvocation(
   turn = 1,
   content = VISION_SKILLS_CONTENT,
   name = VISION_SKILLS_NAME,
+  // DSH renamed this durable event in 0.1.5; older logs keep the legacy name.
+  eventType: 'tool/code-dispatch' | 'tool/ptc-dispatch' = 'tool/code-dispatch',
 ): void {
   session.append('turn/start', { turn })
-  session.append('tool/code-dispatch', {
-    parentCallId: CallId(`restored-run-code-${turn}`),
-    subCallId: CallId(`restored-code-skill-${turn}`),
+  session.append(eventType, {
+    parentCallId: ToolCallId(`restored-run-code-${turn}`),
+    subCallId: ToolCallId(`restored-code-skill-${turn}`),
     name: 'skill',
     arguments: { name },
     isError: false,
@@ -204,7 +206,7 @@ async function registerAgent(ctx: Context, name: string, session?: Session): Pro
 async function loadVisionSkill(ctx: Context, agent: Agent): Promise<void> {
   const result = await ctx.tools.execute({
     signal: new AbortController().signal,
-    callId: CallId(`skill-${String(agent.id)}`),
+    callId: ToolCallId(`skill-${String(agent.id)}`),
     name: 'skill',
     arguments: { name: VISION_SKILLS_NAME },
     agent,
@@ -298,6 +300,17 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
     expect(names).not.toContain(VISION_TOOLKIT_ACTIVATE)
   })
 
+  it('restores PTC Skill activation from the renamed 0.1.5 `tool/ptc-dispatch` history', async () => {
+    const { ctx } = await setupContext(BUNDLED_UPSTREAM)
+    const session = Session.create(SessionId('restored-ptc-skill'))
+    recordCodeSkillInvocation(session, 1, VISION_SKILLS_CONTENT, VISION_SKILLS_NAME, 'tool/ptc-dispatch')
+
+    const agent = await registerAgent(ctx, 'restored-ptc-skill', session)
+    const names = ctx.tools.schemas(agent).map(tool => tool.name)
+    for (const name of TOOL_NAMES) expect(names).toContain(name)
+    expect(names).not.toContain(VISION_TOOLKIT_ACTIVATE)
+  })
+
   it('restores activation from legacy vision-tools Skill history after the rename', async () => {
     const { ctx } = await setupContext(BUNDLED_UPSTREAM)
     const session = Session.create(SessionId('legacy-vision-tools-skill'))
@@ -335,7 +348,7 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
 
     const result = await ctx.tools.execute({
       signal: new AbortController().signal,
-      callId: CallId('activate-after-direct-skill'),
+      callId: ToolCallId('activate-after-direct-skill'),
       name: VISION_TOOLKIT_ACTIVATE,
       arguments: {},
       agent,
@@ -370,7 +383,7 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
 
     const result = await ctx.tools.execute({
       signal: new AbortController().signal,
-      callId: CallId('shadowed-skill-call'),
+      callId: ToolCallId('shadowed-skill-call'),
       name: 'skill',
       arguments: { name: VISION_SKILLS_NAME },
       agent,
@@ -400,7 +413,7 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
 
     const result = await ctx.tools.execute({
       signal: new AbortController().signal,
-      callId: CallId('activate-without-skill'),
+      callId: ToolCallId('activate-without-skill'),
       name: VISION_TOOLKIT_ACTIVATE,
       arguments: {},
       agent,
@@ -419,7 +432,7 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
     const signal = new AbortController().signal
     const skillResult = await ctx.tools.execute({
       signal,
-      callId: CallId('skill-call'),
+      callId: ToolCallId('skill-call'),
       name: 'skill',
       arguments: { name: VISION_SKILLS_NAME },
       agent,
@@ -427,7 +440,7 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
     expect(skillResult.isError, JSON.stringify(skillResult)).toBe(false)
     const activationResult = await ctx.tools.execute({
       signal,
-      callId: CallId('activate-call'),
+      callId: ToolCallId('activate-call'),
       name: VISION_TOOLKIT_ACTIVATE,
       arguments: {},
       agent,
@@ -467,7 +480,7 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
     await loadVisionSkill(ctx, agent)
     const pending = ctx.tools.execute({
       signal: new AbortController().signal,
-      callId: CallId('dispose-active-vision-tool'),
+      callId: ToolCallId('dispose-active-vision-tool'),
       name: 'vision_glance',
       arguments: { images: [SAMPLE_IMAGE] },
       agent,

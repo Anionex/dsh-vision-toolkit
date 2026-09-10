@@ -55,6 +55,10 @@ jobs:
             dsh: 0.1.2-rc.1
           - node: 24.x
             dsh: 0.1.3-alpha.2
+          # The release this branch adapts to. Kept alongside the older lines
+          # because the peer ranges and the runtime probes still support them.
+          - node: 24.x
+            dsh: 0.1.5-rc.1
 
     steps:
       - name: Check out repository
