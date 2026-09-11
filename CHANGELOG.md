@@ -4,6 +4,10 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+### Fixed
+
+- Restored native model reasoning on image-input variant routes. The host hands the provider-native replay metadata — thinking signatures, native effort binding, response ids — only to the adapter instance that owns both the historical and the target provider, so a Session running on a variant route lost it for its entire history: turns produced by the original route were withheld, and turns produced by the variant were stripped again by the delegated call. An upstream that needs that metadata to keep thinking (pi-ai's adaptive-thinking and signed-reasoning paths) then answered with no reasoning block at all while still being asked for the configured `reasoningEffort`, without an error and without a log line. The variant now re-reads the withheld metadata from the durable Session transcript by message id and presents only the delegated copy under the upstream route, so the Session log keeps the route the user selected.
+
 ## [0.1.44] - 2026-09-10
 
 ### Fixed

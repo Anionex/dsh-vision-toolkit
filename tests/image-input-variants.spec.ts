@@ -4,7 +4,14 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import LlmService, { LlmAdapter, resolveRetryPolicy } from '@deepseek-ai/dsh-llm'
-import type { ContentBlock, GenerateOptions, LlmModelInfo, Message, StreamChunk } from '@deepseek-ai/dsh-llm'
+import type {
+  ContentBlock,
+  GenerateOptions,
+  LlmModelInfo,
+  LlmResolvedModelInfo,
+  Message,
+  StreamChunk,
+} from '@deepseek-ai/dsh-llm'
 import {
   abortableWait,
   contentHasImage,
@@ -46,6 +53,20 @@ function imageBlock(id: string): ContentBlock {
 
 function message(id: string, content: ContentBlock[]): Message {
   return { id: id as never, role: 'user', content, source: { kind: 'user' } }
+}
+
+function assistantMessage(id: string, provider: string, replayState?: unknown): Message {
+  return {
+    id: id as never,
+    role: 'assistant',
+    content: [{ type: 'reasoning', text: 'prior thinking' }, { type: 'text', text: 'answer' }],
+    source: { kind: 'model', provider, model: 'plain', ...(replayState === undefined ? {} : { replayState }) },
+  }
+}
+
+/** A live-Session stub carrying the durable transcript the host withholds from a facade route. */
+function sessionStub(transcript: readonly Message[], createdAt = 1) {
+  return { header: { createdAt }, deriveMessages: () => [...transcript] }
 }
 
 function glanceResult(answer: string) {
@@ -761,6 +782,209 @@ describe('ImageInputVariantAdapter', () => {
     expect(delegated).toHaveLength(1)
     expect(delegated[0]).not.toBe(frozen)
     expect(delegated[0]?.provider).toBe('up')
+  })
+
+  it('restores the replay state and the upstream provenance a facade route is denied', async () => {
+    const delegated: GenerateOptions[] = []
+    const upstreamStream = vi.fn(async function* (options: GenerateOptions): AsyncGenerator<StreamChunk> {
+      delegated.push(options)
+      yield { type: 'finish', reason: { kind: 'stop' } }
+    })
+    const withheld = { response: { kind: 'pi-ai' }, blocks: [] }
+    // What the host hands a facade adapter: no state for history owned by
+    // another route, state kept only for the wrapper's own route.
+    const history: Message[] = [
+      message('u1', [{ type: 'text', text: 'hi' }]),
+      assistantMessage('a1', 'up'),
+      assistantMessage('a2', 'vision-toolkit-up', withheld),
+      assistantMessage('a3', 'other'),
+      message('u2', [{ type: 'text', text: 'again' }]),
+    ]
+    // What the Session still holds: the same messages, provenance intact.
+    const durable = [
+      assistantMessage('a1', 'up', withheld),
+      assistantMessage('a2', 'vision-toolkit-up', withheld),
+      assistantMessage('a3', 'other', withheld),
+    ]
+    const ctx = {
+      sessions: { get: () => sessionStub(durable) },
+      get: () => undefined,
+      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(), stream: upstreamStream },
+    } as never
+    const adapter = new ImageInputVariantAdapter(ctx, ctx.llm, 'up', 'Upstream', () => undefined, new EvidenceCache(4))
+
+    for await (const _chunk of adapter.stream({
+      provider: 'vision-toolkit-up',
+      model: 'plain',
+      messages: history,
+      sessionId: 's1' as never,
+    })) { /* drain */ }
+
+    const sent = delegated[0]?.messages ?? []
+    expect(delegated[0]?.messages).not.toBe(history)
+    // History the upstream route produced is dispatched as its own again.
+    expect(sent[1]?.source).toEqual({ kind: 'model', provider: 'up', model: 'plain', replayState: withheld })
+    // History the variant route produced is re-provenanced, because the
+    // delegated call is dispatched under the upstream route.
+    expect(sent[2]?.source).toEqual({ kind: 'model', provider: 'up', model: 'plain', replayState: withheld })
+    // Another provider's history stays foreign: its state means nothing here.
+    expect(sent[3]?.source).toEqual({ kind: 'model', provider: 'other', model: 'plain' })
+    // Neither the caller's request nor the durable log is rewritten.
+    expect(history[1]?.source).toEqual({ kind: 'model', provider: 'up', model: 'plain' })
+    expect(history[2]?.source).toEqual({ kind: 'model', provider: 'vision-toolkit-up', model: 'plain', replayState: withheld })
+    expect(durable[1]?.source).toEqual({ kind: 'model', provider: 'vision-toolkit-up', model: 'plain', replayState: withheld })
+  })
+
+  it('never invents replay state when the durable transcript is unavailable', async () => {
+    const delegated: GenerateOptions[] = []
+    const upstreamStream = vi.fn(async function* (options: GenerateOptions): AsyncGenerator<StreamChunk> {
+      delegated.push(options)
+      yield { type: 'finish', reason: { kind: 'stop' } }
+    })
+    const history: Message[] = [
+      assistantMessage('a1', 'up'),
+      assistantMessage('a2', 'vision-toolkit-up'),
+    ]
+    const ctx = {
+      sessions: { get: () => undefined },
+      get: () => undefined,
+      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(), stream: upstreamStream },
+    } as never
+    const adapter = new ImageInputVariantAdapter(ctx, ctx.llm, 'up', 'Upstream', () => undefined, new EvidenceCache(4))
+
+    for await (const _chunk of adapter.stream({
+      provider: 'vision-toolkit-up',
+      model: 'plain',
+      messages: history,
+      sessionId: 'gone' as never,
+    })) { /* drain */ }
+
+    expect(delegated[0]?.messages.map(candidate => candidate.source)).toEqual([
+      { kind: 'model', provider: 'up', model: 'plain' },
+      { kind: 'model', provider: 'up', model: 'plain' },
+    ])
+  })
+
+  it('leaves history alone when no Session is in play at all', async () => {
+    const delegated: GenerateOptions[] = []
+    const upstreamStream = vi.fn(async function* (options: GenerateOptions): AsyncGenerator<StreamChunk> {
+      delegated.push(options)
+      yield { type: 'finish', reason: { kind: 'stop' } }
+    })
+    // No `sessions` service: the adapter must not require one.
+    const ctx = {
+      get: () => undefined,
+      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(), stream: upstreamStream },
+    } as never
+    const adapter = new ImageInputVariantAdapter(ctx, ctx.llm, 'up', 'Upstream', () => undefined, new EvidenceCache(4))
+    const history: Message[] = [assistantMessage('a1', 'up')]
+
+    for await (const _chunk of adapter.stream({
+      provider: 'vision-toolkit-up',
+      model: 'plain',
+      messages: history,
+    })) { /* drain */ }
+
+    expect(delegated[0]?.messages.map(candidate => candidate.source)).toEqual([history[0]?.source])
+    expect(history[0]?.source.replayState).toBeUndefined()
+  })
+
+  it('refuses replay state whose durable twin no longer matches the delegated content', async () => {
+    const delegated: GenerateOptions[] = []
+    const upstreamStream = vi.fn(async function* (options: GenerateOptions): AsyncGenerator<StreamChunk> {
+      delegated.push(options)
+      yield { type: 'finish', reason: { kind: 'stop' } }
+    })
+    const withheld = { response: { kind: 'pi-ai' }, blocks: [] }
+    const rewritten = {
+      ...assistantMessage('a1', 'up', withheld),
+      content: [{ type: 'text', text: 'rewritten' }],
+    } as Message
+    const ctx = {
+      sessions: { get: () => sessionStub([rewritten]) },
+      get: () => undefined,
+      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(), stream: upstreamStream },
+    } as never
+    const adapter = new ImageInputVariantAdapter(ctx, ctx.llm, 'up', 'Upstream', () => undefined, new EvidenceCache(4))
+    const history: Message[] = [assistantMessage('a1', 'up')]
+
+    for await (const _chunk of adapter.stream({
+      provider: 'vision-toolkit-up',
+      model: 'plain',
+      messages: history,
+      sessionId: 's1' as never,
+    })) { /* drain */ }
+
+    expect(delegated[0]?.messages.map(candidate => candidate.source)).toEqual([history[0]?.source])
+    expect(history[0]?.source.replayState).toBeUndefined()
+  })
+
+  it('carries restored replay state through the real host dispatch, reasoning effort included', async () => {
+    const ctx = new Context()
+    await ctx.plugin(LlmService)
+    try {
+      const seen: GenerateOptions[] = []
+      class Recording extends LlmAdapter {
+        override async listModels(provider: string): Promise<readonly LlmModelInfo[]> {
+          return [{ provider, id: 'plain', name: 'Plain', inputModalities: ['text'] }]
+        }
+
+        override async resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
+          return {
+            provider,
+            id: model,
+            name: model,
+            inputModalities: ['text'],
+            reasoning: { efforts: [{ id: 'max', name: 'Max' }], defaultEffort: 'max' },
+          }
+        }
+
+        override async *stream(options: GenerateOptions): AsyncGenerator<StreamChunk> {
+          seen.push(options)
+          yield { type: 'finish', reason: { kind: 'stop' } }
+        }
+      }
+      const withheld = { response: { kind: 'pi-ai' }, blocks: [] }
+      ctx.provide('sessions', {
+        get: () => sessionStub([
+          assistantMessage('a1', 'up', withheld),
+          assistantMessage('a2', 'vision-toolkit-up', withheld),
+          assistantMessage('a3', 'other', withheld),
+        ]),
+      })
+      ctx.llm.registerAdapter(['up'], new Recording())
+      ctx.llm.registerAdapter(
+        ['vision-toolkit-up'],
+        new ImageInputVariantAdapter(ctx, ctx.llm, 'up', 'Upstream', () => undefined, new EvidenceCache(4)),
+      )
+
+      for await (const _chunk of ctx.llm.stream({
+        provider: 'vision-toolkit-up',
+        model: 'plain',
+        reasoningEffort: 'max' as never,
+        sessionId: 's1' as never,
+        messages: [
+          message('u1', [{ type: 'text', text: 'hi' }]),
+          assistantMessage('a1', 'up'),
+          assistantMessage('a2', 'vision-toolkit-up', withheld),
+          assistantMessage('a3', 'other'),
+          message('u2', [{ type: 'text', text: 'again' }]),
+        ],
+      })) { /* drain */ }
+
+      expect(seen).toHaveLength(1)
+      expect(seen[0]?.provider).toBe('up')
+      expect(seen[0]?.reasoningEffort).toBe('max')
+      expect(seen[0]?.messages.map(candidate => candidate.source)).toEqual([
+        { kind: 'user' },
+        { kind: 'model', provider: 'up', model: 'plain', replayState: withheld },
+        { kind: 'model', provider: 'up', model: 'plain', replayState: withheld },
+        { kind: 'model', provider: 'other', model: 'plain' },
+        { kind: 'user' },
+      ])
+    } finally {
+      await ctx.fiber.dispose()
+    }
   })
 
   it('lets a caller abort mid-conversion while the cached read completes for the retry', async () => {
