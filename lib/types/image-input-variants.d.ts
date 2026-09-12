@@ -74,6 +74,14 @@ export declare class ImageInputVariantAdapter extends LlmAdapter {
     constructor(ctx: Context, llm: LlmService, upstream: string, upstreamName: string, runtime: () => VisionToolkitRuntime | undefined, cache: EvidenceCache, hidden?: () => boolean, startupStorageDirectory?: () => string | undefined);
     providerInfo(provider: string): LlmProviderInfo;
     providerRetryPolicy(_provider: string): ResolvedRetryPolicy;
+    /**
+     * Read the durable transcript of one Session, when the host still holds it.
+     * Only `presentUnderUpstreamRoute` consumes it, and only for messages whose
+     * replay state the host withheld from this facade route.
+     * @param sessionId - Session whose history is being delegated, if any.
+     * @returns the durable messages, or undefined without a live Session.
+     */
+    private durableTranscript;
     listModels(provider: string): Promise<readonly LlmModelInfo[]>;
     resolveModel(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;
     stream(options: GenerateOptions): AsyncGenerator<StreamChunk>;
