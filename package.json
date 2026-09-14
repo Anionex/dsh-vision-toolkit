@@ -1,6 +1,6 @@
 {
   "name": "@anionex/dsh-vision-toolkit",
-  "version": "0.1.44",
+  "version": "0.1.45",
   "description": "DeepSeek Harness-native integration for agent-vision-toolkit: image Q&A, OCR, grounding, UI restoration, pixel diff, Artifacts, and Web UI.",
   "keywords": [
     "deepseek",
@@ -55,6 +55,7 @@
     "runtime",
     "vendor",
     "cordis.patch.yml",
+    "CHANGELOG.md",
     "README.md",
     "README.zh.md",
     "LICENSE"
