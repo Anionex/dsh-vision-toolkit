@@ -274,7 +274,23 @@ You can also configure a Profile patch:
       protocol: openai
 ```
 
-OpenAI Chat Completions-compatible endpoints and Anthropic Messages are supported. The Web Settings panel exposes the full provider, runtime, timeout, image-limit, and image-input-variant configuration.
+OpenAI Chat Completions-compatible endpoints and Anthropic Messages are supported. The Web Settings panel exposes the common provider, runtime, timeout, image-limit, and image-input-variant configuration.
+
+Profile patches can also supply non-secret deployment metadata in `provider.headers`. A gateway that routes by conversation can name one or more generated headers in `provider.sessionHeaders`; OpenCode Zen, for example, requires `x-opencode-session`:
+
+```yaml
+- id: vision-toolkit
+  config:
+    provider:
+      headers:
+        x-tenant: acme
+      sessionHeaders:
+        - x-opencode-session
+```
+
+Static header values are ordinary plaintext Settings, not Credentials. Do not put API keys, bearer tokens, cookies, or other secrets in `provider.headers`; continue to use `provider.credential` for the vision API key. The plugin rejects client-owned authentication headers and HTTP routing/framing headers, case-insensitive duplicates, conflicts between the two fields, invalid names or values, more than 32 combined entries, names over 128 bytes, values over 4096 bytes, or more than 16384 bytes in total.
+
+Every session header receives the first 32 hexadecimal characters of an HMAC-SHA256 value keyed with fresh process randomness. The value is stable for the same operation identity while the DSH process is running and rotates after restart. Calls with a Session use its id as the private HMAC input; only calls without one fall back to `workspace:<absolute path>`, and neither the raw Session id nor workspace path is sent. One Settings health operation uses the same derived value for `GET /models` and its real model request. Headers are injected only into URLs on the configured provider origin and beneath its base path. With both fields empty, no extra-header environment value is created and provider wire-header behavior remains unchanged.
 
 The advanced **Default save directory** setting can place artifacts, pasted images, and caches below an absolute POSIX shared root such as `/tmp/dsh-vision-toolkit`; the plugin creates a private mode-0700 child for the current user and workspace. Leaving it blank keeps the existing workspace-local `.dsh-vision-toolkit` directory. Configured shared roots are currently rejected on Windows because their ownership and access-control lists cannot yet be verified safely.
 
@@ -297,6 +313,7 @@ For advanced setups — overriding `runtime.python`, using `runtime.mode: extern
 | The vision service returns 429 | Wait for the `Retry-After` interval, or switch to your own endpoint when you need stable higher volume |
 | The image exceeds a size or pixel limit | Crop or resize it first; the error identifies whether bytes or decoded pixels caused the rejection |
 | A custom Credential is missing | Enter the API key in **Settings → Vision Toolkit** and confirm the Credential name matches the provider configuration |
+| OpenCode Zen returns `400 MissingSessionID` | Add `x-opencode-session` to `provider.sessionHeaders` in the Profile patch, then restart the Profile; do not put a Session id or API key in `provider.headers` |
 | First-time runtime setup fails | The standalone-Python download needs network and disk access (domestic mirror first, GitHub fallback). Check connectivity or package-cache access, or install Python 3.11+ / configure `runtime.python` in Settings, then retry the model test |
 | Chrome is not found | Install Chrome, Chromium, or Edge. Only HTML screenshot rendering is unavailable; the other tools still work |
 | DSH Desktop says `dsh` is not recognized, or its built-in marketplace install fails | Open **DSH Terminal** from the tray, run `dsh plugin --profile desktop add @anionex/dsh-vision-toolkit`, then restart DSH Desktop. The Desktop 2.0.1 marketplace has known install issues, so the terminal command is the reliable path for now |

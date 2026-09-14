@@ -22,6 +22,8 @@ export interface UpstreamEnvironment {
     VISION_SSL_VERIFY?: string;
     VISION_USER_AGENT: string;
     LANG: 'zh' | 'en';
+    /** JSON-encoded, validated provider headers consumed only by the Python request guard. */
+    DSH_VISION_EXTRA_HEADERS?: string;
 }
 /** Pinned upstream identity plus prepared runtime facts. */
 export interface UpstreamVersionInfo {

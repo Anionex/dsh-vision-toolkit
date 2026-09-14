@@ -1,4 +1,5 @@
 import { copyFile, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises'
+import { createHmac } from 'node:crypto'
 import { createServer } from 'node:http'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -10,7 +11,12 @@ import type { Credentials } from '@deepseek-ai/dsh-credentials'
 import { resolveConfig, type VisionToolkitConfig } from '../src/config.ts'
 import { VisionToolkitError } from '../src/errors.ts'
 import { createPathPolicy, workspaceStorageId } from '../src/paths.ts'
-import { createDeadline, Semaphore, VisionToolkitRuntime } from '../src/runtime.ts'
+import {
+  createDeadline,
+  createVisionProviderHeaderResolver,
+  Semaphore,
+  VisionToolkitRuntime,
+} from '../src/runtime.ts'
 import {
   UpstreamAdapter,
   type UpstreamEnvironment,
@@ -198,6 +204,79 @@ describe('VisionToolkitRuntime', () => {
     const next = await runtime.captureEvidenceRuntime()
     expect(resolve).toHaveBeenCalledTimes(2)
     expect(next.evidenceFingerprint).not.toBe(captured.evidenceFingerprint)
+  })
+
+  it('sends bounded static headers and process-keyed session routing headers', async () => {
+    const { adapter, runtime } = await setup({
+      provider: {
+        headers: { 'x-tenant': 'acme' },
+        sessionHeaders: ['x-opencode-session'],
+      },
+    })
+    const workspace = await tempWorkspace()
+    const run = vi.spyOn(adapter, 'run')
+
+    await runtime.glance({ images: ['sample.png'] }, { signal, workspace, sessionId: 'session-a' })
+    await runtime.glance({ images: ['sample.png'] }, { signal, workspace, sessionId: 'session-a' })
+    await runtime.glance({ images: ['sample.png'] }, { signal, workspace, sessionId: 'session-b' })
+    await runtime.glance({ images: ['sample.png'] }, { signal, workspace })
+
+    const headersAt = (index: number): Record<string, string> => JSON.parse(
+      (run.mock.calls[index]?.[2].env?.DSH_VISION_EXTRA_HEADERS) ?? '{}',
+    ) as Record<string, string>
+    expect(headersAt(0)['x-tenant']).toBe('acme')
+    expect(headersAt(0)['x-opencode-session']).toMatch(/^[0-9a-f]{32}$/u)
+    expect(headersAt(1)['x-opencode-session']).toBe(headersAt(0)['x-opencode-session'])
+    expect(headersAt(2)['x-opencode-session']).not.toBe(headersAt(0)['x-opencode-session'])
+    expect(headersAt(3)['x-opencode-session']).toMatch(/^[0-9a-f]{32}$/u)
+    expect(JSON.stringify(headersAt(3))).not.toContain(workspace)
+  })
+
+  it('rotates session routing identities when the process HMAC key changes', () => {
+    const provider = resolveConfig({ provider: { sessionHeaders: ['x-route'] } }).provider
+    const firstKey = Uint8Array.from({ length: 32 }, () => 1)
+    const firstProcess = createVisionProviderHeaderResolver(firstKey)
+    const secondProcess = createVisionProviderHeaderResolver(Uint8Array.from({ length: 32 }, () => 2))
+    const expected = createHmac('sha256', firstKey).update('session-a').digest('hex').slice(0, 32)
+
+    expect(firstProcess(provider, 'session-a')['x-route']).toBe(expected)
+    expect(firstProcess(provider, 'session-a')['x-route']).toBe(firstProcess(provider, 'session-a')['x-route'])
+    expect(secondProcess(provider, 'session-a')['x-route']).not.toBe(firstProcess(provider, 'session-a')['x-route'])
+  })
+
+  it('omits the provider-header environment payload when no headers are configured', async () => {
+    const { adapter, runtime } = await setup()
+    const workspace = await tempWorkspace()
+    const run = vi.spyOn(adapter, 'run')
+
+    await runtime.glance({ images: ['sample.png'] }, { signal, workspace })
+
+    expect(run.mock.calls[0]?.[2].env?.DSH_VISION_EXTRA_HEADERS).toBeUndefined()
+  })
+
+  it('redacts every outbound provider header value from upstream failures', async () => {
+    const headerValue = 'deployment-metadata-that-must-not-surface'
+    const { adapter, runtime } = await setup({ provider: {
+      headers: { 'x-tenant': headerValue },
+      sessionHeaders: ['x-route'],
+    } })
+    vi.spyOn(adapter, 'run').mockImplementationOnce(async (_tool, _args, options) => {
+      const routeValue = JSON.parse(options.env?.DSH_VISION_EXTRA_HEADERS ?? '{}')['x-route'] as string
+      return {
+        stdout: '',
+        stderr: `provider rejected ${headerValue} for route ${routeValue}`,
+        stdoutTruncated: false,
+        stderrTruncated: false,
+        outcome: { exitCode: 1, signal: null },
+      }
+    })
+    const workspace = await tempWorkspace()
+
+    const error = await runtime.glance({ images: ['sample.png'] }, { signal, workspace })
+      .then(() => undefined, failure => failure as Error)
+    expect(error).toBeInstanceOf(Error)
+    expect(error?.message).not.toContain(headerValue)
+    expect(error?.message).not.toMatch(/[0-9a-f]{32}/u)
   })
 
   it('glance answers a question, OCRs, and zooms into a region', async () => {
@@ -896,6 +975,47 @@ describe('VisionToolkitRuntime', () => {
       const workspace = await tempWorkspace()
       await expect(runtime.health(true, { signal, workspace }))
         .resolves.toMatchObject({ connectionTested: true, checks: { service: { status: 'ok' } } })
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close(error => error === undefined ? resolve() : reject(error)))
+    }
+  })
+
+  it('uses one session route for both requests in a connection and model health operation', async () => {
+    let connectionRoute: string | undefined
+    const server = createServer((request, response) => {
+      connectionRoute = request.headers['x-opencode-session']
+      expect(request.headers['x-tenant']).toBe('acme')
+      response.writeHead(200, { 'content-type': 'application/json' })
+      response.end('{"data":[]}')
+    })
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+    try {
+      const address = server.address()
+      if (address === null || typeof address === 'string') throw new Error('fixture server did not bind')
+      const { adapter, runtime } = await setup({ provider: {
+        baseUrl: `http://127.0.0.1:${address.port}/v1`,
+        credential: 'VISION_API_KEY',
+        model: 'fixture-model',
+        headers: { 'x-tenant': 'acme' },
+        sessionHeaders: ['x-opencode-session'],
+      } })
+      const run = vi.spyOn(adapter, 'run').mockResolvedValueOnce({
+        stdout: 'fixture model ready',
+        stderr: '',
+        stdoutTruncated: false,
+        stderrTruncated: false,
+        outcome: { exitCode: 0, signal: null },
+      })
+      const workspace = await tempWorkspace()
+
+      await expect(runtime.health(true, { signal, workspace, sessionId: 'health-session' }, true))
+        .resolves.toMatchObject({ checks: { service: { status: 'ok' }, model: { status: 'ok' } } })
+      const modelHeaders = JSON.parse(
+        run.mock.calls[0]?.[2].env?.DSH_VISION_EXTRA_HEADERS ?? '{}',
+      ) as Record<string, string>
+      expect(connectionRoute).toMatch(/^[0-9a-f]{32}$/u)
+      expect(modelHeaders['x-opencode-session']).toBe(connectionRoute)
+      expect(modelHeaders['x-tenant']).toBe('acme')
     } finally {
       await new Promise<void>((resolve, reject) => server.close(error => error === undefined ? resolve() : reject(error)))
     }

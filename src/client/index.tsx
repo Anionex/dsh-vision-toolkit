@@ -489,6 +489,8 @@ interface SettingsValue {
     protocol?: 'openai' | 'anthropic'
     anthropicThinking?: 'omit' | 'disabled' | 'adaptive'
     userAgent?: string
+    headers?: Record<string, string>
+    sessionHeaders?: string[]
   }
   language?: 'zh' | 'en'
   timeoutMs?: number
@@ -1097,6 +1099,8 @@ interface Draft {
   protocol: 'openai' | 'anthropic'
   anthropicThinking: 'omit' | 'disabled' | 'adaptive'
   userAgent: string
+  providerHeaders: Record<string, string>
+  providerSessionHeaders: string[]
   language: 'zh' | 'en'
   timeoutMs: string
   maxImageBytes: string
@@ -1121,6 +1125,8 @@ function draftOf(value: SettingsValue): Draft {
     protocol: value.provider?.protocol ?? 'openai',
     anthropicThinking: value.provider?.anthropicThinking ?? 'omit',
     userAgent: value.provider?.userAgent ?? DEFAULT_USER_AGENT,
+    providerHeaders: { ...(value.provider?.headers ?? {}) },
+    providerSessionHeaders: [...(value.provider?.sessionHeaders ?? [])],
     language: value.language ?? 'zh',
     timeoutMs: String(value.timeoutMs ?? 30000),
     maxImageBytes: String(value.maxImageBytes ?? 4194304),
@@ -1163,6 +1169,8 @@ function valueOf(draft: Draft, t: Translate): SettingsValue {
       protocol: draft.protocol,
       anthropicThinking: draft.anthropicThinking,
       userAgent: draft.userAgent.trim(),
+      ...(Object.keys(draft.providerHeaders).length === 0 ? {} : { headers: { ...draft.providerHeaders } }),
+      ...(draft.providerSessionHeaders.length === 0 ? {} : { sessionHeaders: [...draft.providerSessionHeaders] }),
     },
     language: draft.language,
     timeoutMs: positiveInteger(draft.timeoutMs, t('timeout'), t),
