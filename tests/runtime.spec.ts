@@ -21,6 +21,7 @@ import type { PreparedUpstreamRuntime } from '../src/runtime-install.ts'
 import { UPSTREAM_VERSION } from '../src/version.ts'
 
 const FIXTURE_UPSTREAM = fileURLToPath(new URL('./fixtures/upstream', import.meta.url))
+const VENDORED_UPSTREAM = fileURLToPath(new URL('../vendor/agent-vision-toolkit', import.meta.url))
 const SAMPLE_IMAGE = fileURLToPath(new URL('./fixtures/sample.png', import.meta.url))
 
 const tempDirs: string[] = []
@@ -53,6 +54,17 @@ function preparedFixture(cleanHome = FIXTURE_UPSTREAM): PreparedUpstreamRuntime 
     cleanHome,
     pythonVersion: '3.11+',
     dependencies: { pillow: 'fixture', numpy: 'fixture', vtracer: 'fixture' },
+  }
+}
+
+function preparedVendored(cleanHome: string): PreparedUpstreamRuntime {
+  return {
+    source: 'managed',
+    root: VENDORED_UPSTREAM,
+    python: { program: 'python3', prefix: [], display: 'python3' },
+    cleanHome,
+    pythonVersion: '3.11+',
+    dependencies: {},
   }
 }
 
@@ -239,6 +251,29 @@ describe('VisionToolkitRuntime', () => {
       { signal, workspace, sessionId: 'second', sessionScope: {} },
     )
     expect(run).toHaveBeenCalledTimes(3)
+  })
+
+  it('separates the live-Session glance cache by effective Responses reasoning effort', async () => {
+    const { adapter, config, runtime } = await setup({
+      provider: {
+        baseUrl: 'https://vision.example/v1',
+        credential: 'VISION_API_KEY',
+        model: 'fixture-model',
+        protocol: 'responses',
+        reasoningEffort: 'low',
+      },
+    })
+    const workspace = await tempWorkspace()
+    const run = vi.spyOn(adapter, 'run')
+    const options = { signal, workspace, sessionId: 'effort', sessionScope: {} }
+
+    await runtime.glance({ images: ['sample.png'] }, options)
+    config.provider.reasoningEffort = 'high'
+    await runtime.glance({ images: ['sample.png'] }, options)
+
+    expect(run).toHaveBeenCalledTimes(2)
+    expect(run.mock.calls[0]?.[2]?.env).toMatchObject({ VISION_REASONING_EFFORT: 'low' })
+    expect(run.mock.calls[1]?.[2]?.env).toMatchObject({ VISION_REASONING_EFFORT: 'high' })
   })
 
   it('does not cache a failed glance request', async () => {
@@ -1110,6 +1145,72 @@ describe('upstream adapter version facts', () => {
       VISION_API_KEY: 'test-vision-key',
       VISION_USER_AGENT: expect.stringContaining('Mozilla/5.0'),
     })
+  })
+
+  it('runs the vendored Responses transport through the TS subprocess boundary with optional effort', async () => {
+    const requests: Array<{ url: string; body: Record<string, unknown> }> = []
+    const server = createServer((request, response) => {
+      const chunks: Buffer[] = []
+      request.on('data', chunk => { chunks.push(Buffer.from(chunk)) })
+      request.on('end', () => {
+        requests.push({
+          url: request.url ?? '',
+          body: JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown>,
+        })
+        response.writeHead(200, { 'Content-Type': 'application/json' })
+        response.end(JSON.stringify({
+          output: [{ type: 'message', content: [{ type: 'output_text', text: 'responses fixture answer' }] }],
+        }))
+      })
+    })
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(0, '127.0.0.1', resolve)
+    })
+    try {
+      const address = server.address()
+      if (address === null || typeof address === 'string') throw new Error('fixture server has no TCP address')
+      const { ctx, config, runtime } = await setup({
+        provider: {
+          baseUrl: `http://127.0.0.1:${address.port}/v1`,
+          credential: 'VISION_API_KEY',
+          model: 'responses-model',
+          protocol: 'responses',
+          reasoningEffort: 'medium',
+        },
+      })
+      const cleanHome = await tempWorkspace()
+      const adapter = new UpstreamAdapter(ctx, config, preparedVendored(cleanHome))
+
+      const withEffort = await adapter.run('glance', [SAMPLE_IMAGE, '-q', 'describe fixture'], {
+        signal,
+        env: await runtime.resolveVisionEnv(),
+      })
+      delete config.provider.reasoningEffort
+      const withoutEffort = await adapter.run('glance', [SAMPLE_IMAGE, '-q', 'describe fixture'], {
+        signal,
+        env: await runtime.resolveVisionEnv(),
+      })
+
+      expect(withEffort.stdout.trim()).toBe('responses fixture answer')
+      expect(withoutEffort.stdout.trim()).toBe('responses fixture answer')
+      expect(requests).toHaveLength(2)
+      expect(requests[0]?.url).toBe('/v1/responses')
+      expect(requests[0]?.body).toMatchObject({
+        model: 'responses-model',
+        store: false,
+        reasoning: { effort: 'medium' },
+        input: [{ role: 'user', content: expect.arrayContaining([
+          expect.objectContaining({ type: 'input_image' }),
+          expect.objectContaining({ type: 'input_text' }),
+        ]) }],
+      })
+      expect(requests[1]?.body).not.toHaveProperty('reasoning')
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close(error => { if (error === undefined) resolve(); else reject(error) })
+      })
+    }
   })
 
   it('forwards VISION_SSL_VERIFY to the isolated upstream process', async () => {

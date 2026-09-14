@@ -463,6 +463,9 @@ describe('persistent image evidence cache', () => {
     const otherTimeout = resolveConfig({ timeoutMs: baseline.timeoutMs + 1 })
     const otherConcurrency = resolveConfig({ concurrency: baseline.concurrency + 1 })
     const otherStorage = resolveConfig({ storageDir: '/tmp/dsh-vision-toolkit' })
+    const responsesLow = resolveConfig({ provider: { protocol: 'responses', reasoningEffort: 'low' } })
+    const responsesHigh = resolveConfig({ provider: { protocol: 'responses', reasoningEffort: 'high' } })
+    const dormantEffort = resolveConfig({ provider: { protocol: 'openai', reasoningEffort: 'high' } })
     const firstCredential = 'a'.repeat(64)
     const secondCredential = 'b'.repeat(64)
 
@@ -473,6 +476,8 @@ describe('persistent image evidence cache', () => {
     expect(evidenceRuntimeFingerprint(otherTimeout)).not.toBe(evidenceRuntimeFingerprint(baseline))
     expect(evidenceRuntimeFingerprint(otherConcurrency)).not.toBe(evidenceRuntimeFingerprint(baseline))
     expect(evidenceRuntimeFingerprint(otherStorage)).not.toBe(evidenceRuntimeFingerprint(baseline))
+    expect(evidenceRuntimeFingerprint(responsesLow)).not.toBe(evidenceRuntimeFingerprint(responsesHigh))
+    expect(evidenceRuntimeFingerprint(dormantEffort)).toBe(evidenceRuntimeFingerprint(baseline))
     expect(evidenceRuntimeFingerprint(baseline, firstCredential, 'off'))
       .not.toBe(evidenceRuntimeFingerprint(baseline, firstCredential, 'on'))
     expect(evidenceRuntimeFingerprint(baseline, firstCredential))

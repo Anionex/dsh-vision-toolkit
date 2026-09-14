@@ -19,6 +19,7 @@ describe('resolveConfig', () => {
     expect(BUILT_IN_FREE_VISION_KEY).toBe('https://agent-vision.anionex.me')
     expect(config.provider.model).toBe(BUILT_IN_FREE_VISION_MODEL)
     expect(config.provider.protocol).toBe('openai')
+    expect(config.provider.reasoningEffort).toBeUndefined()
     expect(config.provider.anthropicThinking).toBe('omit')
     expect(config.provider.userAgent).toBe(DEFAULT_VISION_USER_AGENT)
     expect(config.language).toBe('zh')
@@ -144,6 +145,27 @@ describe('resolveConfig', () => {
     expect(isBuiltInFreeVisionProvider(config.provider)).toBe(true)
   })
 
+  it('normalizes extensible Responses reasoning effort and removes dormant values', () => {
+    const responses = resolveConfig({
+      provider: { protocol: 'responses', reasoningEffort: '  provider.custom-1  ' },
+    })
+    expect(responses.provider.protocol).toBe('responses')
+    expect(responses.provider.reasoningEffort).toBe('provider.custom-1')
+    expect(resolveConfig({ provider: { protocol: 'responses', reasoningEffort: '   ' } }).provider.reasoningEffort)
+      .toBeUndefined()
+    expect(resolveConfig({ provider: { protocol: 'openai', reasoningEffort: 'high' } }).provider.reasoningEffort)
+      .toBeUndefined()
+    expect(resolveConfig({ provider: { protocol: 'anthropic', reasoningEffort: 'high' } }).provider.reasoningEffort)
+      .toBeUndefined()
+  })
+
+  it('rejects unsafe or overlong Responses reasoning effort', () => {
+    expect(() => resolveConfig({ provider: { protocol: 'responses', reasoningEffort: 'high effort' } }))
+      .toThrowError(/provider\.reasoningEffort/)
+    expect(() => resolveConfig({ provider: { protocol: 'responses', reasoningEffort: 'x'.repeat(65) } }))
+      .toThrowError(/provider\.reasoningEffort/)
+  })
+
   it('rejects a non-http baseUrl', () => {
     expect(() => resolveConfig({ provider: { baseUrl: 'ftp://x' } }))
       .toThrowError(/provider\.baseUrl/)
@@ -170,7 +192,7 @@ describe('resolveConfig', () => {
   })
 
   it('rejects an unsupported provider protocol', () => {
-    expect(() => resolveConfig({ provider: { protocol: 'responses' as 'openai' } }))
+    expect(() => resolveConfig({ provider: { protocol: 'legacy' as 'openai' } }))
       .toThrowError(/provider\.protocol/)
   })
 

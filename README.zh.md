@@ -272,7 +272,14 @@ flowchart LR
       protocol: openai
 ```
 
-支持 OpenAI Chat Completions 兼容端点和 Anthropic Messages。Web Settings 页面还可以调整超时、图片限制、并发、运行时和图片输入变体。
+支持 OpenAI Chat Completions 兼容端点、OpenAI Responses 和 Anthropic Messages。已有配置仍默认使用 Chat Completions。若要使用兼容 Responses 的端点，请设置 `protocol: responses`；插件会在 API 地址后拼接 `/responses`。可选的 `reasoningEffort` 仅随 Responses 请求发送：
+
+```yaml
+      protocol: responses
+      reasoningEffort: medium
+```
+
+`reasoningEffort` 留空时使用模型或代理的默认值。常见值包括 `none`、`minimal`、`low`、`medium`、`high` 和 `xhigh`；为兼容第三方代理和未来扩展，该字段也接受由字母、数字、`.`、`_`、`-` 组成且不超过 64 位的提供方自定义值。实际支持范围与计费由模型或代理决定；较高强度可能增加推理 token、延迟和费用。Responses 请求会设置 `store: false`，但该标记不能替代核查服务商自己的数据保留政策。Web Settings 页面还可以调整超时、图片限制、并发、运行时和图片输入变体。
 
 高级设置中的 **默认保存目录** 可以把产物、粘贴图片和缓存放到 `/tmp/dsh-vision-toolkit` 等 POSIX 绝对共享根目录下；插件会为当前用户和工作区创建权限为 0700 的私有子目录。留空时继续使用工作区内原有的 `.dsh-vision-toolkit` 目录。Windows 目前会拒绝配置共享根目录，因为插件尚不能安全校验其所有权和访问控制列表。
 
@@ -290,7 +297,7 @@ flowchart LR
 
 | 问题 | 处理方式 |
 | --- | --- |
-| 视觉模型测试失败：`Vision API returned an incompatible response structure` | 通常是 API 地址少了路径前缀。LM Studio、Ollama 等本地 OpenAI 兼容服务需填写 `http://127.0.0.1:1234/v1`（带 `/v1`），插件会在其后拼接 `/chat/completions`；只填端口号会命中服务的未知端点并返回该错误 |
+| 视觉模型测试失败：`Vision API returned an incompatible response structure` | 通常是 API 地址少了路径前缀。LM Studio、Ollama 等本地 OpenAI 兼容服务需填写 `http://127.0.0.1:1234/v1`（带 `/v1`）；OpenAI Chat Completions 会拼接 `/chat/completions`，OpenAI Responses 会拼接 `/responses`，只填端口号可能命中未知端点 |
 | 粘贴图片后仍提示模型不支持图片 | 重启 Web Profile 并刷新页面，确认当前模型已切换到带 `(Vision Toolkit)` 的变体；也可以把图片先放进会话工作区，再调用 `/vision-skills` |
 | 视觉服务提示 429 | 按错误中的 `Retry-After` 等待后重试；如果需要稳定高额度，切换到自己的视觉端点 |
 | 图片过大或像素超限 | 先裁剪或缩放图片；错误会明确显示是字节还是像素限制 |
@@ -302,9 +309,9 @@ flowchart LR
 
 ## FAQ
 
-**接入视觉模型会显著增加成本吗？**
+**视觉模型会怎样影响成本？**
 
-不会。每次检查只把必要的意图和图片发给多模态模型，调用之间不会累积上下文，因此额外成本很小。想进一步降低成本，可以用本地部署的小型多模态侧模型（例如 Gemma 4 或 Qwen 3.5/3.6 系列）提供视觉能力。
+每次检查都是一条独立的多模态请求，只携带必要意图和图片，调用之间不会累积上下文。实际费用取决于服务商、图片、模型，以及 Responses 的 `reasoningEffort`；较高强度可能消耗更多推理 token 并增加延迟。留空可使用提供方默认值；若更看重可预测的本地成本，也可以使用本地部署的小型多模态侧模型（例如 Gemma 4 或 Qwen 3.5/3.6 系列）。
 
 ## 赞赏
 

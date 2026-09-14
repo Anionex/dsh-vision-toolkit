@@ -43,6 +43,8 @@ const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKi
 const BUILT_IN_FREE_VISION_BASE_URL = 'https://vision.anionex.me/v1'
 const BUILT_IN_FREE_VISION_CREDENTIAL = 'ANIONEX_FREE_VISION'
 const BUILT_IN_FREE_VISION_MODEL = 'gemini-3.7-flash'
+const MAX_REASONING_EFFORT_LENGTH = 64
+const REASONING_EFFORT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u
 const AIHUBMIX_TUTORIAL_URL_EN = 'https://github.com/Anionex/dsh-vision-toolkit/blob/main/docs/aihubmix-gemini-vision.md'
 const AIHUBMIX_TUTORIAL_URL_ZH = 'https://github.com/Anionex/dsh-vision-toolkit/blob/main/docs/aihubmix-gemini-vision.zh.md'
 
@@ -66,6 +68,9 @@ const en = {
   credentialHint: 'The built-in free provider needs no user key. For a custom provider, this is the DSH credential reference used to store its key.',
   model: 'Model',
   protocol: 'API protocol',
+  reasoningEffort: 'Vision service reasoning effort',
+  reasoningEffortHint: 'Optional. Common values: none, minimal, low, medium, high, xhigh. Supported values and billing depend on the model or proxy; higher effort may increase tokens, latency, and cost. Requests send store:false, but you should still verify the provider\'s data-retention policy.',
+  reasoningEffortInvalid: 'Vision service reasoning effort must be at most 64 ASCII letters, digits, dots, underscores, or hyphens.',
   anthropicThinking: 'Anthropic thinking',
   anthropicThinkingHint: 'omit has the broadest compatibility. Use disabled or adaptive only when the selected model documents that mode; restore omit first after HTTP 400.',
   userAgent: 'User-Agent',
@@ -257,6 +262,9 @@ const zh: Record<LocaleKey, string> = {
   credentialHint: '内置免费视觉服务无需用户密钥；切换到自定义服务时，此处是保存其密钥的 DSH 凭据名称。',
   model: '模型名称',
   protocol: 'API 协议',
+  reasoningEffort: '视觉服务推理强度',
+  reasoningEffortHint: '可选。常见值：none、minimal、low、medium、high、xhigh。实际支持值和计费由模型或代理决定；较高强度可能增加 token、延迟和费用。请求会发送 store:false，但仍应核查服务商的数据保留政策。',
+  reasoningEffortInvalid: '视觉服务推理强度最多 64 位，只能包含 ASCII 字母、数字、点、下划线或连字符。',
   anthropicThinking: 'Anthropic thinking',
   anthropicThinkingHint: 'omit 兼容性最好。仅当所选模型明确支持时使用 disabled 或 adaptive；遇到 HTTP 400 时先恢复 omit。',
   userAgent: 'User-Agent',
@@ -486,7 +494,8 @@ interface SettingsValue {
     baseUrl?: string
     credential?: string
     model?: string
-    protocol?: 'openai' | 'anthropic'
+    protocol?: 'openai' | 'responses' | 'anthropic'
+    reasoningEffort?: string
     anthropicThinking?: 'omit' | 'disabled' | 'adaptive'
     userAgent?: string
   }
@@ -1094,7 +1103,8 @@ interface Draft {
   baseUrl: string
   credential: string
   model: string
-  protocol: 'openai' | 'anthropic'
+  protocol: 'openai' | 'responses' | 'anthropic'
+  reasoningEffort: string
   anthropicThinking: 'omit' | 'disabled' | 'adaptive'
   userAgent: string
   language: 'zh' | 'en'
@@ -1119,6 +1129,7 @@ function draftOf(value: SettingsValue): Draft {
     credential: value.provider?.credential ?? BUILT_IN_FREE_VISION_CREDENTIAL,
     model: value.provider?.model ?? BUILT_IN_FREE_VISION_MODEL,
     protocol: value.provider?.protocol ?? 'openai',
+    reasoningEffort: value.provider?.protocol === 'responses' ? value.provider.reasoningEffort ?? '' : '',
     anthropicThinking: value.provider?.anthropicThinking ?? 'omit',
     userAgent: value.provider?.userAgent ?? DEFAULT_USER_AGENT,
     language: value.language ?? 'zh',
@@ -1155,12 +1166,18 @@ function apiKeyFailure(value: string, t: Translate): string | undefined {
 }
 
 function valueOf(draft: Draft, t: Translate): SettingsValue {
+  const reasoningEffort = draft.reasoningEffort.trim()
+  if (draft.protocol === 'responses' && reasoningEffort.length > 0
+    && (reasoningEffort.length > MAX_REASONING_EFFORT_LENGTH || !REASONING_EFFORT_PATTERN.test(reasoningEffort))) {
+    throw new Error(t('reasoningEffortInvalid'))
+  }
   return {
     provider: {
       baseUrl: draft.baseUrl.trim(),
       credential: draft.credential.trim(),
       model: draft.model.trim(),
       protocol: draft.protocol,
+      ...(draft.protocol === 'responses' && reasoningEffort.length > 0 ? { reasoningEffort } : {}),
       anthropicThinking: draft.anthropicThinking,
       userAgent: draft.userAgent.trim(),
     },
@@ -1426,7 +1443,8 @@ function LoadedSettings({ controller, t }: SettingsInjected) {
       <section className="dvt-panel dvt-essential"><div className="dvt-panel-title"><div><h3>{t('provider')}</h3><p>{t('providerHint')}</p></div><span className={`dvt-badge ${snapshot.credential.configured ? 'ok' : 'error'}`}>{snapshot.credential.configured ? t('configured') : t('missing')}</span></div>
         <p className="dvt-tutorial-link"><a href={aihubmixTutorialUrl} target="_blank" rel="noreferrer">{t('aihubmixTutorial')}</a></p>
         <div className="dvt-form-grid">
-          <Field label={t('protocol')}><select disabled={!snapshot.writable || busy} value={draft.protocol} onChange={(event) => { update('protocol', event.target.value as 'openai' | 'anthropic') }}><option value="openai">OpenAI Chat Completions</option><option value="anthropic">Anthropic Messages</option></select></Field>
+          <Field label={t('protocol')}><select disabled={!snapshot.writable || busy} value={draft.protocol} onChange={(event) => { update('protocol', event.target.value as 'openai' | 'responses' | 'anthropic') }}><option value="openai">OpenAI Chat Completions</option><option value="responses">OpenAI Responses</option><option value="anthropic">Anthropic Messages</option></select></Field>
+          {draft.protocol === 'responses' ? <Field label={t('reasoningEffort')} hint={t('reasoningEffortHint')}><Input aria-label={t('reasoningEffort')} disabled={!snapshot.writable || busy} placeholder="none / minimal / low / medium / high / xhigh" value={draft.reasoningEffort} onChange={(event) => { update('reasoningEffort', event.target.value); setDraftError(undefined) }} /></Field> : null}
           <Field label={t('baseUrl')}><Input disabled={!snapshot.writable || busy} value={draft.baseUrl} onChange={(event) => { update('baseUrl', event.target.value) }} /></Field>
           <Field label={t('model')}><Input disabled={!snapshot.writable || busy} value={draft.model} onChange={(event) => { update('model', event.target.value) }} /></Field>
           <Field label={t('apiKey')} hint={keyLocked ? t('apiKeyLocked') : snapshot.credential.source === undefined ? t('apiKeyHint') : `${t('apiKeyHint')} ${t('sourceHint', { source: t('source'), value: credentialSource(snapshot.credential.source, t) })}`}><Input aria-label={t('apiKey')} type="password" autoComplete="new-password" disabled={busy || keyLocked} placeholder={snapshot.credential.configured ? t('apiKeyPlaceholderConfigured') : t('apiKeyPlaceholderMissing')} value={apiKey} onChange={(event) => { setApiKey(event.target.value); setDraftError(undefined) }} /></Field>

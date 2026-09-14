@@ -4,6 +4,14 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+### Added
+
+- Added an explicit OpenAI Responses protocol for custom vision providers. An optional, constrained `reasoningEffort` is forwarded only for Responses requests, exposed conditionally in bilingual Settings, and included in both live-Session and durable evidence cache identities. Existing OpenAI configurations remain on Chat Completions and omit effort by default.
+
+### Documentation
+
+- Documented `/responses` endpoint composition, common and provider-specific effort values, possible token/latency/cost effects, and the need to review provider data-retention policy even though requests send `store: false`.
+
 ## [0.1.45] - 2026-09-14
 
 ### Fixed
