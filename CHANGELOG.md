@@ -4,6 +4,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+## [0.1.45] - 2026-09-14
+
 ### Fixed
 
 - Restored native model reasoning on image-input variant routes. The host hands the provider-native replay metadata — thinking signatures, native effort binding, response ids — only to the adapter instance that owns both the historical and the target provider, so a Session running on a variant route lost it for its entire history: turns produced by the original route were withheld, and turns produced by the variant were stripped again by the delegated call. An upstream that needs that metadata to keep thinking (pi-ai's adaptive-thinking and signed-reasoning paths) then answered with no reasoning block at all while still being asked for the configured `reasoningEffort`, without an error and without a log line. The variant now re-reads the withheld metadata from the durable Session transcript by message id and presents only the delegated copy under the upstream route, so the Session log keeps the route the user selected.
@@ -453,7 +455,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 - Runtime teardown cancels in-flight operations before removing Agent-scoped tools, the activation bootstrap, and the Skill.
 - The Web client is published through the current nested `dsh.client` manifest and loader-compatible built artifact required by DSH snapshot0810.
 
-[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.44...HEAD
+[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.45...HEAD
+[0.1.45]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.44...v0.1.45
 [0.1.44]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.43...v0.1.44
 [0.1.43]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.42...v0.1.43
 [0.1.42]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.40...v0.1.42
