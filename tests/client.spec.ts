@@ -742,6 +742,99 @@ describe('Vision Toolkit client plugin', () => {
     expect(screen.queryByText('apiKeyBlank')).toBeNull()
   })
 
+  it('shows Responses effort conditionally, trims it on save, and removes it after switching protocols', async () => {
+    const initial = settingsSnapshot()
+    initial.settings.value.provider = {
+      ...initial.settings.value.provider,
+      protocol: 'responses',
+      reasoningEffort: 'low',
+    }
+    const saved = settingsSnapshot()
+    saved.settings.revision = 2
+    saved.settings.value.provider = {
+      ...saved.settings.value.provider,
+      protocol: 'responses',
+      reasoningEffort: 'provider.custom-1',
+    }
+    const savedOpenAi = settingsSnapshot()
+    savedOpenAi.settings.revision = 3
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ ok: true, value: initial }))
+      .mockResolvedValueOnce(jsonResponse({ ok: true, value: saved }))
+      .mockResolvedValueOnce(jsonResponse({ ok: true, value: savedOpenAi }))
+    vi.stubGlobal('fetch', fetchMock)
+    const { ctx, registrations } = fakeClientContext()
+    apply(ctx as never)
+    const settings = registrations.find(entry => entry.options.name === 'settings.section')
+    if (settings === undefined) throw new Error('Settings component was not registered')
+    render(createElement(settings.component, {
+      controller: new VisionSettingsController(),
+      t: (key: string) => key,
+    }))
+
+    const effort = await screen.findByLabelText('reasoningEffort') as HTMLInputElement
+    expect(effort.value).toBe('low')
+    expect(screen.getByText('reasoningEffortHint')).toBeTruthy()
+    fireEvent.change(effort, { target: { value: '  provider.custom-1  ' } })
+    fireEvent.click(screen.getByRole('button', { name: 'save' }))
+    await screen.findByText('saved')
+    const responsesBody = JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body))
+    expect(responsesBody.value.provider).toMatchObject({
+      protocol: 'responses',
+      reasoningEffort: 'provider.custom-1',
+    })
+    expect((screen.getByLabelText('reasoningEffort') as HTMLInputElement).value).toBe('provider.custom-1')
+
+    fireEvent.change(screen.getByLabelText('protocol'), { target: { value: 'openai' } })
+    expect(screen.queryByLabelText('reasoningEffort')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'save' }))
+    await waitFor(() => { expect(fetchMock).toHaveBeenCalledTimes(3) })
+    const openaiBody = JSON.parse(String((fetchMock.mock.calls[2]?.[1] as RequestInit).body))
+    expect(openaiBody.value.provider.protocol).toBe('openai')
+    expect(openaiBody.value.provider).not.toHaveProperty('reasoningEffort')
+  })
+
+  it('disables Responses effort when Settings are read-only', async () => {
+    const initial = settingsSnapshot()
+    initial.writable = false
+    initial.settings.value.provider = {
+      ...initial.settings.value.provider,
+      protocol: 'responses',
+      reasoningEffort: 'medium',
+    }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(jsonResponse({ ok: true, value: initial })))
+    const { ctx, registrations } = fakeClientContext()
+    apply(ctx as never)
+    const settings = registrations.find(entry => entry.options.name === 'settings.section')
+    if (settings === undefined) throw new Error('Settings component was not registered')
+    render(createElement(settings.component, {
+      controller: new VisionSettingsController(),
+      t: (key: string) => key,
+    }))
+
+    expect((await screen.findByLabelText('reasoningEffort') as HTMLInputElement).disabled).toBe(true)
+  })
+
+  it('rejects unsafe Responses effort before sending Settings', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({ ok: true, value: settingsSnapshot() }))
+    vi.stubGlobal('fetch', fetchMock)
+    const { ctx, registrations } = fakeClientContext()
+    apply(ctx as never)
+    const settings = registrations.find(entry => entry.options.name === 'settings.section')
+    if (settings === undefined) throw new Error('Settings component was not registered')
+    render(createElement(settings.component, {
+      controller: new VisionSettingsController(),
+      t: (key: string) => key,
+    }))
+
+    fireEvent.change(await screen.findByLabelText('protocol'), { target: { value: 'responses' } })
+    fireEvent.change(screen.getByLabelText('reasoningEffort'), { target: { value: 'high effort' } })
+    fireEvent.click(screen.getByRole('button', { name: 'save' }))
+
+    expect(screen.getByText('reasoningEffortInvalid')).toBeTruthy()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
   it('reloads the authoritative same-revision settings after a runtime candidate is rejected', async () => {
     const initial = settingsSnapshot()
     const rejected = settingsSnapshot({

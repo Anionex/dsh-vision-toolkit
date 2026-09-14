@@ -34,6 +34,9 @@ declare const en: {
     readonly credentialHint: "The built-in free provider needs no user key. For a custom provider, this is the DSH credential reference used to store its key.";
     readonly model: "Model";
     readonly protocol: "API protocol";
+    readonly reasoningEffort: "Vision service reasoning effort";
+    readonly reasoningEffortHint: "Optional. Common values: none, minimal, low, medium, high, xhigh. Supported values and billing depend on the model or proxy; higher effort may increase tokens, latency, and cost. Requests send store:false, but you should still verify the provider's data-retention policy.";
+    readonly reasoningEffortInvalid: "Vision service reasoning effort must be at most 64 ASCII letters, digits, dots, underscores, or hyphens.";
     readonly anthropicThinking: "Anthropic thinking";
     readonly anthropicThinkingHint: "omit has the broadest compatibility. Use disabled or adaptive only when the selected model documents that mode; restore omit first after HTTP 400.";
     readonly userAgent: "User-Agent";
@@ -241,7 +244,8 @@ interface SettingsValue {
         baseUrl?: string;
         credential?: string;
         model?: string;
-        protocol?: 'openai' | 'anthropic';
+        protocol?: 'openai' | 'responses' | 'anthropic';
+        reasoningEffort?: string;
         anthropicThinking?: 'omit' | 'disabled' | 'adaptive';
         userAgent?: string;
     };

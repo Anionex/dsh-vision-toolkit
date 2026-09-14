@@ -877,7 +877,14 @@ export class VisionToolkitRuntime {
       VISION_API_KEY: resolved.value,
       VISION_BASE_URL: this.config.provider.baseUrl,
       VISION_MODEL: this.config.provider.model,
-      VISION_API_PROTOCOL: this.config.provider.protocol === 'anthropic' ? 'anthropic' : 'chat_completions',
+      VISION_API_PROTOCOL: this.config.provider.protocol === 'anthropic'
+        ? 'anthropic'
+        : this.config.provider.protocol === 'responses'
+          ? 'responses'
+          : 'chat_completions',
+      ...(this.config.provider.protocol === 'responses' && this.config.provider.reasoningEffort !== undefined
+        ? { VISION_REASONING_EFFORT: this.config.provider.reasoningEffort }
+        : {}),
       VISION_ANTHROPIC_THINKING: this.config.provider.anthropicThinking,
       ...(sslVerify === undefined ? {} : { VISION_SSL_VERIFY: sslVerify }),
       VISION_USER_AGENT: this.config.provider.userAgent,
@@ -1159,6 +1166,7 @@ export class VisionToolkitRuntime {
         baseUrl: env.VISION_BASE_URL,
         model: env.VISION_MODEL,
         protocol: env.VISION_API_PROTOCOL,
+        reasoningEffort: env.VISION_REASONING_EFFORT ?? null,
         anthropicThinking: env.VISION_ANTHROPIC_THINKING,
         sslVerify: env.VISION_SSL_VERIFY ?? null,
         userAgent: env.VISION_USER_AGENT,

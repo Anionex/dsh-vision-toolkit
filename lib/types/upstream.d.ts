@@ -17,7 +17,8 @@ export interface UpstreamEnvironment {
     VISION_API_KEY: string;
     VISION_BASE_URL: string;
     VISION_MODEL: string;
-    VISION_API_PROTOCOL: 'chat_completions' | 'anthropic';
+    VISION_API_PROTOCOL: 'chat_completions' | 'responses' | 'anthropic';
+    VISION_REASONING_EFFORT?: string;
     VISION_ANTHROPIC_THINKING: 'omit' | 'disabled' | 'adaptive';
     VISION_SSL_VERIFY?: string;
     VISION_USER_AGENT: string;

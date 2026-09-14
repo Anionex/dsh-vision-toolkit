@@ -235,6 +235,27 @@ describe('VisionToolkitRuntimeManager', () => {
     expect(manager.status().activeConfig?.imageInputVariants.hidden).toBe(true)
   })
 
+  it('drops dormant reasoning effort so non-Responses edits do not rebuild the runtime', async () => {
+    const ctx = new Context()
+    contexts.push(ctx)
+    const factory = vi.fn(async (_ctx: Context, resolved: ResolvedVisionToolkitConfig) => fakeRuntime(resolved))
+    const manager = new VisionToolkitRuntimeManager(ctx, factory)
+    await manager.initialize({
+      ...config('first'),
+      provider: { ...config('first').provider, protocol: 'openai', reasoningEffort: 'low' },
+    })
+
+    const changed = await manager.reconfigure({
+      ...config('first'),
+      provider: { ...config('first').provider, protocol: 'openai', reasoningEffort: 'high' },
+    })
+
+    expect(changed).toBe(false)
+    expect(factory).toHaveBeenCalledTimes(1)
+    expect(manager.currentConfig().provider.reasoningEffort).toBeUndefined()
+    expect(manager.status()).toMatchObject({ ready: true, generation: 1 })
+  })
+
   it('prevents a slower obsolete Settings prepare from overwriting a newer one', async () => {
     const ctx = new Context()
     contexts.push(ctx)

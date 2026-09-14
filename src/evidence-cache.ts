@@ -89,6 +89,7 @@ export function evidenceRuntimeFingerprint(
       },
       model: config.provider.model,
       protocol: config.provider.protocol,
+      reasoningEffort: config.provider.reasoningEffort ?? null,
       anthropicThinking: config.provider.anthropicThinking,
       sslVerify: sslVerify ?? null,
       userAgent: config.provider.userAgent,
