@@ -367,7 +367,11 @@ export declare class VisionToolkitRuntime {
     private semaphore;
     private runOperation;
     /** Resolve the configured credential at the remote-operation boundary. */
-    resolveVisionEnv(): Promise<UpstreamEnvironment>;
+    private resolveCredential;
+    /** Resolve the credential and build one operation-scoped upstream environment. */
+    resolveVisionEnv(options?: ToolCallOptions): Promise<UpstreamEnvironment>;
+    private operationKey;
+    private sessionHeaders;
     private visionEnv;
     private pathPolicy;
     private compressedImageRoot;

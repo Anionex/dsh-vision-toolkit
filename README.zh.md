@@ -274,6 +274,22 @@ flowchart LR
 
 支持 OpenAI Chat Completions 兼容端点和 Anthropic Messages。Web Settings 页面还可以调整超时、图片限制、并发、运行时和图片输入变体。
 
+OpenCode Zen 要求请求携带 `x-opencode-session`。可在 **高级设置 → 在线视觉服务 → 会话路由请求头** 中填写这个名称，也可以写入 Profile patch：
+
+```yaml
+- id: vision-toolkit
+  config:
+    provider:
+      baseUrl: https://opencode.ai/zen/go/v1
+      credential: OPENCODE_API_KEY
+      model: mimo-v2.5
+      protocol: openai
+      sessionHeaders:
+        - x-opencode-session
+```
+
+`sessionHeaders` 只接受请求头名称，不接受用户填写请求头值。运行时使用 HMAC-SHA-256，为每个 Session 或工作区操作生成 32 位不透明值。该值在当前 DSH 进程内保持稳定，重启后轮换。此字段不会把原始 Session ID、工作区路径、HMAC 密钥或 Credential 发给服务商。插件会拒绝鉴权头、客户端自有头、代理转发头和 HTTP 分帧控制头，也不会在跳出已配置 provider 基路径的重定向中继续携带会话头。
+
 高级设置中的 **默认保存目录** 可以把产物、粘贴图片和缓存放到 `/tmp/dsh-vision-toolkit` 等 POSIX 绝对共享根目录下；插件会为当前用户和工作区创建权限为 0700 的私有子目录。留空时继续使用工作区内原有的 `.dsh-vision-toolkit` 目录。Windows 目前会拒绝配置共享根目录，因为插件尚不能安全校验其所有权和访问控制列表。
 
 配置的保存目录变更后，插件会把之前验证过的根目录保留为只读输入位置。Web Profile 会把这段历史保存在插件自有的 `vision_toolkit_storage` storage-domain sidecar 中；即使当前 Settings 提供方只读，Profile 重启后原有粘贴图片路径仍可继续使用。使用配置共享存储的自定义 Profile 应组合 `@deepseek-ai/dsh-storage-domain`。
@@ -295,6 +311,7 @@ flowchart LR
 | 视觉服务提示 429 | 按错误中的 `Retry-After` 等待后重试；如果需要稳定高额度，切换到自己的视觉端点 |
 | 图片过大或像素超限 | 先裁剪或缩放图片；错误会明确显示是字节还是像素限制 |
 | 自定义 Credential 缺失 | 在 **设置 → 视觉工具** 填写 API Key，并确认 Credential 名称与配置一致 |
+| OpenCode Zen 返回 `MissingSessionID` | 在 **高级设置 → 在线视觉服务 → 会话路由请求头** 中加入 `x-opencode-session`，保存后重新运行视觉模型测试 |
 | 首次运行时准备失败 | 自动下载托管 Python 需要网络和磁盘权限（默认先走国内镜像，失败时回退 GitHub）；失败时检查网络或包缓存，也可以安装 Python 3.11+ 或在 Settings 中配置 `runtime.python`，然后重新测试 |
 | 找不到 Chrome | 安装 Chrome、Chromium 或 Edge；只有 HTML 截图不可用，其他工具不受影响 |
 | DSH Desktop 提示找不到 `dsh` 命令，或内置插件市场安装失败 | 从托盘打开 **DSH 终端**，运行 `dsh plugin --profile desktop add @anionex/dsh-vision-toolkit`，再重启 DSH Desktop。桌面版 2.0.1 的内置市场存在已知安装问题，当前请优先使用终端安装 |

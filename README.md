@@ -276,6 +276,22 @@ You can also configure a Profile patch:
 
 OpenAI Chat Completions-compatible endpoints and Anthropic Messages are supported. The Web Settings panel exposes the full provider, runtime, timeout, image-limit, and image-input-variant configuration.
 
+OpenCode Zen requires `x-opencode-session` for request routing. Add its name under **Advanced settings → Vision service → Session routing headers**, or configure it in the Profile patch:
+
+```yaml
+- id: vision-toolkit
+  config:
+    provider:
+      baseUrl: https://opencode.ai/zen/go/v1
+      credential: OPENCODE_API_KEY
+      model: mimo-v2.5
+      protocol: openai
+      sessionHeaders:
+        - x-opencode-session
+```
+
+`sessionHeaders` accepts header names, not values. The runtime derives one 32-character opaque value with HMAC-SHA-256 for each Session or workspace operation. That value stays stable during the running DSH process and changes after restart. The provider never receives the raw Session id, workspace path, HMAC key, or Credential through this field. The plugin rejects authentication, client-owned, proxy-forwarding, and HTTP framing header names, and never forwards a session header through a redirect outside the configured provider base path.
+
 The advanced **Default save directory** setting can place artifacts, pasted images, and caches below an absolute POSIX shared root such as `/tmp/dsh-vision-toolkit`; the plugin creates a private mode-0700 child for the current user and workspace. Leaving it blank keeps the existing workspace-local `.dsh-vision-toolkit` directory. Configured shared roots are currently rejected on Windows because their ownership and access-control lists cannot yet be verified safely.
 
 When the configured save directory changes, the plugin retains earlier validated roots as read-only input locations. Web Profiles persist that history in the plugin-owned `vision_toolkit_storage` storage-domain sidecar, including when the active Settings provider is read-only, so existing pasted-image paths remain usable after a Profile restart. Custom Profiles should compose `@deepseek-ai/dsh-storage-domain` when they use configured shared storage.
@@ -297,6 +313,7 @@ For advanced setups — overriding `runtime.python`, using `runtime.mode: extern
 | The vision service returns 429 | Wait for the `Retry-After` interval, or switch to your own endpoint when you need stable higher volume |
 | The image exceeds a size or pixel limit | Crop or resize it first; the error identifies whether bytes or decoded pixels caused the rejection |
 | A custom Credential is missing | Enter the API key in **Settings → Vision Toolkit** and confirm the Credential name matches the provider configuration |
+| OpenCode Zen returns `MissingSessionID` | Add `x-opencode-session` under **Advanced settings → Vision service → Session routing headers**, save, and rerun the vision-model test |
 | First-time runtime setup fails | The standalone-Python download needs network and disk access (domestic mirror first, GitHub fallback). Check connectivity or package-cache access, or install Python 3.11+ / configure `runtime.python` in Settings, then retry the model test |
 | Chrome is not found | Install Chrome, Chromium, or Edge. Only HTML screenshot rendering is unavailable; the other tools still work |
 | DSH Desktop says `dsh` is not recognized, or its built-in marketplace install fails | Open **DSH Terminal** from the tray, run `dsh plugin --profile desktop add @anionex/dsh-vision-toolkit`, then restart DSH Desktop. The Desktop 2.0.1 marketplace has known install issues, so the terminal command is the reliable path for now |

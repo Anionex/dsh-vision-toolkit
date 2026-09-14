@@ -200,6 +200,111 @@ describe('VisionToolkitRuntime', () => {
     expect(next.evidenceFingerprint).not.toBe(captured.evidenceFingerprint)
   })
 
+  it('derives opaque operation-scoped session headers and omits them by default', async () => {
+    const workspace = await tempWorkspace()
+    const plain = await setup()
+    await expect(plain.runtime.resolveVisionEnv({ signal, workspace, sessionId: 'plain' }))
+      .resolves.not.toHaveProperty('DSH_VISION_SESSION_HEADERS')
+
+    const { runtime } = await setup({
+      provider: {
+        baseUrl: 'https://vision.example/v1',
+        credential: 'VISION_API_KEY',
+        model: 'fixture-model',
+        sessionHeaders: ['x-opencode-session'],
+      },
+    })
+    const first = await runtime.resolveVisionEnv({ signal, workspace, sessionId: 'session-a' })
+    const repeated = await runtime.resolveVisionEnv({ signal, workspace, sessionId: 'session-a' })
+    const other = await runtime.resolveVisionEnv({ signal, workspace, sessionId: 'session-b' })
+    const fallback = await runtime.resolveVisionEnv({ signal, workspace })
+    const firstHeaders = JSON.parse(first.DSH_VISION_SESSION_HEADERS ?? '{}') as Record<string, string>
+    const otherHeaders = JSON.parse(other.DSH_VISION_SESSION_HEADERS ?? '{}') as Record<string, string>
+
+    expect(repeated.DSH_VISION_SESSION_HEADERS).toBe(first.DSH_VISION_SESSION_HEADERS)
+    expect(firstHeaders['x-opencode-session']).toMatch(/^[0-9a-f]{32}$/u)
+    expect(otherHeaders['x-opencode-session']).not.toBe(firstHeaders['x-opencode-session'])
+    expect(fallback.DSH_VISION_SESSION_HEADERS).not.toContain(workspace)
+  })
+
+  it('uses one session routing identity across glance, ground, detect, and long OCR', async () => {
+    const { adapter, runtime } = await setup({
+      provider: {
+        baseUrl: 'https://vision.example/v1',
+        credential: 'VISION_API_KEY',
+        model: 'fixture-model',
+        sessionHeaders: ['x-opencode-session'],
+      },
+    })
+    const workspace = await tempWorkspace()
+    const options = { signal, workspace, sessionId: 'shared-session' }
+    const run = vi.spyOn(adapter, 'run')
+
+    await runtime.glance({ images: ['sample.png'] }, options)
+    await runtime.ground({ image: 'sample.png', target: 'send button' }, options)
+    await runtime.detect({ image: 'sample.png', target: 'buttons' }, options)
+    await runtime.longScreenshotOcr({ image: 'sample.png', runName: 'session-header-ocr', jobs: 1 }, options)
+
+    const calls = run.mock.calls.filter(([tool]) => ['glance', 'ground', 'detect', 'long_screenshot_ocr'].includes(tool))
+    expect(calls.map(([tool]) => tool)).toEqual(['glance', 'ground', 'detect', 'long_screenshot_ocr'])
+    const values = calls.map(([, , callOptions]) => {
+      const serialized = callOptions.env?.DSH_VISION_SESSION_HEADERS
+      return (JSON.parse(serialized ?? '{}') as Record<string, string>)['x-opencode-session']
+    })
+    expect(values[0]).toMatch(/^[0-9a-f]{32}$/u)
+    expect(new Set(values).size).toBe(1)
+  })
+
+  it('isolates the process-local glance cache by derived routing identity', async () => {
+    const { adapter, runtime } = await setup({
+      provider: {
+        baseUrl: 'https://vision.example/v1',
+        credential: 'VISION_API_KEY',
+        model: 'fixture-model',
+        sessionHeaders: ['x-opencode-session'],
+      },
+    })
+    const workspace = await tempWorkspace()
+    const sessionScope = {}
+    const run = vi.spyOn(adapter, 'run')
+
+    await runtime.glance({ images: ['sample.png'] }, { signal, workspace, sessionId: 'session-a', sessionScope })
+    await runtime.glance({ images: ['sample.png'] }, { signal, workspace, sessionId: 'session-b', sessionScope })
+
+    expect(run).toHaveBeenCalledTimes(2)
+  })
+
+  it('redacts a derived session routing value echoed by the provider', async () => {
+    const { adapter, runtime } = await setup({
+      provider: {
+        baseUrl: 'https://vision.example/v1',
+        credential: 'VISION_API_KEY',
+        model: 'fixture-model',
+        sessionHeaders: ['x-opencode-session'],
+      },
+    })
+    const workspace = await tempWorkspace()
+    const options = { signal, workspace, sessionId: 'private-session' }
+    const env = await runtime.resolveVisionEnv(options)
+    const value = (JSON.parse(env.DSH_VISION_SESSION_HEADERS ?? '{}') as Record<string, string>)['x-opencode-session'] ?? ''
+    vi.spyOn(adapter, 'run').mockResolvedValueOnce({
+      stdout: '',
+      stderr: `Vision API HTTP 400: echoed ${value}`,
+      stdoutTruncated: false,
+      stderrTruncated: false,
+      outcome: { exitCode: 1, signal: null },
+    })
+
+    let message = ''
+    try {
+      await runtime.glance({ images: ['sample.png'] }, options)
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error)
+    }
+    expect(message).toContain('<redacted>')
+    expect(message).not.toContain(value)
+  })
+
   it('glance answers a question, OCRs, and zooms into a region', async () => {
     const { runtime } = await setup()
     const workspace = await tempWorkspace()
@@ -777,6 +882,79 @@ describe('VisionToolkitRuntime', () => {
         modelTested: true,
         checks: { service: { status: 'ok' }, model: { status: 'ok' } },
       })
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close(error => error === undefined ? resolve() : reject(error)))
+    }
+  })
+
+  it('uses the same session routing identity for /models and the model test', async () => {
+    let modelsSession: string | undefined
+    const server = createServer((request, response) => {
+      modelsSession = request.headers['x-opencode-session'] as string | undefined
+      response.writeHead(200, { 'content-type': 'application/json' })
+      response.end('{"data":[]}')
+    })
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+    try {
+      const address = server.address()
+      if (address === null || typeof address === 'string') throw new Error('missing fixture server address')
+      const { adapter, runtime } = await setup({
+        provider: {
+          baseUrl: `http://127.0.0.1:${address.port}/v1`,
+          credential: 'VISION_API_KEY',
+          model: 'fixture-model',
+          sessionHeaders: ['x-opencode-session'],
+        },
+      })
+      const run = vi.spyOn(adapter, 'run').mockResolvedValueOnce({
+        stdout: 'fixture model response\n',
+        stderr: '',
+        stdoutTruncated: false,
+        stderrTruncated: false,
+        outcome: { exitCode: 0, signal: null },
+      })
+      const workspace = await tempWorkspace()
+
+      await expect(runtime.health(true, { signal, workspace, sessionId: 'settings-session' }, true))
+        .resolves.toMatchObject({ checks: { service: { status: 'ok' }, model: { status: 'ok' } } })
+      const modelEnv = run.mock.calls[0]?.[2]?.env
+      const modelHeaders = JSON.parse(modelEnv?.DSH_VISION_SESSION_HEADERS ?? '{}') as Record<string, string>
+      expect(modelsSession).toMatch(/^[0-9a-f]{32}$/u)
+      expect(modelHeaders['x-opencode-session']).toBe(modelsSession)
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close(error => error === undefined ? resolve() : reject(error)))
+    }
+  })
+
+  it('does not forward a Settings session header through an HTTP redirect', async () => {
+    let redirectedRequests = 0
+    const server = createServer((request, response) => {
+      if (request.url === '/v1/models') {
+        response.writeHead(302, { location: '/outside' })
+        response.end()
+        return
+      }
+      redirectedRequests += 1
+      response.writeHead(200, { 'content-type': 'application/json' })
+      response.end('{}')
+    })
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+    try {
+      const address = server.address()
+      if (address === null || typeof address === 'string') throw new Error('missing fixture server address')
+      const { runtime } = await setup({
+        provider: {
+          baseUrl: `http://127.0.0.1:${address.port}/v1`,
+          credential: 'VISION_API_KEY',
+          model: 'fixture-model',
+          sessionHeaders: ['x-opencode-session'],
+        },
+      })
+      const workspace = await tempWorkspace()
+
+      await expect(runtime.health(true, { signal, workspace, sessionId: 'settings-session' }))
+        .resolves.toMatchObject({ checks: { service: { status: 'error' } } })
+      expect(redirectedRequests).toBe(0)
     } finally {
       await new Promise<void>((resolve, reject) => server.close(error => error === undefined ? resolve() : reject(error)))
     }

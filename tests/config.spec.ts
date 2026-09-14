@@ -21,6 +21,7 @@ describe('resolveConfig', () => {
     expect(config.provider.protocol).toBe('openai')
     expect(config.provider.anthropicThinking).toBe('omit')
     expect(config.provider.userAgent).toBe(DEFAULT_VISION_USER_AGENT)
+    expect(config.provider.sessionHeaders).toEqual([])
     expect(config.language).toBe('zh')
     expect(config.timeoutMs).toBe(30000)
     expect(config.maxImageBytes).toBe(4194304)
@@ -113,6 +114,7 @@ describe('resolveConfig', () => {
         protocol: 'anthropic',
         anthropicThinking: 'disabled',
         userAgent: 'custom-vision-client/2.0',
+        sessionHeaders: [' X-OpenCode-Session ', 'x-tenant-route'],
       },
       language: 'en',
       runtime: { mode: 'external', agentVisionToolkitPath: '/tmp/toolkit', python: 'python3.12' },
@@ -128,6 +130,7 @@ describe('resolveConfig', () => {
     expect(config.provider.protocol).toBe('anthropic')
     expect(config.provider.anthropicThinking).toBe('disabled')
     expect(config.provider.userAgent).toBe('custom-vision-client/2.0')
+    expect(config.provider.sessionHeaders).toEqual(['x-opencode-session', 'x-tenant-route'])
     expect(config.allowedDirs).toEqual(['~/Pictures'])
     expect(resolveConfig({ storageDir: '   ' }).storageDir).toBeUndefined()
   })
@@ -172,6 +175,28 @@ describe('resolveConfig', () => {
   it('rejects an unsupported provider protocol', () => {
     expect(() => resolveConfig({ provider: { protocol: 'responses' as 'openai' } }))
       .toThrowError(/provider\.protocol/)
+  })
+
+  it('rejects duplicate, reserved, malformed, or oversized session header names', () => {
+    for (const sessionHeaders of [
+      ['x-route', ' X-Route '],
+      ['Authorization'],
+      ['User-Agent'],
+      ['Host'],
+      ['Content-Length'],
+      ['Transfer-Encoding'],
+      ['Connection'],
+      ['X-Forwarded-For'],
+      ['Accept'],
+      [''],
+      ['bad header'],
+      ['bad\nheader'],
+      ['x'.repeat(129)],
+      Array.from({ length: 9 }, (_, index) => `x-route-${index}`),
+      Array.from({ length: 8 }, (_, index) => `x-${index}-${'a'.repeat(118)}`),
+    ]) {
+      expect(() => resolveConfig({ provider: { sessionHeaders } })).toThrowError(/provider\.sessionHeaders/u)
+    }
   })
 
   it('rejects unsupported language and limits', () => {

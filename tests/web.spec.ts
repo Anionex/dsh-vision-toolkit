@@ -185,7 +185,12 @@ describe('VisionToolkitWebBackend', () => {
   it('preflights, persists, activates, and rejects a stale revision', async () => {
     const { manager, activated, post } = await setup()
     const value = {
-      provider: { baseUrl: 'https://vision.example/v1', credential: 'VISION_API_KEY', model: 'next-model' },
+      provider: {
+        baseUrl: 'https://vision.example/v1',
+        credential: 'VISION_API_KEY',
+        model: 'next-model',
+        sessionHeaders: ['x-opencode-session'],
+      },
       language: 'en', timeoutMs: 45000, maxImageBytes: 1000000, maxImagePixels: 2000000,
       concurrency: 2, runtime: { mode: 'managed' }, allowedDirs: [],
     }
@@ -194,6 +199,7 @@ describe('VisionToolkitWebBackend', () => {
     expect(first.status).toBe(200)
     expect(firstBody.value.settings.revision).toBe(1)
     expect(manager.status().activeConfig?.provider.model).toBe('next-model')
+    expect(manager.status().activeConfig?.provider.sessionHeaders).toEqual(['x-opencode-session'])
     expect(activated).toHaveBeenCalledTimes(1)
 
     const stale = await post({ action: 'save', expectedRevision: 0, value: { ...value, concurrency: 3 } })

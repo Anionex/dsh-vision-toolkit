@@ -69,6 +69,8 @@ const en = {
   anthropicThinking: 'Anthropic thinking',
   anthropicThinkingHint: 'omit has the broadest compatibility. Use disabled or adaptive only when the selected model documents that mode; restore omit first after HTTP 400.',
   userAgent: 'User-Agent',
+  sessionHeaders: 'Session routing headers',
+  sessionHeadersHint: 'One header name per line. The runtime sends the same opaque value for one session during this process and rotates it after restart. Raw Session ids and workspace paths are never sent.',
   language: 'Output language',
   limits: 'Limits',
   timeout: 'Request timeout (ms)',
@@ -260,6 +262,8 @@ const zh: Record<LocaleKey, string> = {
   anthropicThinking: 'Anthropic thinking',
   anthropicThinkingHint: 'omit 兼容性最好。仅当所选模型明确支持时使用 disabled 或 adaptive；遇到 HTTP 400 时先恢复 omit。',
   userAgent: 'User-Agent',
+  sessionHeaders: '会话路由请求头',
+  sessionHeadersHint: '每行填写一个请求头名称。当前进程内，同一会话使用同一个不透明值；重启后自动轮换。插件不会发送原始 Session ID 或工作区路径。',
   language: '结果语言',
   limits: '资源与并发限制',
   timeout: '单次请求超时（毫秒）',
@@ -489,6 +493,7 @@ interface SettingsValue {
     protocol?: 'openai' | 'anthropic'
     anthropicThinking?: 'omit' | 'disabled' | 'adaptive'
     userAgent?: string
+    sessionHeaders?: string[]
   }
   language?: 'zh' | 'en'
   timeoutMs?: number
@@ -1097,6 +1102,7 @@ interface Draft {
   protocol: 'openai' | 'anthropic'
   anthropicThinking: 'omit' | 'disabled' | 'adaptive'
   userAgent: string
+  sessionHeaders: string
   language: 'zh' | 'en'
   timeoutMs: string
   maxImageBytes: string
@@ -1121,6 +1127,7 @@ function draftOf(value: SettingsValue): Draft {
     protocol: value.provider?.protocol ?? 'openai',
     anthropicThinking: value.provider?.anthropicThinking ?? 'omit',
     userAgent: value.provider?.userAgent ?? DEFAULT_USER_AGENT,
+    sessionHeaders: (value.provider?.sessionHeaders ?? []).join('\n'),
     language: value.language ?? 'zh',
     timeoutMs: String(value.timeoutMs ?? 30000),
     maxImageBytes: String(value.maxImageBytes ?? 4194304),
@@ -1163,6 +1170,9 @@ function valueOf(draft: Draft, t: Translate): SettingsValue {
       protocol: draft.protocol,
       anthropicThinking: draft.anthropicThinking,
       userAgent: draft.userAgent.trim(),
+      ...(draft.sessionHeaders.trim().length === 0 ? {} : {
+        sessionHeaders: draft.sessionHeaders.split(/\r?\n/).map(entry => entry.trim()).filter(Boolean),
+      }),
     },
     language: draft.language,
     timeoutMs: positiveInteger(draft.timeoutMs, t('timeout'), t),
@@ -1474,6 +1484,7 @@ function LoadedSettings({ controller, t }: SettingsInjected) {
             <Field label={t('credential')} hint={t('credentialHint')}><Input aria-label={t('credential')} disabled={!snapshot.writable || busy} value={draft.credential} onChange={(event) => { update('credential', event.target.value) }} /></Field>
             {draft.protocol === 'anthropic' ? <Field label={t('anthropicThinking')} hint={t('anthropicThinkingHint')}><select aria-label={t('anthropicThinking')} value={draft.anthropicThinking} onChange={(event) => { update('anthropicThinking', event.target.value as 'omit' | 'disabled' | 'adaptive') }}><option value="omit">omit (widest compatibility)</option><option value="disabled">disabled (model support required)</option><option value="adaptive">adaptive (model support required)</option></select></Field> : null}
             <Field label={t('userAgent')}><Input value={draft.userAgent} onChange={(event) => { update('userAgent', event.target.value) }} /></Field>
+            <Field label={t('sessionHeaders')} hint={t('sessionHeadersHint')}><textarea aria-label={t('sessionHeaders')} rows={3} value={draft.sessionHeaders} onChange={(event) => { update('sessionHeaders', event.target.value) }} /></Field>
           </div></section>
 
           <section className="dvt-panel"><div className="dvt-panel-title"><h3>{t('limits')}</h3></div><div className="dvt-form-grid">

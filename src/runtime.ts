@@ -18,6 +18,7 @@ import { isBuiltInFreeVisionProvider, type ResolvedVisionToolkitConfig } from '.
 import { BUILT_IN_FREE_VISION_KEY } from './defaults.ts'
 import { evidenceRuntimeFingerprint } from './evidence-cache.ts'
 import { VisionToolkitError } from './errors.ts'
+import { sessionHeadersForOperation } from './session-headers.ts'
 import {
   assertDistinctOutput,
   commitStagedDirectory,
@@ -527,6 +528,17 @@ function integerInRange(value: number | undefined, fallback: number, minimum: nu
   return resolved
 }
 
+function sessionHeaderSecrets(serialized: string | undefined): string[] {
+  if (serialized === undefined) return []
+  try {
+    const parsed = JSON.parse(serialized) as unknown
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return []
+    return Object.values(parsed).filter((value): value is string => typeof value === 'string')
+  } catch {
+    return []
+  }
+}
+
 function finiteInRange(value: number | undefined, minimum: number, maximum: number, name: string): number | undefined {
   if (value === undefined) return undefined
   if (!Number.isFinite(value) || value < minimum || value > maximum) {
@@ -718,7 +730,8 @@ export class VisionToolkitRuntime {
 
   /** Capture the credential and provider identity used by one evidence conversion. */
   async captureEvidenceRuntime(): Promise<CapturedEvidenceRuntime> {
-    const env = await this.resolveVisionEnv()
+    const resolved = await this.resolveCredential()
+    const env = this.visionEnv(resolved)
     const evidenceFingerprint = evidenceRuntimeFingerprint(
       this.config,
       createHash('sha256').update(env.VISION_API_KEY).digest('hex'),
@@ -726,7 +739,7 @@ export class VisionToolkitRuntime {
     )
     return Object.freeze({
       evidenceFingerprint,
-      glance: (request: GlanceRequest, options: ToolCallOptions) => this.glanceWithEnv(request, options, env),
+      glance: (request: GlanceRequest, options: ToolCallOptions) => this.glanceWithEnv(request, options, this.visionEnv(resolved, options)),
     })
   }
 
@@ -761,7 +774,7 @@ export class VisionToolkitRuntime {
   }
 
   private semaphore(options: ToolCallOptions): { key: string; value: Semaphore } {
-    const key = options.sessionId ?? `workspace:${options.workspace}`
+    const key = this.operationKey(options)
     const value = this.semaphores.get(key) ?? new Semaphore(this.config.concurrency)
     this.semaphores.set(key, value)
     return { key, value }
@@ -858,7 +871,7 @@ export class VisionToolkitRuntime {
   }
 
   /** Resolve the configured credential at the remote-operation boundary. */
-  async resolveVisionEnv(): Promise<UpstreamEnvironment> {
+  private async resolveCredential(): Promise<ResolvedCredential> {
     const resolved: ResolvedCredential | undefined = isBuiltInFreeVisionProvider(this.config.provider)
       ? { value: BUILT_IN_FREE_VISION_KEY, source: 'built-in' }
       : await this.ctx.credentials.resolve(this.config.provider.credential)
@@ -868,11 +881,25 @@ export class VisionToolkitRuntime {
         `credential ${this.config.provider.credential} is not configured; set it through DSH credentials`,
       )
     }
-    return this.visionEnv(resolved)
+    return resolved
   }
 
-  private visionEnv(resolved: ResolvedCredential): UpstreamEnvironment {
+  /** Resolve the credential and build one operation-scoped upstream environment. */
+  async resolveVisionEnv(options?: ToolCallOptions): Promise<UpstreamEnvironment> {
+    return this.visionEnv(await this.resolveCredential(), options)
+  }
+
+  private operationKey(options: ToolCallOptions): string {
+    return options.sessionId ?? `workspace:${options.workspace}`
+  }
+
+  private sessionHeaders(options: ToolCallOptions): Record<string, string> {
+    return sessionHeadersForOperation(this.config.provider.sessionHeaders, this.operationKey(options))
+  }
+
+  private visionEnv(resolved: ResolvedCredential, options?: ToolCallOptions): UpstreamEnvironment {
     const sslVerify = process.env.VISION_SSL_VERIFY?.trim()
+    const sessionHeaders = options === undefined ? {} : this.sessionHeaders(options)
     return {
       VISION_API_KEY: resolved.value,
       VISION_BASE_URL: this.config.provider.baseUrl,
@@ -881,6 +908,9 @@ export class VisionToolkitRuntime {
       VISION_ANTHROPIC_THINKING: this.config.provider.anthropicThinking,
       ...(sslVerify === undefined ? {} : { VISION_SSL_VERIFY: sslVerify }),
       VISION_USER_AGENT: this.config.provider.userAgent,
+      ...(Object.keys(sessionHeaders).length === 0
+        ? {}
+        : { DSH_VISION_SESSION_HEADERS: JSON.stringify(sessionHeaders) }),
       LANG: this.config.language,
     }
   }
@@ -1164,6 +1194,7 @@ export class VisionToolkitRuntime {
         userAgent: env.VISION_USER_AGENT,
         language: env.LANG,
         credentialSha256: createHash('sha256').update(env.VISION_API_KEY).digest('hex'),
+        sessionHeaders: env.DSH_VISION_SESSION_HEADERS ?? null,
       },
     })
   }
@@ -1185,7 +1216,12 @@ export class VisionToolkitRuntime {
       throw this.adapter.classifyFailure(tool, result, {
         timedOut: false,
         cancelled: operation.signal.aborted,
-        ...(env === undefined ? {} : { secrets: [env.VISION_API_KEY] }),
+        ...(env === undefined ? {} : {
+          secrets: [
+            env.VISION_API_KEY,
+            ...sessionHeaderSecrets(env.DSH_VISION_SESSION_HEADERS),
+          ],
+        }),
       })
     }
     if (result.stdoutTruncated || result.stderrTruncated) {
@@ -1275,7 +1311,7 @@ export class VisionToolkitRuntime {
         this.accountImage(image, operation)
         images.push(image)
       }
-      const env = capturedEnv ?? await this.resolveVisionEnv()
+      const env = capturedEnv ?? await this.resolveVisionEnv(options)
       const cacheKey = options.sessionScope === undefined
         ? undefined
         : await this.glanceCacheKey(request, images, env, operation.signal)
@@ -1335,7 +1371,7 @@ export class VisionToolkitRuntime {
     const policy = await this.pathPolicy(options.workspace)
     const image = await this.validateImage(request.image, policy, operation)
     this.accountImage(image, operation)
-    const env = await this.resolveVisionEnv()
+    const env = await this.resolveVisionEnv(options)
     const result = await this.runUpstream(tool, [
       image.path,
       request.target,
@@ -1705,7 +1741,7 @@ export class VisionToolkitRuntime {
           String(chunkTimeoutSeconds),
           ...(splitOnly ? ['--split-only'] : []),
           ...(request.resume === true ? ['--resume'] : []),
-        ], operation, splitOnly ? undefined : await this.resolveVisionEnv())
+        ], operation, splitOnly ? undefined : await this.resolveVisionEnv(options))
         const reported = result.stdout.trim()
         const expectedReported = splitOnly ? stagedManifest : stagedOutput
         if (reported !== expectedReported) {
@@ -2098,6 +2134,7 @@ export class VisionToolkitRuntime {
         status: 'not_tested',
         detail: 'Vision model was not tested; run an explicit model test to send the bundled diagnostic image',
       }
+      const operationSessionHeaders = this.sessionHeaders(options)
       if (testConnection) {
         if (resolvedCredential === undefined) {
           service = { status: 'error', detail: 'Connection test skipped because the configured credential is unavailable' }
@@ -2109,6 +2146,7 @@ export class VisionToolkitRuntime {
             const headers: Record<string, string> = {
               Accept: 'application/json',
               'User-Agent': this.config.provider.userAgent,
+              ...operationSessionHeaders,
             }
             if (this.config.provider.protocol === 'anthropic') {
               headers['x-api-key'] = resolvedCredential.value
@@ -2120,6 +2158,7 @@ export class VisionToolkitRuntime {
               method: 'GET',
               headers,
               signal: operation.signal,
+              ...(Object.keys(operationSessionHeaders).length === 0 ? {} : { redirect: 'manual' }),
             })
             operation.metrics.upstreamMs += Date.now() - started
             await response.body?.cancel().catch(() => {})
@@ -2154,7 +2193,7 @@ export class VisionToolkitRuntime {
               'glance',
               [VISION_MODEL_TEST_IMAGE, '-q', VISION_MODEL_TEST_PROMPT],
               operation,
-              this.visionEnv(resolvedCredential),
+              this.visionEnv(resolvedCredential, options),
             )
             if (result.stdout.trim().length === 0) {
               throw new VisionToolkitError('output', 'glance: vision API returned an empty description')

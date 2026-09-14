@@ -253,6 +253,10 @@ describe('convertImagesToEvidence', () => {
       text: expect.stringContaining('[Pasted image available at absolute path: '),
     })
     expect((text as { text: string }).text).toContain('[vision model description] path-aware description')
+    expect(glance).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ sessionId: 'session-native' }),
+    )
     const imagePath = glance.mock.calls[0]?.[0]?.images[0]
     expect(imagePath).toBeDefined()
     expect([...await readFile(imagePath as string)]).toEqual([7, 8, 9])
