@@ -6,7 +6,7 @@
  * @module dsh-vision-toolkit/runtime
  */
 
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash, createHmac, randomBytes, randomUUID } from 'node:crypto'
 import { lstat, mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -53,6 +53,26 @@ import {
 import { PLUGIN_VERSION } from './version.ts'
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
+
+/** Build one process-scoped provider-header resolver with a fresh, non-exported routing key. */
+export function createVisionProviderHeaderResolver(
+  hmacKey: Uint8Array = randomBytes(32),
+): (provider: ResolvedVisionToolkitConfig['provider'], operationKey: string) => Record<string, string> {
+  if (hmacKey.byteLength < 32) throw new TypeError('vision provider session HMAC key must contain at least 32 bytes')
+  const key = Buffer.from(hmacKey)
+  return (provider, operationKey) => {
+    if (provider.sessionHeaders.length === 0) return { ...provider.headers }
+    const sessionRoutingId = createHmac('sha256', key).update(operationKey).digest('hex').slice(0, 32)
+    return {
+      ...provider.headers,
+      ...Object.fromEntries(provider.sessionHeaders.map(name => [name, sessionRoutingId])),
+    }
+  }
+}
+
+/** Same operation key is stable within this process; a restart creates a fresh routing identity. */
+export const visionProviderHeaders = createVisionProviderHeaderResolver()
+
 const VISION_MODEL_TEST_IMAGE = fileURLToPath(new URL('../assets/vision-model-test.png', import.meta.url))
 const VISION_MODEL_TEST_PROMPT = 'This is an explicit service readiness test. Reply with one short sentence confirming that you received the image.'
 
@@ -506,6 +526,8 @@ interface OperationMetrics {
 interface OperationContext {
   signal: AbortSignal
   metrics: OperationMetrics
+  /** Session id when available, otherwise the workspace key used by the concurrency gate. */
+  operationKey: string
 }
 
 const REGION_PATTERN = /^\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)\s*$/
@@ -820,7 +842,7 @@ export class VisionToolkitRuntime {
     const executionDeadline = createDeadline(options.signal, timeoutMs)
     try {
       if (executionDeadline.signal.aborted) throw this.operationError(tool, undefined, executionDeadline)
-      const value = await action({ signal: executionDeadline.signal, metrics })
+      const value = await action({ signal: executionDeadline.signal, metrics, operationKey: semaphore.key })
       if (executionDeadline.signal.aborted) throw this.operationError(tool, undefined, executionDeadline)
       this.ctx.logger.info(
         'dsh-vision-toolkit tool=%s outcome=ok totalMs=%d queueMs=%d upstreamMs=%d images=%d imageBytes=%d imagePixels=%d cacheHits=%d model=%s',
@@ -1176,16 +1198,25 @@ export class VisionToolkitRuntime {
   ): Promise<UpstreamRunResult> {
     const started = Date.now()
     if (env !== undefined) operation.metrics.usedVisionService = true
+    const headers = env === undefined ? undefined : visionProviderHeaders(this.config.provider, operation.operationKey)
     const result = await this.adapter.run(tool, args, {
       signal: operation.signal,
-      ...(env === undefined ? {} : { env }),
+      ...(env === undefined
+        ? {}
+        : {
+            env: headers !== undefined && Object.keys(headers).length > 0
+              ? { ...env, DSH_VISION_EXTRA_HEADERS: JSON.stringify(headers) }
+              : env,
+          }),
     })
     operation.metrics.upstreamMs += Date.now() - started
     if (result.outcome.exitCode !== 0) {
       throw this.adapter.classifyFailure(tool, result, {
         timedOut: false,
         cancelled: operation.signal.aborted,
-        ...(env === undefined ? {} : { secrets: [env.VISION_API_KEY] }),
+        ...(env === undefined
+          ? {}
+          : { secrets: [env.VISION_API_KEY, ...Object.values(headers ?? {})] }),
       })
     }
     if (result.stdoutTruncated || result.stderrTruncated) {
@@ -2109,6 +2140,7 @@ export class VisionToolkitRuntime {
             const headers: Record<string, string> = {
               Accept: 'application/json',
               'User-Agent': this.config.provider.userAgent,
+              ...visionProviderHeaders(this.config.provider, operation.operationKey),
             }
             if (this.config.provider.protocol === 'anthropic') {
               headers['x-api-key'] = resolvedCredential.value

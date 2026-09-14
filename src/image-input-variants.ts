@@ -391,7 +391,11 @@ async function readImageBlock(
     // deadline still bounds it.
     const result = await current.glance(
       { images: [materialized.file], query },
-      { signal: new AbortController().signal, workspace: materialized.workspace },
+      {
+        signal: new AbortController().signal,
+        workspace: materialized.workspace,
+        ...(sessionId === undefined ? {} : { sessionId }),
+      },
     )
     const answer = result.answer.trim()
     if (answer.length === 0) throw new Error('the Vision Toolkit returned an empty description')

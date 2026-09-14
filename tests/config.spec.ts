@@ -21,6 +21,8 @@ describe('resolveConfig', () => {
     expect(config.provider.protocol).toBe('openai')
     expect(config.provider.anthropicThinking).toBe('omit')
     expect(config.provider.userAgent).toBe(DEFAULT_VISION_USER_AGENT)
+    expect(config.provider.headers).toEqual({})
+    expect(config.provider.sessionHeaders).toEqual([])
     expect(config.language).toBe('zh')
     expect(config.timeoutMs).toBe(30000)
     expect(config.maxImageBytes).toBe(4194304)
@@ -33,6 +35,66 @@ describe('resolveConfig', () => {
     expect(config.storageHistory).toEqual([])
     expect(config.allowedDirs).toEqual([])
     expect(config.imageInputVariants).toEqual({ enabled: true, providers: [], autoSwitch: true, hidden: true })
+  })
+
+  it('normalizes and sorts provider header names', () => {
+    const config = resolveConfig({
+      provider: {
+        headers: { ' X-Tenant ': 'acme', 'x-deployment': 'edge' },
+        sessionHeaders: [' X-OpenCode-Session ', 'x-request-route'],
+      },
+    })
+    expect(config.provider.headers).toEqual({ 'x-deployment': 'edge', 'x-tenant': 'acme' })
+    expect(config.provider.sessionHeaders).toEqual(['x-opencode-session', 'x-request-route'])
+  })
+
+  it('rejects duplicate and conflicting provider header names case-insensitively', () => {
+    expect(() => resolveConfig({ provider: { headers: { 'X-Tenant': 'a', ' x-tenant ': 'b' } } }))
+      .toThrow(/duplicate name "x-tenant"/u)
+    expect(() => resolveConfig({ provider: { sessionHeaders: ['X-Route', ' x-route '] } }))
+      .toThrow(/duplicate name "x-route"/u)
+    expect(() => resolveConfig({ provider: { headers: { 'X-Route': 'static' }, sessionHeaders: ['x-route'] } }))
+      .toThrow(/both name "x-route"/u)
+  })
+
+  it.each(['Authorization', 'x-api-key', 'Content-Type', 'User-Agent', 'anthropic-version', 'Host', 'Content-Length', 'Transfer-Encoding', 'Connection', 'Cookie'])('rejects transport-owned provider header %s', (name) => {
+    expect(() => resolveConfig({ provider: { headers: { [name]: 'value' } } }))
+      .toThrow(/client or HTTP transport owns it/u)
+    expect(() => resolveConfig({ provider: { sessionHeaders: [name] } }))
+      .toThrow(/client or HTTP transport owns it/u)
+  })
+
+  it('rejects empty or unsendable provider header names and values without echoing values', () => {
+    const secret = 'sensitive\nvalue'
+    expect(() => resolveConfig({ provider: { headers: { '  ': 'value' } } }))
+      .toThrow(/empty name/u)
+    expect(() => resolveConfig({ provider: { sessionHeaders: ['bad header name'] } }))
+      .toThrow(/not a valid HTTP header/u)
+    let thrown: unknown
+    try {
+      resolveConfig({ provider: { headers: { 'x-bad': secret } } })
+    } catch (error) {
+      thrown = error
+    }
+    expect(thrown).toBeInstanceOf(Error)
+    expect(String(thrown)).not.toContain(secret)
+    expect(String(thrown)).not.toContain('sensitive')
+  })
+
+  it('bounds provider header count and byte size', () => {
+    const tooMany = Object.fromEntries(Array.from({ length: 33 }, (_, index) => [`x-field-${index}`, 'x']))
+    expect(() => resolveConfig({ provider: { headers: tooMany } }))
+      .toThrow(/at most 32 entries/u)
+    expect(() => resolveConfig({ provider: { headers: { [`x-${'a'.repeat(127)}`]: 'x' } } }))
+      .toThrow(/128-byte name limit/u)
+    expect(() => resolveConfig({ provider: { headers: { 'x-large': 'x'.repeat(4097) } } }))
+      .toThrow(/4096-byte value limit/u)
+    expect(() => resolveConfig({ provider: { headers: {
+      'x-one': 'a'.repeat(4096),
+      'x-two': 'b'.repeat(4096),
+      'x-three': 'c'.repeat(4096),
+      'x-four': 'd'.repeat(4096),
+    } } })).toThrow(/16384-byte total limit/u)
   })
 
   it('normalizes image-input variant settings', () => {

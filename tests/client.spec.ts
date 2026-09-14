@@ -681,6 +681,10 @@ describe('Vision Toolkit client plugin', () => {
 
   it('saves Settings first, then stores the typed API key without sending it in Settings', async () => {
     const initial = settingsSnapshot()
+    Object.assign(initial.settings.value.provider, {
+      headers: { 'x-tenant': 'acme' },
+      sessionHeaders: ['x-opencode-session'],
+    })
     const savedSettings = {
       ...initial,
       settings: { ...initial.settings, revision: 2 },
@@ -715,7 +719,15 @@ describe('Vision Toolkit client plugin', () => {
     const credentialBody = JSON.parse(String((fetchMock.mock.calls[2]?.[1] as RequestInit | undefined)?.body)) as Record<string, unknown>
     expect(settingsBody.action).toBe('save')
     expect(JSON.stringify(settingsBody)).not.toContain('sk-browser-entry')
-    expect(settingsBody).toMatchObject({ value: { storageDir: '/tmp/dsh-vision-toolkit' } })
+    expect(settingsBody).toMatchObject({
+      value: {
+        storageDir: '/tmp/dsh-vision-toolkit',
+        provider: {
+          headers: { 'x-tenant': 'acme' },
+          sessionHeaders: ['x-opencode-session'],
+        },
+      },
+    })
     expect(credentialBody).toEqual({
       action: 'credential', expectedRevision: 2, ref: 'VISION_API_KEY', value: 'sk-browser-entry',
     })

@@ -9,6 +9,10 @@ import type { Context } from '@deepseek-ai/cordis';
 import { type ArtifactDescriptor } from './artifacts.ts';
 import { type ResolvedVisionToolkitConfig } from './config.ts';
 import { UpstreamAdapter, type DominantColorsOutput, type UpstreamEnvironment, type UpstreamVersionInfo } from './upstream.ts';
+/** Build one process-scoped provider-header resolver with a fresh, non-exported routing key. */
+export declare function createVisionProviderHeaderResolver(hmacKey?: Uint8Array): (provider: ResolvedVisionToolkitConfig['provider'], operationKey: string) => Record<string, string>;
+/** Same operation key is stable within this process; a restart creates a fresh routing identity. */
+export declare const visionProviderHeaders: (provider: ResolvedVisionToolkitConfig["provider"], operationKey: string) => Record<string, string>;
 /** Per-invocation cancellation and timeout facts. */
 export interface Deadline {
     signal: AbortSignal;

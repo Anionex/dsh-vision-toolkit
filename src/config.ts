@@ -72,6 +72,10 @@ export interface VisionToolkitConfig {
     anthropicThinking?: 'omit' | 'disabled' | 'adaptive'
     /** Outbound User-Agent for provider requests and connection tests. */
     userAgent?: string
+    /** Non-secret deployment metadata sent with provider requests. */
+    headers?: Record<string, string>
+    /** Header names whose values are derived from the current operation identity. */
+    sessionHeaders?: string[]
   }
   /** Vision output language (`zh` or `en`). */
   language?: 'zh' | 'en'
@@ -142,6 +146,8 @@ export const Config: Schema<VisionToolkitConfig> = z.object({
     protocol: z.union(['openai', 'anthropic'] as const).default('openai'),
     anthropicThinking: z.union(['omit', 'disabled', 'adaptive'] as const).default('omit'),
     userAgent: z.string().default(DEFAULT_VISION_USER_AGENT),
+    headers: z.dict(z.string()).default({}),
+    sessionHeaders: z.array(z.string()).default([]),
   }),
   language: z.union(['zh', 'en'] as const).default('zh'),
   timeoutMs: z.number().default(30000),
@@ -173,6 +179,8 @@ export interface ResolvedVisionToolkitConfig {
     protocol: 'openai' | 'anthropic'
     anthropicThinking: 'omit' | 'disabled' | 'adaptive'
     userAgent: string
+    headers: Record<string, string>
+    sessionHeaders: string[]
   }
   language: 'zh' | 'en'
   timeoutMs: number
@@ -199,6 +207,105 @@ const MAX_TIMEOUT_MS = 600000
 const MAX_IMAGE_BYTES = 268435456
 const MAX_IMAGE_PIXELS = 268435456
 const MAX_CONCURRENCY = 16
+const MAX_PROVIDER_HEADER_COUNT = 32
+const MAX_PROVIDER_HEADER_NAME_BYTES = 128
+const MAX_PROVIDER_HEADER_VALUE_BYTES = 4096
+const MAX_PROVIDER_HEADER_BYTES = 16 * 1024
+
+/** Headers owned by the client or HTTP transport cannot be taken over by configuration. */
+const RESERVED_PROVIDER_HEADER_NAMES = new Set([
+  'authorization',
+  'connection',
+  'content-length',
+  'content-type',
+  'cookie',
+  'expect',
+  'host',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'proxy-connection',
+  'set-cookie',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade',
+  'user-agent',
+  'www-authenticate',
+  'x-api-key',
+  'anthropic-version',
+])
+
+function headerBytes(value: string): number {
+  return Buffer.byteLength(value, 'utf8')
+}
+
+/** Validate one header without echoing its potentially sensitive value. */
+function assertSendableHeader(field: string, name: string, value: string): void {
+  if (headerBytes(name) > MAX_PROVIDER_HEADER_NAME_BYTES) {
+    throw new VisionToolkitError('config', `${field} entry "${name}" exceeds the ${MAX_PROVIDER_HEADER_NAME_BYTES}-byte name limit`)
+  }
+  if (headerBytes(value) > MAX_PROVIDER_HEADER_VALUE_BYTES) {
+    throw new VisionToolkitError('config', `${field} entry "${name}" exceeds the ${MAX_PROVIDER_HEADER_VALUE_BYTES}-byte value limit`)
+  }
+  try {
+    new Headers([[name, value]])
+  } catch {
+    throw new VisionToolkitError(
+      'config',
+      `${field} entry "${name}" is not a valid HTTP header; use a valid field name and a single-line value`,
+    )
+  }
+}
+
+function normalizeProviderHeaders(provider: NonNullable<VisionToolkitConfig['provider']>): {
+  headers: Record<string, string>
+  sessionHeaders: string[]
+} {
+  const normalized = new Map<string, string>()
+  for (const [rawName, value] of Object.entries(provider.headers ?? {})) {
+    const name = rawName.trim().toLowerCase()
+    if (name.length === 0) throw new VisionToolkitError('config', 'provider.headers has an entry with an empty name')
+    if (RESERVED_PROVIDER_HEADER_NAMES.has(name)) {
+      throw new VisionToolkitError('config', `provider.headers must not set "${name}"; the client or HTTP transport owns it`)
+    }
+    if (normalized.has(name)) {
+      throw new VisionToolkitError('config', `provider.headers contains the duplicate name "${name}"`)
+    }
+    assertSendableHeader('provider.headers', name, value)
+    normalized.set(name, value)
+  }
+
+  const sessions = new Set<string>()
+  for (const rawName of provider.sessionHeaders ?? []) {
+    const name = rawName.trim().toLowerCase()
+    if (name.length === 0) throw new VisionToolkitError('config', 'provider.sessionHeaders has an empty entry')
+    if (RESERVED_PROVIDER_HEADER_NAMES.has(name)) {
+      throw new VisionToolkitError('config', `provider.sessionHeaders must not name "${name}"; the client or HTTP transport owns it`)
+    }
+    if (sessions.has(name)) {
+      throw new VisionToolkitError('config', `provider.sessionHeaders contains the duplicate name "${name}"`)
+    }
+    if (normalized.has(name)) {
+      throw new VisionToolkitError('config', `provider.headers and provider.sessionHeaders both name "${name}"`)
+    }
+    assertSendableHeader('provider.sessionHeaders', name, '0'.repeat(32))
+    sessions.add(name)
+  }
+
+  if (normalized.size + sessions.size > MAX_PROVIDER_HEADER_COUNT) {
+    throw new VisionToolkitError('config', `provider headers must contain at most ${MAX_PROVIDER_HEADER_COUNT} entries in total`)
+  }
+  const compareNames = (left: string, right: string): number => left < right ? -1 : left > right ? 1 : 0
+  const entries = [...normalized.entries()].sort(([left], [right]) => compareNames(left, right))
+  const sessionHeaders = [...sessions].sort(compareNames)
+  const totalBytes = entries.reduce((total, [name, value]) => total + headerBytes(name) + headerBytes(value) + 4, 0)
+    + sessionHeaders.reduce((total, name) => total + headerBytes(name) + 32 + 4, 0)
+  if (totalBytes > MAX_PROVIDER_HEADER_BYTES) {
+    throw new VisionToolkitError('config', `provider headers exceed the ${MAX_PROVIDER_HEADER_BYTES}-byte total limit`)
+  }
+  return { headers: Object.fromEntries(entries), sessionHeaders }
+}
 
 /**
  * Validate and normalize a config object (partial inputs receive the same
@@ -241,6 +348,7 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
   if (userAgent.length === 0) {
     throw new VisionToolkitError('config', 'provider.userAgent must not be empty')
   }
+  const { headers, sessionHeaders } = normalizeProviderHeaders(provider)
   const language = config.language ?? 'zh'
   if (language !== 'zh' && language !== 'en') {
     throw new VisionToolkitError('config', 'language must be "zh" or "en"')
@@ -289,7 +397,7 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
     .map(provider => provider.trim())
     .filter(provider => provider.length > 0)
   return {
-    provider: { baseUrl, credential, model, protocol, anthropicThinking, userAgent },
+    provider: { baseUrl, credential, model, protocol, anthropicThinking, userAgent, headers, sessionHeaders },
     language,
     timeoutMs,
     maxImageBytes,

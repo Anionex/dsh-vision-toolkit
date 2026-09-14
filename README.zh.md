@@ -272,7 +272,23 @@ flowchart LR
       protocol: openai
 ```
 
-支持 OpenAI Chat Completions 兼容端点和 Anthropic Messages。Web Settings 页面还可以调整超时、图片限制、并发、运行时和图片输入变体。
+支持 OpenAI Chat Completions 兼容端点和 Anthropic Messages。Web Settings 页面可以调整常用 provider 配置、超时、图片限制、并发、运行时和图片输入变体。
+
+Profile patch 还可以通过 `provider.headers` 配置非秘密的部署元数据。需要按会话路由的网关可在 `provider.sessionHeaders` 中列出一个或多个运行时生成的请求头；例如 OpenCode Zen 要求 `x-opencode-session`：
+
+```yaml
+- id: vision-toolkit
+  config:
+    provider:
+      headers:
+        x-tenant: acme
+      sessionHeaders:
+        - x-opencode-session
+```
+
+静态请求头是保存在 Settings 中的普通明文，不是 Credential。不要在 `provider.headers` 中填写 API Key、Bearer Token、Cookie 或其他秘密；视觉 API Key 仍应使用 `provider.credential`。插件会拒绝客户端自有的鉴权头和 HTTP 路由/请求帧控制头、大小写不敏感的重复项、两个字段间的冲突、非法名称或值、合计超过 32 项、名称超过 128 字节、值超过 4096 字节，或总量超过 16384 字节的配置。
+
+每个会话请求头都会获得 HMAC-SHA256（带密钥的不可逆摘要）的前 32 位十六进制值，密钥在 DSH 进程启动时随机生成。同一进程内，相同 operation identity（一次调用采用的会话身份）得到稳定值；重启后会轮换。有 Session 的调用只把 Session id 作为内部 HMAC 输入；确实没有 Session 时才回退到 `workspace:<绝对路径>`，原始 Session id 和 workspace 路径都不会发送。同一次 Settings 健康检查的 `GET /models` 与真实模型请求共用派生值。请求头只注入配置 provider 的同源 URL 且路径必须位于其 base path 下。两个字段均为空时，不创建额外请求头环境变量，provider 的网络请求头语义保持原样。
 
 高级设置中的 **默认保存目录** 可以把产物、粘贴图片和缓存放到 `/tmp/dsh-vision-toolkit` 等 POSIX 绝对共享根目录下；插件会为当前用户和工作区创建权限为 0700 的私有子目录。留空时继续使用工作区内原有的 `.dsh-vision-toolkit` 目录。Windows 目前会拒绝配置共享根目录，因为插件尚不能安全校验其所有权和访问控制列表。
 
@@ -295,6 +311,7 @@ flowchart LR
 | 视觉服务提示 429 | 按错误中的 `Retry-After` 等待后重试；如果需要稳定高额度，切换到自己的视觉端点 |
 | 图片过大或像素超限 | 先裁剪或缩放图片；错误会明确显示是字节还是像素限制 |
 | 自定义 Credential 缺失 | 在 **设置 → 视觉工具** 填写 API Key，并确认 Credential 名称与配置一致 |
+| OpenCode Zen 返回 `400 MissingSessionID` | 在 Profile patch 的 `provider.sessionHeaders` 中加入 `x-opencode-session`，然后重启 Profile；不要把 Session id 或 API Key 写进 `provider.headers` |
 | 首次运行时准备失败 | 自动下载托管 Python 需要网络和磁盘权限（默认先走国内镜像，失败时回退 GitHub）；失败时检查网络或包缓存，也可以安装 Python 3.11+ 或在 Settings 中配置 `runtime.python`，然后重新测试 |
 | 找不到 Chrome | 安装 Chrome、Chromium 或 Edge；只有 HTML 截图不可用，其他工具不受影响 |
 | DSH Desktop 提示找不到 `dsh` 命令，或内置插件市场安装失败 | 从托盘打开 **DSH 终端**，运行 `dsh plugin --profile desktop add @anionex/dsh-vision-toolkit`，再重启 DSH Desktop。桌面版 2.0.1 的内置市场存在已知安装问题，当前请优先使用终端安装 |
