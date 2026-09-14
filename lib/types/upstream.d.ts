@@ -21,6 +21,7 @@ export interface UpstreamEnvironment {
     VISION_ANTHROPIC_THINKING: 'omit' | 'disabled' | 'adaptive';
     VISION_SSL_VERIFY?: string;
     VISION_USER_AGENT: string;
+    DSH_VISION_SESSION_HEADERS?: string;
     LANG: 'zh' | 'en';
 }
 /** Pinned upstream identity plus prepared runtime facts. */

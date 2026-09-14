@@ -93,6 +93,7 @@ function settingsSnapshot(runtime: { ready: boolean; lastError?: string } = { re
           protocol: 'openai',
           anthropicThinking: 'omit',
           userAgent: 'fixture-agent/1.0',
+          sessionHeaders: ['x-opencode-session'],
         },
         language: 'zh',
         timeoutMs: 61000,
@@ -356,6 +357,8 @@ describe('Vision Toolkit client plugin', () => {
     expect(advanced).not.toBeNull()
     expect(advanced?.contains(screen.getByLabelText('credential'))).toBe(true)
     expect(advanced?.contains(screen.getByLabelText('storageDir'))).toBe(true)
+    expect(advanced?.contains(screen.getByLabelText('sessionHeaders'))).toBe(true)
+    expect((screen.getByLabelText('sessionHeaders') as HTMLTextAreaElement).value).toBe('x-opencode-session')
     expect((screen.getByLabelText('storageDir') as HTMLInputElement).placeholder).toBe('/tmp/dsh-vision-toolkit')
     expect(view.container.querySelector('.dvt-settings-header')).toBeNull()
   })
@@ -707,6 +710,7 @@ describe('Vision Toolkit client plugin', () => {
     const keyInput = await screen.findByLabelText('apiKey') as HTMLInputElement
     fireEvent.change(keyInput, { target: { value: 'sk-browser-entry' } })
     fireEvent.change(screen.getByLabelText('storageDir'), { target: { value: ' /tmp/dsh-vision-toolkit ' } })
+    fireEvent.change(screen.getByLabelText('sessionHeaders'), { target: { value: ' x-opencode-session\nX-Tenant-Route ' } })
     fireEvent.click(screen.getByRole('button', { name: 'save' }))
 
     await screen.findByText('saved')
@@ -716,6 +720,7 @@ describe('Vision Toolkit client plugin', () => {
     expect(settingsBody.action).toBe('save')
     expect(JSON.stringify(settingsBody)).not.toContain('sk-browser-entry')
     expect(settingsBody).toMatchObject({ value: { storageDir: '/tmp/dsh-vision-toolkit' } })
+    expect(settingsBody).toMatchObject({ value: { provider: { sessionHeaders: ['x-opencode-session', 'X-Tenant-Route'] } } })
     expect(credentialBody).toEqual({
       action: 'credential', expectedRevision: 2, ref: 'VISION_API_KEY', value: 'sk-browser-entry',
     })

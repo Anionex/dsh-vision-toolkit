@@ -4,6 +4,10 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+### Added
+
+- Added safe per-session routing headers for vision providers such as OpenCode Zen. Users configure header names through `provider.sessionHeaders`; the runtime supplies an opaque, process-scoped HMAC identity across direct tools, image-input variants, long OCR, and both Settings tests. Empty configuration preserves existing requests, and the plugin rejects headers that could control authentication, proxy forwarding, or HTTP framing and strips session headers from redirects outside the provider base path.
+
 ## [0.1.45] - 2026-09-14
 
 ### Fixed

@@ -37,6 +37,8 @@ declare const en: {
     readonly anthropicThinking: "Anthropic thinking";
     readonly anthropicThinkingHint: "omit has the broadest compatibility. Use disabled or adaptive only when the selected model documents that mode; restore omit first after HTTP 400.";
     readonly userAgent: "User-Agent";
+    readonly sessionHeaders: "Session routing headers";
+    readonly sessionHeadersHint: "One header name per line. The runtime sends the same opaque value for one session during this process and rotates it after restart. Raw Session ids and workspace paths are never sent.";
     readonly language: "Output language";
     readonly limits: "Limits";
     readonly timeout: "Request timeout (ms)";
@@ -244,6 +246,7 @@ interface SettingsValue {
         protocol?: 'openai' | 'anthropic';
         anthropicThinking?: 'omit' | 'disabled' | 'adaptive';
         userAgent?: string;
+        sessionHeaders?: string[];
     };
     language?: 'zh' | 'en';
     timeoutMs?: number;

@@ -28,6 +28,8 @@ export interface VisionToolkitConfig {
         anthropicThinking?: 'omit' | 'disabled' | 'adaptive';
         /** Outbound User-Agent for provider requests and connection tests. */
         userAgent?: string;
+        /** Header names whose values are derived from an opaque per-process Session identity. */
+        sessionHeaders?: string[];
     };
     /** Vision output language (`zh` or `en`). */
     language?: 'zh' | 'en';
@@ -99,6 +101,7 @@ export interface ResolvedVisionToolkitConfig {
         protocol: 'openai' | 'anthropic';
         anthropicThinking: 'omit' | 'disabled' | 'adaptive';
         userAgent: string;
+        sessionHeaders: string[];
     };
     language: 'zh' | 'en';
     timeoutMs: number;

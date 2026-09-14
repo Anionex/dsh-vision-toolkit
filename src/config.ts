@@ -16,6 +16,7 @@ import {
   BUILT_IN_FREE_VISION_CREDENTIAL,
   BUILT_IN_FREE_VISION_MODEL,
 } from './defaults.ts'
+import { normalizeSessionHeaderNames } from './session-headers.ts'
 
 export {
   BUILT_IN_FREE_VISION_BASE_URL,
@@ -72,6 +73,8 @@ export interface VisionToolkitConfig {
     anthropicThinking?: 'omit' | 'disabled' | 'adaptive'
     /** Outbound User-Agent for provider requests and connection tests. */
     userAgent?: string
+    /** Header names whose values are derived from an opaque per-process Session identity. */
+    sessionHeaders?: string[]
   }
   /** Vision output language (`zh` or `en`). */
   language?: 'zh' | 'en'
@@ -142,6 +145,7 @@ export const Config: Schema<VisionToolkitConfig> = z.object({
     protocol: z.union(['openai', 'anthropic'] as const).default('openai'),
     anthropicThinking: z.union(['omit', 'disabled', 'adaptive'] as const).default('omit'),
     userAgent: z.string().default(DEFAULT_VISION_USER_AGENT),
+    sessionHeaders: z.array(z.string()).default([]),
   }),
   language: z.union(['zh', 'en'] as const).default('zh'),
   timeoutMs: z.number().default(30000),
@@ -173,6 +177,7 @@ export interface ResolvedVisionToolkitConfig {
     protocol: 'openai' | 'anthropic'
     anthropicThinking: 'omit' | 'disabled' | 'adaptive'
     userAgent: string
+    sessionHeaders: string[]
   }
   language: 'zh' | 'en'
   timeoutMs: number
@@ -241,6 +246,12 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
   if (userAgent.length === 0) {
     throw new VisionToolkitError('config', 'provider.userAgent must not be empty')
   }
+  let sessionHeaders: string[]
+  try {
+    sessionHeaders = normalizeSessionHeaderNames(provider.sessionHeaders ?? [])
+  } catch (error) {
+    throw new VisionToolkitError('config', error instanceof Error ? error.message : String(error), { cause: error })
+  }
   const language = config.language ?? 'zh'
   if (language !== 'zh' && language !== 'en') {
     throw new VisionToolkitError('config', 'language must be "zh" or "en"')
@@ -289,7 +300,7 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
     .map(provider => provider.trim())
     .filter(provider => provider.length > 0)
   return {
-    provider: { baseUrl, credential, model, protocol, anthropicThinking, userAgent },
+    provider: { baseUrl, credential, model, protocol, anthropicThinking, userAgent, sessionHeaders },
     language,
     timeoutMs,
     maxImageBytes,
