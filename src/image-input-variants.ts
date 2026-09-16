@@ -445,7 +445,10 @@ export async function convertImagesToEvidence(
   for (const message of messages) {
     let hint = ''
     let hintSource: VisionHintSource = 'user'
-    if (message.role === 'user' && message.source.kind === 'user') {
+    // `source` is declared required but is optional at runtime: the official
+    // createUserMessage() never writes one. A user-role message that does not
+    // declare its producer is still the current user turn.
+    if (message.role === 'user' && (message.source?.kind ?? 'user') === 'user') {
       const itemUserText = userMessageText(message)
       if (itemUserText.length > 0) {
         lastUserText = itemUserText
@@ -543,7 +546,9 @@ function presentUnderUpstreamRoute(
   let presented: Message[] | undefined
   messages.forEach((message, index) => {
     const source = message.source
-    if (message.role !== 'assistant' || source.kind !== 'model') return
+    // Without provenance there is no route to prove and nothing to restore;
+    // skip it exactly like history produced under another route.
+    if (message.role !== 'assistant' || source?.kind !== 'model') return
     if (source.provider !== upstream && source.provider !== variant) return
     let replayState = source.replayState
     if (replayState === undefined) {

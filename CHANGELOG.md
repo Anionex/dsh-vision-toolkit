@@ -4,6 +4,10 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+### Fixed
+
+- Stopped the image-input variant route from crashing on request messages that carry no `source`. The variant read `message.source.kind` while assembling the evidence pass, but the official `createUserMessage()` helper writes no `source` at runtime (its published type still declares one as required), so a plugin that built a programmatic `ctx.llm.stream()` call on a `vision-toolkit-*` route — the usual summarize, title, or classify pattern (`@modusensus/dsh-mneme` ≤ 0.8.1 did exactly this) — failed with `TypeError: Cannot read properties of undefined (reading 'kind')`, which the host surfaced only as a generic `UNKNOWN` failure chunk. A user message without provenance is now treated as a user turn, and assistant history without provenance is skipped instead of throwing; messages that do carry a source behave exactly as before.
+
 ## [0.1.45] - 2026-09-14
 
 ### Fixed
