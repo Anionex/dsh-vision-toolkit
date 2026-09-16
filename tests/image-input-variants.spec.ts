@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import LlmService, { LlmAdapter, resolveRetryPolicy } from '@deepseek-ai/dsh-llm'
+import LlmService, { createUserMessage, LlmAdapter, resolveRetryPolicy } from '@deepseek-ai/dsh-llm'
 import type {
   ContentBlock,
   GenerateOptions,
@@ -53,6 +53,15 @@ function imageBlock(id: string): ContentBlock {
 
 function message(id: string, content: ContentBlock[]): Message {
   return { id: id as never, role: 'user', content, source: { kind: 'user' } }
+}
+
+/**
+ * The shape the official `createUserMessage()` really produces: `Message`
+ * declares `source` as required, but the shipped helper never writes one, so a
+ * programmatic caller holds exactly this object.
+ */
+function sourcelessUserMessage(id: string, content: ContentBlock[]): Message {
+  return { id: id as never, role: 'user', content } as Message
 }
 
 function assistantMessage(id: string, provider: string, replayState?: unknown): Message {
@@ -334,6 +343,56 @@ describe('convertImagesToEvidence', () => {
     expect(converted[0]).toBe(messages[0])
   })
 
+  it('accepts a programmatic user message that carries no source', async () => {
+    const ctx = { get: () => undefined } as never
+    const messages = [sourcelessUserMessage('m1', [{ type: 'text', text: 'hi' }])]
+    const converted = await convertImagesToEvidence(ctx, () => undefined, new EvidenceCache(4), messages)
+    expect(converted[0]).toBe(messages[0])
+  })
+
+  it('handles a message built by the official createUserMessage helper, which writes no source', async () => {
+    const created = createUserMessage({
+      content: [{ type: 'text', text: 'programmatic' }],
+    } as never) as unknown as Message
+    // Canary: the published type requires `source`, but the shipped helper never
+    // fills it in. If upstream starts writing one, this fails and the cast above
+    // can be dropped.
+    expect((created as { source?: unknown }).source).toBeUndefined()
+    const ctx = { get: () => undefined } as never
+    const converted = await convertImagesToEvidence(ctx, () => undefined, new EvidenceCache(4), [created])
+    expect(converted[0]).toBe(created)
+  })
+
+  it('treats a sourceless user turn exactly like a sourced one', async () => {
+    async function convert(user: Message) {
+      const glance = vi.fn(async () => glanceResult('described'))
+      const attachments = { readImage: vi.fn(async () => ({ ref: attachment('a'), data: Uint8Array.of(1) })) }
+      const ctx = { get: (name: string) => name === 'attachments' ? attachments : undefined } as never
+      const messages: Message[] = [
+        {
+          id: 'a1' as never,
+          role: 'assistant',
+          content: [{ type: 'text', text: 'STALE ASSISTANT INTENT' }],
+          source: { kind: 'model', provider: 'up', model: 'plain' },
+        },
+        user,
+      ]
+      const converted = await convertImagesToEvidence(ctx, () => runtimeStub(glance), new EvidenceCache(4), messages)
+      return { query: glance.mock.calls[0]?.[0]?.query ?? '', content: converted[1]?.content ?? [] }
+    }
+
+    const sourced = await convert(message('m1', [{ type: 'text', text: 'FRESH USER REQUEST' }, imageBlock('a')]))
+    const sourceless = await convert(sourcelessUserMessage('m1', [{ type: 'text', text: 'FRESH USER REQUEST' }, imageBlock('a')]))
+
+    expect(sourceless.query).toBe(sourced.query)
+    expect(sourceless.query).toContain('FRESH USER REQUEST')
+    expect(sourceless.query).not.toContain('STALE ASSISTANT INTENT')
+    expect(sourceless.content).toContainEqual({
+      type: 'text',
+      text: '[vision model description] described',
+    })
+  })
+
   it('injects the exact upstream focus prompt using the current user request', async () => {
     const glance = vi.fn(async () => glanceResult('logo description'))
     const attachments = { readImage: vi.fn(async () => ({ ref: attachment('a'), data: Uint8Array.of(1) })) }
@@ -609,6 +668,43 @@ describe('ImageInputVariantAdapter', () => {
       type: 'text',
       text: expect.stringContaining('wire description'),
     })
+  })
+
+  it('delegates a programmatic request whose messages carry no source', async () => {
+    const delegated: GenerateOptions[] = []
+    const upstreamStream = vi.fn(async function* (options: GenerateOptions): AsyncGenerator<StreamChunk> {
+      delegated.push(options)
+      yield { type: 'finish', reason: { kind: 'stop' } }
+    })
+    const ctx = {
+      get: () => undefined,
+      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(), stream: upstreamStream },
+    } as never
+    const adapter = new ImageInputVariantAdapter(ctx, ctx.llm, 'up', 'Upstream', () => undefined, new EvidenceCache(4))
+    // The exact shape an official-helper caller produces: a frozen user message
+    // without `source`, plus assistant history the facade cannot prove either.
+    const programmatic = createUserMessage({
+      content: [{ type: 'text', text: 'hi' }],
+    } as never) as unknown as Message
+    const sourcelessAssistant = {
+      id: 'a1' as never,
+      role: 'assistant',
+      content: [{ type: 'text', text: 'answer' }],
+    } as unknown as Message
+
+    const chunks: StreamChunk[] = []
+    for await (const chunk of adapter.stream({
+      provider: 'vision-toolkit-up',
+      model: 'plain',
+      messages: [programmatic, sourcelessAssistant],
+    })) chunks.push(chunk)
+
+    expect(chunks).toEqual([{ type: 'finish', reason: { kind: 'stop' } }])
+    expect(delegated).toHaveLength(1)
+    expect(delegated[0]?.provider).toBe('up')
+    // Missing provenance must not be invented: both messages delegate untouched.
+    expect(delegated[0]?.messages[0]).toBe(programmatic)
+    expect(delegated[0]?.messages[1]).toBe(sourcelessAssistant)
   })
 
   it.skipIf(typeof process.geteuid !== 'function')('materializes native attachments under validated startup storage when the runtime is unavailable', async () => {
