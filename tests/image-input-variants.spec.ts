@@ -707,6 +707,46 @@ describe('ImageInputVariantAdapter', () => {
     expect(delegated[0]?.messages[1]).toBe(sourcelessAssistant)
   })
 
+  it('serves a real LlmService variant-route stream instead of an UNKNOWN failure chunk', async () => {
+    const ctx = new Context()
+    await ctx.plugin(LlmService)
+    class UpstreamAdapter extends LlmAdapter {
+      override async resolveModel(_provider: string, model: string) {
+        return { provider: 'up', id: model, name: model, inputModalities: ['text'] }
+      }
+
+      override async *stream(): AsyncGenerator<StreamChunk> {
+        yield { type: 'text-delta', index: 0, text: 'upstream answer' }
+        yield { type: 'finish', reason: { kind: 'stop' } }
+      }
+    }
+
+    try {
+      ctx.llm.registerAdapter(['up'], new UpstreamAdapter())
+      ctx.llm.registerAdapter(
+        ['vision-toolkit-up'],
+        new ImageInputVariantAdapter(ctx, ctx.llm, 'up', 'Upstream', () => undefined, new EvidenceCache(4)),
+      )
+      const programmatic = createUserMessage({
+        content: [{ type: 'text', text: 'hi' }],
+      } as never) as unknown as Message
+      const chunks: StreamChunk[] = []
+      for await (const chunk of ctx.llm.stream({
+        provider: 'vision-toolkit-up',
+        model: 'plain',
+        messages: [programmatic],
+      })) chunks.push(chunk)
+
+      // The reported symptom: LlmRuntime converts the adapter TypeError into a
+      // terminal error finish with code UNKNOWN. It must stay a normal answer.
+      expect(chunks).toContainEqual({ type: 'text-delta', index: 0, text: 'upstream answer' })
+      expect(chunks).toContainEqual({ type: 'finish', reason: { kind: 'stop' } })
+      expect(chunks.some(chunk => chunk.type === 'finish' && chunk.reason.kind === 'error')).toBe(false)
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it.skipIf(typeof process.geteuid !== 'function')('materializes native attachments under validated startup storage when the runtime is unavailable', async () => {
     const attachments = { readImage: vi.fn(async () => ({ ref: attachment('startup-native'), data: Uint8Array.of(8, 7, 6) })) }
     const delegated: GenerateOptions[] = []
