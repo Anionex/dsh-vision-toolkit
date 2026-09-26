@@ -4,6 +4,10 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+### Fixed
+
+- `vision_trace` now reports an actionable runtime error before invoking vtracer on Windows with Python 3.14, where the native extension has been observed to terminate with an access violation. Configure Python 3.12 or 3.13 for tracing on Windows.
+
 ## [0.1.45] - 2026-09-14
 
 ### Fixed

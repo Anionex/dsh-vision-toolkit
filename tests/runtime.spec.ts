@@ -10,7 +10,7 @@ import type { Credentials } from '@deepseek-ai/dsh-credentials'
 import { resolveConfig, type VisionToolkitConfig } from '../src/config.ts'
 import { VisionToolkitError } from '../src/errors.ts'
 import { createPathPolicy, workspaceStorageId } from '../src/paths.ts'
-import { createDeadline, Semaphore, VisionToolkitRuntime } from '../src/runtime.ts'
+import { assertTracePythonSupported, createDeadline, Semaphore, VisionToolkitRuntime } from '../src/runtime.ts'
 import {
   UpstreamAdapter,
   type UpstreamEnvironment,
@@ -108,6 +108,12 @@ function mockTraceDocument(
 const signal = new AbortController().signal
 
 describe('VisionToolkitRuntime', () => {
+  it('reports the Windows Python 3.14 vtracer crash before executing trace', () => {
+    expect(() => assertTracePythonSupported('3.14.0', 'win32')).toThrowError(/configure runtime\.python to Python 3\.12 or 3\.13/u)
+    expect(() => assertTracePythonSupported('3.12.13', 'win32')).not.toThrow()
+    expect(() => assertTracePythonSupported('3.14.0', 'linux')).not.toThrow()
+  })
+
   it('uses the bundled free proxy without resolving a user credential', async () => {
     const ctx = new Context()
     contexts.push(ctx)

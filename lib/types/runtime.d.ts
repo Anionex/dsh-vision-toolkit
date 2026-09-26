@@ -345,6 +345,8 @@ export declare function parseRegion(region: string): {
     x2: number;
     y2: number;
 };
+/** Reject the observed Windows/Python combination before loading native vtracer. */
+export declare function assertTracePythonSupported(version: string, platform: NodeJS.Platform): void;
 /** Runtime facade used by every native tool. */
 export declare class VisionToolkitRuntime {
     private readonly ctx;

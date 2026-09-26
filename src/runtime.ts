@@ -686,6 +686,13 @@ export function parseRegion(region: string): { x1: number; y1: number; x2: numbe
   return box
 }
 
+/** Reject the observed Windows/Python combination before loading native vtracer. */
+export function assertTracePythonSupported(version: string, platform: NodeJS.Platform): void {
+  if (platform === 'win32' && /^3\.14(?:\.|$)/u.test(version)) {
+    throw new VisionToolkitError('runtime', 'trace: vtracer is not supported with Python 3.14 on Windows; configure runtime.python to Python 3.12 or 3.13')
+  }
+}
+
 /** Runtime facade used by every native tool. */
 export class VisionToolkitRuntime {
   private readonly semaphores = new Map<string, Semaphore>()
@@ -1459,6 +1466,9 @@ export class VisionToolkitRuntime {
   /** trace: recover an SVG through the pinned upstream vtracer pipeline. */
   async trace(request: TraceRequest, options: ToolCallOptions): Promise<TraceResult> {
     return this.runOperation('vision_trace', options, async (operation) => {
+      // vtracer exits with an access violation on Windows with Python 3.14.
+      // Refuse that interpreter before invoking the native extension.
+      assertTracePythonSupported(this.adapter.versionInfo.pythonVersion, process.platform)
       if (request.region !== undefined) parseRegion(request.region)
       if (request.scale !== undefined && (!Number.isInteger(request.scale) || request.scale < 1 || request.scale > 16)) {
         throw new VisionToolkitError('input', 'trace: scale must be an integer between 1 and 16')
