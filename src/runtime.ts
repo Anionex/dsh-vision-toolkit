@@ -1,6 +1,7 @@
 /**
  * Vision Toolkit runtime: structured requests in, structured results out.
- * One operation-wide deadline reaches every subprocess; image decoding,
+ * Independent queue and execution deadlines bound each operation; the execution
+ * signal reaches every subprocess. Image decoding,
  * byte/pixel limits, session-scoped concurrency, credential resolution, safe
  * output staging, and diagnostic logging stay below the model-facing tools.
  * @module dsh-vision-toolkit/runtime
@@ -125,7 +126,7 @@ export interface Deadline {
   cleanup(): void
 }
 
-/** Combine a caller abort signal with one hard operation timeout. */
+/** Combine a caller abort signal with one hard phase timeout. */
 export function createDeadline(signal: AbortSignal, timeoutMs: number): Deadline {
   const controller = new AbortController()
   const state = { timedOut: false, cancelled: false }
@@ -1207,17 +1208,22 @@ export class VisionToolkitRuntime {
     const started = Date.now()
     if (env !== undefined) operation.metrics.usedVisionService = true
     const headers = env === undefined ? undefined : visionProviderHeaders(this.config.provider, operation.operationKey)
-    const result = await this.adapter.run(tool, args, {
-      signal: operation.signal,
-      ...(env === undefined
-        ? {}
-        : {
-            env: headers !== undefined && Object.keys(headers).length > 0
-              ? { ...env, DSH_VISION_EXTRA_HEADERS: JSON.stringify(headers) }
-              : env,
-          }),
-    })
-    operation.metrics.upstreamMs += Date.now() - started
+    let result: UpstreamRunResult
+    try {
+      result = await this.adapter.run(tool, args, {
+        signal: operation.signal,
+        ...(env === undefined
+          ? {}
+          : {
+              env: headers !== undefined && Object.keys(headers).length > 0
+                ? { ...env, DSH_VISION_EXTRA_HEADERS: JSON.stringify(headers) }
+                : env,
+            }),
+      })
+    } finally {
+      // Rejected spawn/collection and abort paths must retain elapsed time too.
+      operation.metrics.upstreamMs += Date.now() - started
+    }
     if (result.outcome.exitCode !== 0) {
       throw this.adapter.classifyFailure(tool, result, {
         timedOut: false,

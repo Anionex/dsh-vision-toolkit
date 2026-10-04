@@ -1,6 +1,7 @@
 /**
  * Vision Toolkit runtime: structured requests in, structured results out.
- * One operation-wide deadline reaches every subprocess; image decoding,
+ * Independent queue and execution deadlines bound each operation; the execution
+ * signal reaches every subprocess. Image decoding,
  * byte/pixel limits, session-scoped concurrency, credential resolution, safe
  * output staging, and diagnostic logging stay below the model-facing tools.
  * @module dsh-vision-toolkit/runtime
@@ -23,7 +24,7 @@ export interface Deadline {
     /** Clear the timer and caller listener. */
     cleanup(): void;
 }
-/** Combine a caller abort signal with one hard operation timeout. */
+/** Combine a caller abort signal with one hard phase timeout. */
 export declare function createDeadline(signal: AbortSignal, timeoutMs: number): Deadline;
 /** FIFO bounded concurrency gate whose queued callers remain cancellable. */
 export declare class Semaphore {
