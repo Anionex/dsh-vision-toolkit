@@ -4,6 +4,11 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+### Fixed
+
+- Added actionable writable-session-workspace guidance for permission-denied or read-only workspace-local storage creation. Documented the Windows writable-workspace requirement; storage isolation, the lack of automatic fallback, and the Windows shared-storage ACL restriction remain unchanged (partial follow-up to #169).
+- 工作区内存储因权限或只读文件系统无法创建时，错误会提示改用可写会话工作区；补充 Windows 的可写工作区要求。存储隔离、不自动回退以及 Windows 共享存储的 ACL 限制均保持不变（#169 的部分改进）。
+
 ## [0.1.46] - 2026-10-01
 
 ### Compatibility

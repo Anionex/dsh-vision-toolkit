@@ -45,6 +45,7 @@ This reference maps the DSH Vision Toolkit product brief's committed P0/P1 requi
 
 | Scenario | Expected behavior | Evidence |
 |---|---|---|
+| Workspace-local storage creation denied (`EACCES`, `EPERM`, `EROFS`) | Reject with category `path` and writable-session-workspace guidance; do not silently select another storage root. Windows shared storage remains disabled pending ACL verification | [`tests/workspace-storage.spec.ts`](../../tests/workspace-storage.spec.ts), existing fence coverage in [`tests/paths.spec.ts`](../../tests/paths.spec.ts) |
 | Missing/invalid image, format, region, or path | Reject before upstream execution with an input, capacity, or path-safe error | [`tests/paths.spec.ts`](../../tests/paths.spec.ts), [`tests/runtime.spec.ts`](../../tests/runtime.spec.ts) |
 | Missing Credential | Local tools remain usable; remote tools plus explicit API-connection and real-model tests report a redacted configuration/service action | [`tests/runtime.spec.ts`](../../tests/runtime.spec.ts), [`tests/web.spec.ts`](../../tests/web.spec.ts) |
 | 401/403, 429, timeout, malformed output, or cancellation | Return a stable actionable category, preserve bounded diagnostics, and stop the request/subprocess | [`tests/errors.spec.ts`](../../tests/errors.spec.ts), [`tests/runtime.spec.ts`](../../tests/runtime.spec.ts), [`tests/upstream.spec.ts`](../../tests/upstream.spec.ts) |

@@ -300,6 +300,8 @@ Every session header receives the first 32 hexadecimal characters of an HMAC-SHA
 
 The advanced **Default save directory** setting can place artifacts, pasted images, and caches below an absolute POSIX shared root such as `/tmp/dsh-vision-toolkit`; the plugin creates a private mode-0700 child for the current user and workspace. Leaving it blank keeps the existing workspace-local `.dsh-vision-toolkit` directory. Configured shared roots are currently rejected on Windows because their ownership and access-control lists cannot yet be verified safely.
 
+On Windows, the session workspace must allow the current user to create and write `.dsh-vision-toolkit` and its contents. A read-only workspace (for example, `C:\Program Files (x86)`) prevents vision execution tools from running. Choose a writable session workspace, such as a project directory under your user profile, and leave **Default save directory** (`storageDir`) blank. Storage creation failures do not automatically fall back to the user home or temporary directory; a successful Settings health check does not establish that the session workspace is writable.
+
 When the configured save directory changes, the plugin retains earlier validated roots as read-only input locations. Web Profiles persist that history in the plugin-owned `vision_toolkit_storage` storage-domain sidecar, including when the active Settings provider is read-only, so existing pasted-image paths remain usable after a Profile restart. Custom Profiles should compose `@deepseek-ai/dsh-storage-domain` when they use configured shared storage.
 
 For a trusted internal endpoint that uses a self-signed certificate or MITM proxy, start the DSH process with `VISION_SSL_VERIFY=0`. The plugin forwards that value to the isolated Python runtime; certificate verification remains enabled when the variable is unset or has any other value. The false values `false`, `off`, `no`, `none`, and `disabled` are also accepted, case-insensitively.
@@ -314,6 +316,7 @@ For advanced setups — overriding `runtime.python`, using `runtime.mode: extern
 
 | Problem | What to do |
 | --- | --- |
+| `plugin storage directory is not writable` | Choose a session workspace writable by the current user and retry. On Windows, leave **Default save directory** (`storageDir`) blank; configured shared storage remains unavailable pending safe ACL validation |
 | The vision-model test fails with `Vision API returned an incompatible response structure` | The base URL usually needs a path prefix. Local OpenAI-compatible services such as LM Studio and Ollama should be entered as `http://127.0.0.1:1234/v1` (include `/v1`); the plugin appends `/chat/completions` for OpenAI Chat Completions or `/responses` for OpenAI Responses, and a port-only address may hit an unknown endpoint |
 | Pasting an image still says the model does not support image input | Restart the Web Profile, refresh the page, and confirm the selected route has the `(Vision Toolkit)` suffix. You can also place the image in the session workspace and invoke `/vision-skills` |
 | The vision service returns 429 | Wait for the `Retry-After` interval, or switch to your own endpoint when you need stable higher volume |

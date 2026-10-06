@@ -45,6 +45,7 @@
 
 | 场景 | 预期行为 | 证据 |
 |---|---|---|
+| 工作区内存储创建被拒绝（`EACCES`、`EPERM`、`EROFS`） | 返回 `path` 错误并提示使用可写会话工作区，不自动切换存储根；Windows 共享存储在 ACL 校验就绪前保持禁用 | [`tests/workspace-storage.spec.ts`](../../tests/workspace-storage.spec.ts)、[`tests/paths.spec.ts`](../../tests/paths.spec.ts) 中已有的围栏测试 |
 | 图片缺失/无效、格式、区域或路径错误 | 在执行上游前以输入、容量或路径安全错误拒绝 | [`tests/paths.spec.ts`](../../tests/paths.spec.ts)、[`tests/runtime.spec.ts`](../../tests/runtime.spec.ts) |
 | Credential 缺失 | 本地工具保持可用；远程工具以及显式 API 连接/真实模型测试返回脱敏且可执行下一步的配置/服务结果 | [`tests/runtime.spec.ts`](../../tests/runtime.spec.ts)、[`tests/web.spec.ts`](../../tests/web.spec.ts) |
 | 401/403、429、超时、畸形输出或取消 | 返回稳定且可执行下一步的类别，保留有界诊断信息，并停止请求/子进程 | [`tests/errors.spec.ts`](../../tests/errors.spec.ts)、[`tests/runtime.spec.ts`](../../tests/runtime.spec.ts)、[`tests/upstream.spec.ts`](../../tests/upstream.spec.ts) |
