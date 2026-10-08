@@ -6,6 +6,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ### Fixed
 
+- Added actionable writable-session-workspace guidance for permission-denied or read-only workspace-local storage creation. Documented the Windows writable-workspace requirement; storage isolation, the lack of automatic fallback, and the Windows shared-storage ACL restriction remain unchanged (partial follow-up to #169).
+- 工作区内存储因权限或只读文件系统无法创建时，错误会提示改用可写会话工作区；补充 Windows 的可写工作区要求。存储隔离、不自动回退以及 Windows 共享存储的 ACL 限制均保持不变（#169 的部分改进）。
 - Preserve elapsed upstream time when subprocess startup/collection rejects, including abort paths. Clarify that `timeoutMs` gives queue waiting and execution separate budgets, and that execution covers all upstream attempts and retries. The default timeout and runtime deadline behavior are unchanged (partial diagnostics/documentation follow-up to #166).
 - 上游子进程启动或结果收集被拒绝时（包括中止路径）保留已用耗时。明确 `timeoutMs` 分别约束排队与执行，执行预算涵盖所有上游尝试和重试；默认超时和运行时截止行为保持不变（#166 的部分诊断与文档改进）。
 

@@ -51,6 +51,8 @@ export declare function preflightSharedStorageBase(storageDirRaw: string): Promi
  * Resolve the plugin-managed root for one workspace. Blank configuration keeps
  * the legacy workspace-local `.dsh-vision-toolkit` directory. A configured
  * shared root receives one stable, automatically generated workspace child.
+ * Workspace-local permission failures remain fail-closed and identify the
+ * writable-session-workspace workaround; no alternate root is selected.
  */
 export declare function resolveWorkspaceStorage(workspaceRaw: string, storageDirRaw?: string): Promise<WorkspaceStorage>;
 /**

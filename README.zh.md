@@ -298,6 +298,8 @@ Profile patch 还可以通过 `provider.headers` 配置非秘密的部署元数�
 
 高级设置中的 **默认保存目录** 可以把产物、粘贴图片和缓存放到 `/tmp/dsh-vision-toolkit` 等 POSIX 绝对共享根目录下；插件会为当前用户和工作区创建权限为 0700 的私有子目录。留空时继续使用工作区内原有的 `.dsh-vision-toolkit` 目录。Windows 目前会拒绝配置共享根目录，因为插件尚不能安全校验其所有权和访问控制列表。
 
+Windows 上，会话工作区必须允许当前用户创建、写入 `.dsh-vision-toolkit` 及其内容。只读工作区（例如 `C:\Program Files (x86)`）会阻止视觉执行工具运行。请改用用户目录下具有写权限的项目目录作为会话工作区，并将 **默认保存目录**（`storageDir`）留空。创建存储失败时不会自动回退到用户目录或临时目录；Settings 健康检查成功不代表会话工作区可写。
+
 配置的保存目录变更后，插件会把之前验证过的根目录保留为只读输入位置。Web Profile 会把这段历史保存在插件自有的 `vision_toolkit_storage` storage-domain sidecar 中；即使当前 Settings 提供方只读，Profile 重启后原有粘贴图片路径仍可继续使用。使用配置共享存储的自定义 Profile 应组合 `@deepseek-ai/dsh-storage-domain`。
 
 如果受信任的内部端点使用自签证书或 MITM 代理，可在启动 DSH 进程时设置 `VISION_SSL_VERIFY=0`。插件会把该值传入隔离的 Python 运行环境；未设置或使用其他值时仍默认校验证书。还支持大小写不敏感的假值 `false`、`off`、`no`、`none` 和 `disabled`。
@@ -314,6 +316,7 @@ Profile patch 还可以通过 `provider.headers` 配置非秘密的部署元数�
 
 | 问题 | 处理方式 |
 | --- | --- |
+| `plugin storage directory is not writable` | 将会话工作区改为当前用户可写的目录后重试。Windows 上将 **默认保存目录**（`storageDir`）留空；安全 ACL 校验就绪前，共享存储仍不可用 |
 | 视觉模型测试失败：`Vision API returned an incompatible response structure` | 通常是 API 地址少了路径前缀。LM Studio、Ollama 等本地 OpenAI 兼容服务需填写 `http://127.0.0.1:1234/v1`（带 `/v1`）；OpenAI Chat Completions 会拼接 `/chat/completions`，OpenAI Responses 会拼接 `/responses`，只填端口号可能命中未知端点 |
 | 粘贴图片后仍提示模型不支持图片 | 重启 Web Profile 并刷新页面，确认当前模型已切换到带 `(Vision Toolkit)` 的变体；也可以把图片先放进会话工作区，再调用 `/vision-skills` |
 | 工具提示 `timed out` | 查看诊断日志中的 `queueMs` 和 `upstreamMs`；对于可成功但较慢的服务调用，提高单次 `timeoutMs`。排队和执行使用独立预算 |
