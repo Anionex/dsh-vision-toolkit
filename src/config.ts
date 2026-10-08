@@ -81,7 +81,7 @@ export interface VisionToolkitConfig {
   }
   /** Vision output language (`zh` or `en`). */
   language?: 'zh' | 'en'
-  /** Single remote/upstream call budget in milliseconds. */
+  /** Separate queue-wait and tool-execution budgets in milliseconds. */
   timeoutMs?: number
   /** Maximum input image size in bytes; larger images are auto-compressed (lossless first). */
   maxImageBytes?: number

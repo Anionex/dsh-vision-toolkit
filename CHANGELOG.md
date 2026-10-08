@@ -4,6 +4,11 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+### Fixed
+
+- Preserve elapsed upstream time when subprocess startup/collection rejects, including abort paths. Clarify that `timeoutMs` gives queue waiting and execution separate budgets, and that execution covers all upstream attempts and retries. The default timeout and runtime deadline behavior are unchanged (partial diagnostics/documentation follow-up to #166).
+- 上游子进程启动或结果收集被拒绝时（包括中止路径）保留已用耗时。明确 `timeoutMs` 分别约束排队与执行，执行预算涵盖所有上游尝试和重试；默认超时和运行时截止行为保持不变（#166 的部分诊断与文档改进）。
+
 ## [0.1.46] - 2026-10-01
 
 ### Compatibility

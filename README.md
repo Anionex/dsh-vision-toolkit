@@ -304,6 +304,8 @@ When the configured save directory changes, the plugin retains earlier validated
 
 For a trusted internal endpoint that uses a self-signed certificate or MITM proxy, start the DSH process with `VISION_SSL_VERIFY=0`. The plugin forwards that value to the isolated Python runtime; certificate verification remains enabled when the variable is unset or has any other value. The false values `false`, `off`, `no`, `none`, and `disabled` are also accepted, case-insensitively.
 
+`timeoutMs` defaults to `30000` and accepts `1000`–`600000`. Queue waiting and execution each receive that budget, so a queued call can take longer than `timeoutMs` overall. Execution includes image preparation and all provider attempts/retry waits; this is not a per-HTTP-attempt timeout. For a slow provider, raise the per-call `timeoutMs` based on measured latency, or adjust the profile default when appropriate. The parent cancels unfinished work at its execution deadline even if the provider is still processing it. Logs distinguish `queueMs` from `upstreamMs`; upstream time measures the CLI invocation, including startup, retries and failure collection, rather than pure provider latency.
+
 ### Configure the Python runtime
 
 Most users never need to configure the Python runtime: the plugin prefers a system Python 3.11+ and otherwise downloads a pinned standalone Python automatically from the domestic mirror, falling back to GitHub when the mirror is unreachable.
@@ -316,6 +318,7 @@ For advanced setups — overriding `runtime.python`, using `runtime.mode: extern
 | --- | --- |
 | The vision-model test fails with `Vision API returned an incompatible response structure` | The base URL usually needs a path prefix. Local OpenAI-compatible services such as LM Studio and Ollama should be entered as `http://127.0.0.1:1234/v1` (include `/v1`); the plugin appends `/chat/completions` for OpenAI Chat Completions or `/responses` for OpenAI Responses, and a port-only address may hit an unknown endpoint |
 | Pasting an image still says the model does not support image input | Restart the Web Profile, refresh the page, and confirm the selected route has the `(Vision Toolkit)` suffix. You can also place the image in the session workspace and invoke `/vision-skills` |
+| A tool reports `timed out` | Check `queueMs` and `upstreamMs` in the diagnostic log; for slow successful provider calls, use a larger per-call `timeoutMs`. Queue time and execution have separate budgets |
 | The vision service returns 429 | Wait for the `Retry-After` interval, or switch to your own endpoint when you need stable higher volume |
 | The image exceeds a size or pixel limit | Crop or resize it first; the error identifies whether bytes or decoded pixels caused the rejection |
 | A custom Credential is missing | Enter the API key in **Settings → Vision Toolkit** and confirm the Credential name matches the provider configuration |

@@ -683,6 +683,29 @@ describe('VisionToolkitRuntime', () => {
     )).rejects.toMatchObject({ code: 'timeout' })
   })
 
+  it('records elapsed upstream time when the adapter rejects on abort', async () => {
+    const { ctx, adapter, runtime } = await setup()
+    const workspace = await tempWorkspace()
+    const warn = vi.spyOn(ctx.logger, 'warn')
+    vi.spyOn(adapter, 'probeImageSize').mockResolvedValue({ width: 256, height: 256, format: 'png', mode: 'RGBA' })
+    vi.spyOn(adapter, 'run').mockImplementation(async (_tool, _args, options) => {
+      await new Promise<void>((_resolve, reject) => {
+        options.signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
+      })
+      throw new Error('unreachable')
+    })
+
+    await expect(runtime.glance(
+      { images: ['sample.png'] },
+      { signal, workspace, timeoutMs: 1000 },
+    )).rejects.toMatchObject({ code: 'timeout' })
+
+    const diagnostic = warn.mock.calls.find(call => String(call[0]).startsWith('dsh-vision-toolkit tool='))
+    expect(diagnostic?.[2]).toBe('timeout')
+    expect(diagnostic?.[5]).toBeGreaterThan(0)
+    expect(diagnostic?.[5]).toBeLessThanOrEqual(diagnostic?.[3])
+  })
+
   it('requires a credential only for remote vision operations', async () => {
     const { runtime } = await setup({}, null)
     const workspace = await tempWorkspace()

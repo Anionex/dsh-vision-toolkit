@@ -532,11 +532,17 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
       if (['vision_glance', 'vision_ground', 'vision_detect', 'vision_long_screenshot_ocr'].includes(name)) {
         expect(definition?.description, `${name} trust boundary`).toContain('untrusted visual evidence')
       }
+      expect(definition?.parameters).toMatchObject({
+        properties: { timeoutMs: { description: expect.stringContaining('Queue waiting and execution each get this budget') } },
+      })
       const output = definition?.output as { schema?: { type?: string } } | undefined
       expect(output?.schema?.type, `${name} output`).toBe('object')
       const blocks = definition?.output.render({}, { kind: 'ok' })
       expect(blocks?.[0]).toMatchObject({ type: 'text' })
     }
+    expect(ctx.tools.get('vision_long_screenshot_ocr', agent)?.parameters).toMatchObject({
+      properties: { chunkTimeoutSeconds: { description: expect.stringContaining('after a separate queue-wait budget') } },
+    })
     const htmlScreenshot = ctx.tools.get('vision_html_screenshot', agent)
     expect(htmlScreenshot?.parameters).toMatchObject({
       properties: { fullPage: { type: 'boolean' } },

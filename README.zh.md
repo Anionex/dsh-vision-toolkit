@@ -302,6 +302,8 @@ Profile patch 还可以通过 `provider.headers` 配置非秘密的部署元数�
 
 如果受信任的内部端点使用自签证书或 MITM 代理，可在启动 DSH 进程时设置 `VISION_SSL_VERIFY=0`。插件会把该值传入隔离的 Python 运行环境；未设置或使用其他值时仍默认校验证书。还支持大小写不敏感的假值 `false`、`off`、`no`、`none` 和 `disabled`。
 
+`timeoutMs` 默认是 `30000`，允许范围为 `1000`–`600000`。排队等待和执行各自获得这份预算，因此排队调用的总耗时可能超过 `timeoutMs`。执行预算包括图片准备、所有服务请求尝试和重试等待；它并不是每次 HTTP 请求的超时。对于较慢的服务商，可根据实测延迟提高单次调用的 `timeoutMs`，必要时再调整 Profile 默认值。即使服务商仍在处理，父进程也会在执行截止时间取消未完成的任务。日志用 `queueMs` 和 `upstreamMs` 区分排队与上游耗时；后者包含 CLI 启动、重试和失败收集，并不等同于纯服务端延迟。
+
 ### 配置 Python 运行时
 
 大多数用户无需配置 Python 运行时：插件会优先使用系统 Python 3.11+，找不到时自动从国内镜像下载固定版本的托管 Python；国内镜像不可用时回退到 GitHub 官方发布源。
@@ -314,6 +316,7 @@ Profile patch 还可以通过 `provider.headers` 配置非秘密的部署元数�
 | --- | --- |
 | 视觉模型测试失败：`Vision API returned an incompatible response structure` | 通常是 API 地址少了路径前缀。LM Studio、Ollama 等本地 OpenAI 兼容服务需填写 `http://127.0.0.1:1234/v1`（带 `/v1`）；OpenAI Chat Completions 会拼接 `/chat/completions`，OpenAI Responses 会拼接 `/responses`，只填端口号可能命中未知端点 |
 | 粘贴图片后仍提示模型不支持图片 | 重启 Web Profile 并刷新页面，确认当前模型已切换到带 `(Vision Toolkit)` 的变体；也可以把图片先放进会话工作区，再调用 `/vision-skills` |
+| 工具提示 `timed out` | 查看诊断日志中的 `queueMs` 和 `upstreamMs`；对于可成功但较慢的服务调用，提高单次 `timeoutMs`。排队和执行使用独立预算 |
 | 视觉服务提示 429 | 按错误中的 `Retry-After` 等待后重试；如果需要稳定高额度，切换到自己的视觉端点 |
 | 图片过大或像素超限 | 先裁剪或缩放图片；错误会明确显示是字节还是像素限制 |
 | 自定义 Credential 缺失 | 在 **设置 → 视觉工具** 填写 API Key，并确认 Credential 名称与配置一致 |
