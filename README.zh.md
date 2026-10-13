@@ -348,6 +348,7 @@ Windows 上，会话工作区必须允许当前用户创建、写入 `.dsh-visio
 - 安全漏洞请按 [SECURITY.md](SECURITY.md) 私下报告。
 - 版本变化见 [CHANGELOG.md](CHANGELOG.md)，赞助说明见 [FUNDING.md](FUNDING.md)。
 - 通用视觉工具、跨 Agent 接入和视觉任务方法论请访问上游 [agent-vision-toolkit](https://github.com/Anionex/agent-vision-toolkit)。
+- 国内访问：项目已同步至 [AtomGit](https://atomgit.com/Anionex/dsh-vision-toolkit)，方便国内开发者访问、下载和使用。
 
 <p align="center">
   <img src="assets/community-group-qr.png" alt="agent-vision-toolkit 项目交流群二维码" width="240" />
