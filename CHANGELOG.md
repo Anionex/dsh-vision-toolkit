@@ -4,6 +4,11 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+### Compatibility
+
+- Support DSH `0.2.1-rc.2`. Headless profiles resolve vision credentials through the host launch environment when the interactive credential service is disabled; interactive credentials remain authoritative.
+- 支持 DSH `0.2.1-rc.2`。Headless 禁用交互式凭据服务时从宿主启动环境读取视觉凭据；交互模式仍以凭据服务为准。
+
 ### Fixed
 
 - Added actionable writable-session-workspace guidance for permission-denied or read-only workspace-local storage creation. Documented the Windows writable-workspace requirement; storage isolation, the lack of automatic fallback, and the Windows shared-storage ACL restriction remain unchanged (partial follow-up to #169).

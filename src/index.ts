@@ -37,7 +37,7 @@ export const name = '@anionex/dsh-vision-toolkit'
 
 export { Config } from './config.ts'
 
-export const inject = ['tools', 'credentials', 'skills', 'subprocess', 'settings', 'agents', 'sessions']
+export const inject = ['tools', 'skills', 'subprocess', 'settings', 'agents', 'sessions']
 
 /** Plugin entry: validate configuration synchronously, then mount asynchronously. */
 export async function apply(ctx: Context, config: VisionToolkitConfig = {}): Promise<() => void> {

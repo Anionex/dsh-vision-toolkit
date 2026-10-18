@@ -73,7 +73,7 @@ async function runDsh(
   cwd = repoRoot,
 ): Promise<{ stdout: string; stderr: string; code: number }> {
   const childEnv = Object.fromEntries(
-    Object.entries({ ...process.env, ...env })
+    Object.entries({ ...process.env, ...env, DSH_AGENTS_HOME: join(env.DSH_HOME ?? tmpdir(), 'isolated-agents') })
       .filter((entry): entry is [string, string] => entry[1] !== undefined),
   )
   const result = await execa('dsh', args, {
@@ -242,7 +242,7 @@ function expectProgressiveExposure(requests: readonly ScriptedLlmRequest[]): voi
   expect(requests).toHaveLength(3)
   const initial = requestToolNames(requests[0])
   expect(initial).toContain('skill')
-  expect(initial).toContain(VISION_TOOLKIT_ACTIVATE)
+  expect(initial, JSON.stringify(initial)).toContain(VISION_TOOLKIT_ACTIVATE)
   for (const name of VISUAL_TOOL_NAMES) expect(initial).not.toContain(name)
 
   for (const request of requests.slice(1)) {
@@ -356,6 +356,7 @@ describe.skipIf(!profileE2eAvailable)('dsh-vision-toolkit profile install (keyle
           DEEPSEEK_BASE_URL: server.baseURL,
           VISION_API_KEY: 'fixture-vision-key',
         })
+        expect(run.stderr).not.toContain('did not activate')
         expect(run.code, run.stderr).toBe(0)
         expect(run.stdout).toBe('vision done')
         expect(existsSync(join(home, 'profiles', 'headless', 'node_modules', 'schemastery'))).toBe(false)
