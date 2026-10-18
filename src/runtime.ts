@@ -13,6 +13,7 @@ import { basename, extname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
 import type { ResolvedCredential } from '@deepseek-ai/dsh-credentials'
+import { resolveVisionCredential } from './credentials-compat.ts'
 import { SaxesParser } from 'saxes'
 import { describeArtifact, type ArtifactDescriptor } from './artifacts.ts'
 import { isBuiltInFreeVisionProvider, type ResolvedVisionToolkitConfig } from './config.ts'
@@ -884,7 +885,7 @@ export class VisionToolkitRuntime {
   async resolveVisionEnv(): Promise<UpstreamEnvironment> {
     const resolved: ResolvedCredential | undefined = isBuiltInFreeVisionProvider(this.config.provider)
       ? { value: BUILT_IN_FREE_VISION_KEY, source: 'built-in' }
-      : await this.ctx.credentials.resolve(this.config.provider.credential)
+      : await resolveVisionCredential(this.ctx, this.config.provider.credential)
     if (resolved === undefined) {
       throw new VisionToolkitError(
         'config',
@@ -2119,7 +2120,7 @@ export class VisionToolkitRuntime {
       try {
         resolvedCredential = isBuiltInFreeVisionProvider(this.config.provider)
           ? { value: BUILT_IN_FREE_VISION_KEY, source: 'built-in' }
-          : await this.ctx.credentials.resolve(this.config.provider.credential)
+          : await resolveVisionCredential(this.ctx, this.config.provider.credential)
         credential = resolvedCredential === undefined
           ? { status: 'error', detail: `credential ${this.config.provider.credential} is not configured` }
           : { status: 'ok', detail: `credential ${this.config.provider.credential} is resolvable` }

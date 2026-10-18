@@ -9,6 +9,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Context } from '@deepseek-ai/cordis'
 import type { CredentialInfo, CredentialRef } from '@deepseek-ai/dsh-credentials'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
+import { resolveVisionCredential } from './credentials-compat.ts'
 import { SettingsConflictError, type SettingsDescriptor } from '@deepseek-ai/dsh-settings'
 // Type-only import activates the optional webServer Context declaration.
 import type {} from '@deepseek-ai/dsh-host-webserver'
@@ -264,7 +265,11 @@ export class VisionToolkitWebBackend {
     if (isBuiltInFreeVisionProvider(config.provider)) {
       return { configured: true, source: 'built-in-free', writable: false }
     }
-    return this.ctx.credentials.describe(credentialRef(String(config.provider.credential)))
+    const credentials = this.ctx.get('credentials')
+    const ref = credentialRef(String(config.provider.credential))
+    if (credentials !== undefined) return credentials.describe(ref)
+    const resolved = await resolveVisionCredential(this.ctx, ref)
+    return { configured: resolved !== undefined, source: resolved?.source ?? 'unset', writable: false }
   }
 
   /** Build the current settings/runtime/credential snapshot without secrets. */
@@ -346,7 +351,9 @@ export class VisionToolkitWebBackend {
     if (isBuiltInFreeVisionProvider(resolved.provider)) {
       throw new Error('The built-in free vision provider does not accept a user API key')
     }
-    await this.ctx.credentials.set(currentRef, request.value)
+    const credentials = this.ctx.get('credentials')
+    if (credentials === undefined) throw new Error('This profile uses launch-time credentials; update the environment and restart')
+    await credentials.set(currentRef, request.value)
     return this.snapshot()
   }
 
