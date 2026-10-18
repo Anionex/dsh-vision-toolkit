@@ -4,6 +4,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+## [0.1.47] - 2026-10-18
+
 ### Compatibility
 
 - Support DSH `0.2.1-rc.2`. Headless profiles resolve vision credentials through the host launch environment when the interactive credential service is disabled; interactive credentials remain authoritative.
@@ -490,7 +492,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 - Runtime teardown cancels in-flight operations before removing Agent-scoped tools, the activation bootstrap, and the Skill.
 - The Web client is published through the current nested `dsh.client` manifest and loader-compatible built artifact required by DSH snapshot0810.
 
-[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.46...HEAD
+[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.47...HEAD
+[0.1.47]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.46...v0.1.47
 [0.1.46]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.45...v0.1.46
 [0.1.45]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.44...v0.1.45
 [0.1.44]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.43...v0.1.44
