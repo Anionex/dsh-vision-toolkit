@@ -74,3 +74,7 @@ pnpm pack --dry-run
 ```
 
 The release acceptance pass additionally runs the repository's plugin checker, installs the package into clean Web and Headless `DSH_HOME` directories, inspects `--dump-config`, exercises local and keyless mock-backed remote tool calls, verifies Settings persistence and live switching, checks dedicated Web cards with zero browser-console errors, disables/re-enables the row, and removes the package. These runtime checks complement the automated tests; they do not replace them.
+
+### Scoped image-input bridge evidence (#176)
+
+`src/image-input-variants.ts` limits its role and channel note to converted images without changing modality gating or safety instructions. `tests/image-input-variants.spec.ts` runs the real `LlmService` through native → bridge → native routes with the same source messages, asserting that native requests retain their images, only the bridge receives a scoped note, the safety rule remains present, and the original conversation is unchanged. This is a cloud host-dispatch regression, not Windows Desktop end-to-end acceptance.
