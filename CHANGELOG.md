@@ -4,6 +4,11 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+### Fixed
+
+- Scope image-input bridge prompts to the converted image blocks rather than asserting that the assistant is globally text-only. Preserve native-image routing, image evidence safety rules, and the original conversation messages.
+- 将图片输入桥接提示限定于当前转换的图片块，不再宣称助手全局只能接收文本。原生视觉路由、图片证据安全规则和原始会话消息保持不变。
+
 ## [0.1.47] - 2026-10-18
 
 ### Compatibility

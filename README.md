@@ -254,6 +254,8 @@ recorded in `assets/skill/UPSTREAM.json` and `patches/vision-tools-dsh.patch`.
 
 For routes that DSH positively identifies as text-only, the plugin registers a sibling `<model> (Vision Toolkit)` variant. By default, pasting an image in DSH Web switches to that variant and gives the model both a reusable workspace path and a visual description focused on the current task.
 
+The bridge note describes only the image blocks converted for the current request, not the assistant’s capabilities on other routes or turns. Native-image models and models with unknown input modalities are not wrapped. Conversion happens on the outgoing message copy; it does not rewrite the stored conversation. This wording change does not remove earlier descriptions or statements already present in a conversation.
+
 ## Configuration and limits
 
 ### Configure a vision model

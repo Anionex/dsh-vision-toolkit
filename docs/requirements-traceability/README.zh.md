@@ -74,3 +74,7 @@ pnpm pack --dry-run
 ```
 
 发布验收还会运行仓库插件检查器，把软件包分别安装到干净的 Web 和 Headless `DSH_HOME`，检查 `--dump-config`，执行本地工具和由无真实 Key mock 支持的远程工具调用，验证 Settings 持久化与实时切换，检查专用 Web 卡片且确保浏览器 Console 无错误，禁用/重新启用插件行，最后移除软件包。这些运行时检查补充自动化测试，不替代自动化测试。
+
+### 限定图片输入桥接证据范围（#176）
+
+`src/image-input-variants.ts` 将角色和通道说明限定于转换的图片，不改变模态判断或安全指令。`tests/image-input-variants.spec.ts` 使用真实 `LlmService` 和同一组源消息，依次测试原生视觉、桥接、原生视觉路由，确认原生请求保留图片、仅桥接请求带有限定范围的说明、安全规则保持不变、原始会话未被改写。这是云端宿主分派回归测试，不是 Windows Desktop 端到端验收。
