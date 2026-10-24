@@ -4,6 +4,8 @@ English | [中文](README.zh.md)
 
 This reference maps the DSH Vision Toolkit product brief's committed P0/P1 requirements to their owning implementation, automated coverage, and runnable acceptance evidence. A row marked **Delivered** is part of the package contract; P2/P3 rows document intentional product boundaries rather than unfinished P0/P1 work.
 
+The exact DSH `0.2.1-rc.3` compatibility declaration is covered by the package-layout contract and a required real-Profile CI lane; future prereleases remain outside this declaration.
+
 ## P0 product requirements
 
 | Requirement | Status | Owning implementation | Verification |
