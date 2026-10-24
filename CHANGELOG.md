@@ -4,6 +4,11 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+### Compatibility
+
+- Add exact DSH `0.2.1-rc.3` peer and compatibility declarations, with a required real-Profile CI lane. Keep earlier supported releases and do not admit untested future prereleases.
+- 增加 DSH `0.2.1-rc.3` 的确切 peer 与兼容声明及必跑的真实 Profile CI 验收。保留已支持版本，不放行未经验证的未来预发布版。
+
 ### Fixed
 
 - Scope image-input bridge prompts to the converted image blocks rather than asserting that the assistant is globally text-only. Preserve native-image routing, image evidence safety rules, and the original conversation messages.
