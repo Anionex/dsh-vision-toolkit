@@ -4,6 +4,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+## [0.1.48] - 2026-10-26
+
 ### Compatibility
 
 - Add exact DSH `0.2.1-rc.3` peer and compatibility declarations, with a required real-Profile CI lane. Keep earlier supported releases and do not admit untested future prereleases.
@@ -502,7 +504,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 - Runtime teardown cancels in-flight operations before removing Agent-scoped tools, the activation bootstrap, and the Skill.
 - The Web client is published through the current nested `dsh.client` manifest and loader-compatible built artifact required by DSH snapshot0810.
 
-[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.47...HEAD
+[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.48...HEAD
+[0.1.48]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.47...v0.1.48
 [0.1.47]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.46...v0.1.47
 [0.1.46]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.45...v0.1.46
 [0.1.45]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.44...v0.1.45
