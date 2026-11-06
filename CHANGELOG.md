@@ -4,6 +4,11 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+### Fixed
+
+- Resolve models outside an image-input variant's scope without failing the provider picker, and preserve native image handling when such a route is used.
+- 修复图片输入变体解析范围外的模型时导致提供商列表加载失败的问题，并在使用该路由时保留原生图片处理。
+
 ## [0.1.48] - 2026-10-26
 
 ### Compatibility

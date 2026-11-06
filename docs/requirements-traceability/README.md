@@ -80,3 +80,5 @@ The release acceptance pass additionally runs the repository's plugin checker, i
 ### Scoped image-input bridge evidence (#176)
 
 `src/image-input-variants.ts` limits its role and channel note to converted images without changing modality gating or safety instructions. `tests/image-input-variants.spec.ts` runs the real `LlmService` through native → bridge → native routes with the same source messages, asserting that native requests retain their images, only the bridge receives a scoped note, the safety rule remains present, and the original conversation is unchanged. This is a cloud host-dispatch regression, not Windows Desktop end-to-end acceptance.
+
+Variant resolution also preserves upstream metadata for models whose modalities are unknown or already include images. Such models are not advertised as variants; if resolved through a variant route, requests retain their native image content. The adapter tests cover resolution and image passthrough for both cases.
