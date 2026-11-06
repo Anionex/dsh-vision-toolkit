@@ -183,6 +183,8 @@ dsh plugin --profile desktop add @anionex/dsh-vision-toolkit
 
 首次启动会自动准备隔离运行环境：插件优先使用系统已有的 Python 3.11+；如果系统没有，会自动从国内镜像（`dsh-vision-python-bootstrap-1317715800.cos.ap-guangzhou.myqcloud.com`）下载一个带完整性校验的托管 Python（约 35MB，仅首次需要网络），镜像不可用时自动回退到 GitHub 官方发布源。锁定依赖（Pillow、NumPy、vtracer）会优先从腾讯云 PyPI 镜像（`mirrors.cloud.tencent.com/pypi/simple`）安装，镜像不可用时回退到官方 PyPI。普通安装不需要下载 `agent-vision-toolkit` 源码，也不需要设置本地路径。
 
+运行环境在后台准备，不阻塞 Profile 启动。首轮即可看到 Skill；视觉工具调用会等待准备完成，并报告准备失败的原因。禁用插件会取消未完成的准备任务；准备失败后仍可通过设置修复。
+
 ### 3. 粘贴图片，直接说你要做什么
 
 在会话中粘贴截图，或把图片放进会话工作区，然后调用 `/vision-skills`。例如：

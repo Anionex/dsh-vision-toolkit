@@ -183,6 +183,8 @@ Restart a running Web Profile, then open **Settings → Vision Toolkit**, config
 
 The first start prepares an isolated runtime: the plugin prefers a system Python 3.11+; when none is found, it downloads a hash-verified standalone Python (about 35 MB) from the domestic mirror (`dsh-vision-python-bootstrap-1317715800.cos.ap-guangzhou.myqcloud.com`) on first use, falling back to the GitHub release when the mirror is unreachable. The locked runtime dependencies (Pillow, NumPy, vtracer) are installed from the Tencent Cloud PyPI mirror (`mirrors.cloud.tencent.com/pypi/simple`) first and fall back to the official PyPI index. A normal installation does not require an `agent-vision-toolkit` source checkout or a local path setting.
 
+Runtime preparation runs in the background without delaying Profile startup. The Skill is available on the first turn; visual tool calls wait for preparation and report failures. Disabling the plugin cancels unfinished preparation. Settings remain available to repair a failed setup.
+
 ### 3. Paste an image and describe the outcome you want
 
 Paste a screenshot into the conversation or place an image in the session workspace, then invoke `/vision-skills`. For example:

@@ -125,6 +125,24 @@ async function setup(path: string) {
 }
 
 describe('external pinned runtime preparation', () => {
+  it('cancels a managed-runtime lock wait without deleting the other preparer lock', async () => {
+    const { ctx } = await setup(bundledUpstreamRoot())
+    const manifest = JSON.parse(await readFile(join(bundledUpstreamRoot(), 'UPSTREAM_MANIFEST.json'), 'utf8')) as { contentSha256: string }
+    const requirements = await readFile(join(process.cwd(), 'runtime', 'requirements.lock'))
+    const runtimeId = [manifest.contentSha256.slice(0, 16), createHash('sha256').update(requirements).digest('hex').slice(0, 16), 'py312', process.platform, process.arch].join('-')
+    const lock = join(visionToolkitStateRoot(), 'python', `${runtimeId}.lock`)
+    await mkdir(lock, { recursive: true })
+    const waiting = vi.spyOn(ctx.logger, 'info')
+    const controller = new AbortController()
+    const pending = prepareUpstreamRuntime(ctx, resolveConfig({ runtime: { mode: 'managed', python: '/fixture/python' } }), controller.signal)
+    // Register the rejection assertion before aborting shared preparation.
+    const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    await vi.waitFor(() => expect(waiting.mock.calls.some(args => String(args[0]).includes('waiting for another process'))).toBe(true))
+    controller.abort(new Error('unloaded'))
+    await rejected
+    expect(await pathExists(lock)).toBe(true)
+  })
+
   it('accepts an exact exported snapshot and scrubs ambient Python overrides', async () => {
     const snapshot = await copiedSnapshot()
     const { ctx, service, config } = await setup(snapshot)

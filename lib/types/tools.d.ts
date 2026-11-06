@@ -33,7 +33,7 @@ export declare const VISION_TOOL_NAMES: {
     readonly htmlScreenshot: "vision_html_screenshot";
 };
 /** Runtime lookup accepted by tools so Settings can atomically swap generations. */
-export type VisionToolkitRuntimeSource = VisionToolkitRuntime | (() => VisionToolkitRuntime);
+export type VisionToolkitRuntimeSource = VisionToolkitRuntime | ((signal?: AbortSignal) => VisionToolkitRuntime | Promise<VisionToolkitRuntime>);
 /** Browser-only metadata projector; the model-visible value remains unchanged. */
 export type VisionToolkitPresentationProjector = (value: JsonValue) => JsonValue;
 /**

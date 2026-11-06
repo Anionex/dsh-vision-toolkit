@@ -38,6 +38,7 @@ export type RuntimeGenerationFactory = (
   ctx: Context,
   config: ResolvedVisionToolkitConfig,
   readableStorageDirs: readonly string[],
+  signal?: AbortSignal,
 ) => Promise<VisionToolkitRuntime>
 
 /** Async commit prerequisite run after preparation and before a generation becomes active. */
@@ -47,9 +48,10 @@ async function defaultFactory(
   ctx: Context,
   config: ResolvedVisionToolkitConfig,
   readableStorageDirs: readonly string[],
+  signal?: AbortSignal,
 ): Promise<VisionToolkitRuntime> {
   const adapter = new UpstreamAdapter(ctx, config)
-  await adapter.prepare()
+  await adapter.prepare(signal)
   return new VisionToolkitRuntime(ctx, config, adapter, readableStorageDirs)
 }
 
@@ -74,6 +76,9 @@ export class VisionToolkitRuntimeManager {
   private lastError: string | undefined
   private validatedStartupStorageDir: string | null | undefined
   private readonly readableStorageDirs = new Set<string>()
+  private readonly lifetime = new AbortController()
+  private preparation: AbortController | undefined
+  private pending: Promise<unknown> | undefined
 
   constructor(
     private readonly ctx: Context,
@@ -95,6 +100,53 @@ export class VisionToolkitRuntimeManager {
   /** Whether at least one generation is available. */
   get ready(): boolean {
     return this.active !== undefined
+  }
+
+  /** Start preparation without holding up Profile boot. */
+  start(raw: VisionToolkitConfig, beforePublish?: RuntimeGenerationBeforePublish): Promise<void> {
+    return this.initialize(raw, beforePublish)
+  }
+
+  private track<T>(pending: Promise<T>): Promise<T> {
+    this.pending = pending
+    void pending.catch(() => {})
+    return pending
+  }
+
+  /** Wait for the first generation; a caller cancellation does not cancel shared preparation. */
+  async whenReady(signal?: AbortSignal): Promise<VisionToolkitRuntime> {
+    const combined = signal === undefined ? this.lifetime.signal : AbortSignal.any([signal, this.lifetime.signal])
+    combined.throwIfAborted()
+    if (this.active !== undefined) return this.active.runtime
+    let abort!: () => void
+    const cancelled = new Promise<never>((_resolve, reject) => {
+      abort = () => reject(combined.reason)
+      combined.addEventListener('abort', abort, { once: true })
+    })
+    try {
+      while (true) {
+        const pending = this.pending
+        try {
+          await Promise.race([pending, cancelled])
+        } catch (error) {
+          combined.throwIfAborted()
+          if (pending !== this.pending) continue
+          throw error
+        }
+        combined.throwIfAborted()
+        if (this.ready) return this.current()
+        if (pending === this.pending) return this.current()
+      }
+    } finally {
+      combined.removeEventListener('abort', abort)
+    }
+  }
+
+  /** Invalidate queued generations and cancel their subprocesses/downloads. */
+  dispose(): void {
+    this.reconfigureTicket += 1
+    this.lifetime.abort()
+    this.preparation?.abort()
   }
 
   /** Storage config safe for paste writes even when initial runtime preparation failed. */
@@ -120,7 +172,8 @@ export class VisionToolkitRuntimeManager {
     return this.validatedStartupStorageDir ?? undefined
   }
 
-  private async prepareResolvedCandidate(config: ResolvedVisionToolkitConfig): Promise<PreparedRuntimeGeneration> {
+  private async prepareResolvedCandidate(config: ResolvedVisionToolkitConfig, signal = this.lifetime.signal): Promise<PreparedRuntimeGeneration> {
+    signal.throwIfAborted()
     const resolvedFingerprint = fingerprint(config)
     if (this.active?.fingerprint === resolvedFingerprint) {
       return { ...this.active, config }
@@ -130,7 +183,9 @@ export class VisionToolkitRuntimeManager {
       config,
       [...new Set([...this.readableStorageDirs, ...config.storageHistory])]
         .filter(storageDir => storageDir !== config.storageDir),
+      signal,
     )
+    signal.throwIfAborted()
     return { config, fingerprint: resolvedFingerprint, runtime }
   }
 
@@ -154,6 +209,7 @@ export class VisionToolkitRuntimeManager {
    * @param candidate - generation returned by {@link prepareCandidate}.
    */
   activateCandidate(candidate: PreparedRuntimeGeneration): void {
+    this.lifetime.signal.throwIfAborted()
     if (this.active?.fingerprint === candidate.fingerprint) {
       this.active = candidate
       this.lastError = undefined
@@ -179,18 +235,29 @@ export class VisionToolkitRuntimeManager {
    * @param raw - untrusted Settings generation to resolve and prepare.
    * @param beforePublish - optional durable prerequisite run after preparation.
    */
-  async initialize(raw: VisionToolkitConfig, beforePublish?: RuntimeGenerationBeforePublish): Promise<void> {
+  initialize(raw: VisionToolkitConfig, beforePublish?: RuntimeGenerationBeforePublish): Promise<void> {
+    return this.track(this.initializeGeneration(raw, beforePublish))
+  }
+
+  private async initializeGeneration(raw: VisionToolkitConfig, beforePublish?: RuntimeGenerationBeforePublish): Promise<void> {
+    const ticket = ++this.reconfigureTicket
+    this.preparation?.abort()
+    const controller = this.preparation = new AbortController()
+    const signal = AbortSignal.any([controller.signal, this.lifetime.signal])
     try {
       const config = resolveConfig(raw)
       if (config.storageDir !== undefined) await preflightSharedStorageBase(config.storageDir)
       this.validatedStartupStorageDir = config.storageDir ?? null
       this.rememberStorageDirectories(config.storageHistory)
       this.rememberStorageDirectory(config.storageDir)
-      const candidate = await this.prepareResolvedCandidate(config)
+      const candidate = await this.prepareResolvedCandidate(config, signal)
+      if (ticket !== this.reconfigureTicket) return
       await beforePublish?.(candidate)
+      signal.throwIfAborted()
+      if (ticket !== this.reconfigureTicket) return
       this.activateCandidate(candidate)
     } catch (error) {
-      this.lastError = messageOf(error)
+      if (ticket === this.reconfigureTicket) this.lastError = messageOf(error)
       throw error
     }
   }
@@ -202,15 +269,26 @@ export class VisionToolkitRuntimeManager {
    * @param beforePublish - optional durable prerequisite run after preparation.
    * @returns whether this call published a new active generation.
    */
-  async reconfigure(raw: VisionToolkitConfig, beforePublish?: RuntimeGenerationBeforePublish): Promise<boolean> {
+  reconfigure(raw: VisionToolkitConfig, beforePublish?: RuntimeGenerationBeforePublish): Promise<boolean> {
+    return this.track(this.reconfigureGeneration(raw, beforePublish))
+  }
+
+  private async reconfigureGeneration(raw: VisionToolkitConfig, beforePublish?: RuntimeGenerationBeforePublish): Promise<boolean> {
     const ticket = ++this.reconfigureTicket
+    this.preparation?.abort()
+    const controller = this.preparation = new AbortController()
+    const signal = AbortSignal.any([controller.signal, this.lifetime.signal])
     let candidate: PreparedRuntimeGeneration
     try {
-      candidate = await this.prepareCandidate(raw)
+      const config = resolveConfig(raw)
+      if (config.storageDir !== undefined) await preflightSharedStorageBase(config.storageDir)
+      candidate = await this.prepareResolvedCandidate(config, signal)
       if (ticket !== this.reconfigureTicket) return false
       await beforePublish?.(candidate)
+      signal.throwIfAborted()
     } catch (error) {
       if (ticket === this.reconfigureTicket) this.lastError = messageOf(error)
+      if (ticket !== this.reconfigureTicket) return false
       throw error
     }
     if (ticket !== this.reconfigureTicket) return false

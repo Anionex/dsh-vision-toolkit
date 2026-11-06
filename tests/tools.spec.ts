@@ -98,6 +98,21 @@ class BlockingSubprocessService extends ProbeSubprocessService {
   }
 }
 
+class PreparingSubprocessService extends ProbeSubprocessService {
+  aborted = false
+  override spawn(spec: SubprocessSpawnSpec): SubprocessHandle {
+    const handle = super.spawn(spec)
+    if (!spec.argv.join(' ').includes('sys.version_info')) return handle
+    const done = new Promise<{ exitCode: number | null; signal: string | null }>(resolve => {
+      spec.signal!.addEventListener('abort', () => {
+        this.aborted = true
+        resolve({ exitCode: null, signal: 'SIGTERM' })
+      }, { once: true })
+    })
+    return { ...handle, done }
+  }
+}
+
 class MemorySettings extends Settings {
   readonly writable = true
   private document: Record<string, unknown> = {}
@@ -497,11 +512,45 @@ describe('dsh-vision-toolkit plugin lifecycle', () => {
     expect(result.content).toEqual([{ type: 'text', text: expect.stringContaining('cancelled') }])
   })
 
-  it('registers nothing when the upstream runtime is missing', async () => {
+  it('boots with a first-turn Skill while Python is pending and cancels preparation on unload', async () => {
+    const ctx = new Context()
+    contexts.push(ctx)
+    for (const plugin of [SystemPrompt, ToolRegistry, SessionStore, AgentRegistry, SkillService, ToolSkill, MemorySettings]) await ctx.plugin(plugin)
+    const subprocessFiber = await ctx.plugin(PreparingSubprocessService)
+    const subprocess = subprocessFiber.ctx.subprocess as PreparingSubprocessService
+    ctx.provide('credentials', fakeCredentials())
+    const fiber = await ctx.plugin(VisionToolkit, {
+      provider: { baseUrl: 'https://vision.example/v1', credential: 'VISION_API_KEY', model: 'fixture' },
+      runtime: { mode: 'external', agentVisionToolkitPath: BUNDLED_UPSTREAM, python: 'python3' },
+    })
+    expect((await ctx.skills.list()).some(skill => skill.name === VISION_SKILLS_NAME)).toBe(true)
+    const agent = await registerAgent(ctx, 'pending-preparation')
+    expect(ctx.tools.schemas(agent).map(tool => tool.name)).toContain(VISION_TOOLKIT_ACTIVATE)
+    await loadVisionSkill(ctx, agent)
+    const pending = ctx.tools.execute({
+      signal: new AbortController().signal, callId: ToolCallId('pending-preparation-call'),
+      name: 'vision_glance', arguments: { images: [SAMPLE_IMAGE] }, agent,
+    })
+    await new Promise(resolve => setTimeout(resolve, 50))
+    await fiber.dispose()
+    expect((await pending).isError).toBe(true)
+    expect(subprocess.aborted).toBe(true)
+    expect((await ctx.skills.list()).some(skill => skill.name === VISION_SKILLS_NAME)).toBe(false)
+  })
+
+  it('keeps the first-turn Skill available and reports failed preparation on use', async () => {
     const { ctx } = await setupContext('/nonexistent/vision-toolkit')
     expect(ctx.tools.schemas().some(tool => TOOL_NAMES.includes(tool.name))).toBe(false)
     const skills = await ctx.skills.list()
-    expect(skills.find(entry => entry.name === VISION_SKILLS_NAME)).toBeUndefined()
+    expect(skills.find(entry => entry.name === VISION_SKILLS_NAME)).toBeDefined()
+    const agent = await registerAgent(ctx, 'failed-preparation')
+    await loadVisionSkill(ctx, agent)
+    const result = await ctx.tools.execute({
+      signal: new AbortController().signal,
+      callId: ToolCallId('failed-preparation-call'),
+      name: 'vision_glance', arguments: { images: [SAMPLE_IMAGE] }, agent,
+    })
+    expect(result.isError).toBe(true)
   })
 
   it('fails loud on invalid configuration at plugin load', async () => {
