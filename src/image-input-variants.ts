@@ -653,7 +653,7 @@ export class ImageInputVariantAdapter extends LlmAdapter {
   ): Promise<LlmResolvedModelInfo> {
     const info = await this.llm.resolveModelInfo(this.upstream, model, signal)
     if (!shouldWrapModel(info)) {
-      throw new Error(`model "${model}" is not a text-only model and needs no image-input variant`)
+      return { ...info, provider, id: model, name: this.hidden() ? info.name : `${info.name}${VARIANT_SUFFIX}` }
     }
     return {
       provider,
@@ -671,6 +671,12 @@ export class ImageInputVariantAdapter extends LlmAdapter {
   }
 
   override async *stream(options: GenerateOptions): AsyncGenerator<StreamChunk> {
+    const info = await this.llm.resolveModelInfo(this.upstream, options.model, options.signal)
+    if (!shouldWrapModel(info)) {
+      const messages = presentUnderUpstreamRoute(this.upstream, options.messages, () => this.durableTranscript(options.sessionId))
+      yield* this.llm.stream({ ...options, provider: this.upstream, messages })
+      return
+    }
     const current = this.runtime()
     const storageDir = current === undefined ? this.startupStorageDirectory() : current.storageDirectory
     let captured: CapturedEvidenceRuntime | undefined

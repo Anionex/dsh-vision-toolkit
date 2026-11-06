@@ -553,7 +553,7 @@ describe('ImageInputVariantAdapter', () => {
     ])
   })
 
-  it('resolves a wrapped model with image input and refuses a model outside the wrap scope', async () => {
+  it('resolves wrapped and unwrapped models without changing unwrapped capabilities', async () => {
     const ctx = { llm: llmStub() } as never
     const adapter = new ImageInputVariantAdapter(ctx, ctx.llm, 'up', 'Upstream', () => undefined, new EvidenceCache(4))
     const resolved = await adapter.resolveModel('vision-toolkit-up', 'plain')
@@ -567,7 +567,19 @@ describe('ImageInputVariantAdapter', () => {
       llm: llmStub({ resolveModelInfo: vi.fn(async () => ({ provider: 'up', id: 'v', name: 'v', inputModalities: ['text', 'image'] })) }),
     } as never
     const adapterVision = new ImageInputVariantAdapter(visionCtx, visionCtx.llm, 'up', 'Upstream', () => undefined, new EvidenceCache(4))
-    await expect(adapterVision.resolveModel('vision-toolkit-up', 'v')).rejects.toThrow('needs no image-input variant')
+    await expect(adapterVision.resolveModel('vision-toolkit-up', 'v')).resolves.toMatchObject({ provider: 'vision-toolkit-up', id: 'v', inputModalities: ['text', 'image'] })
+    const unknownCtx = { llm: llmStub({ resolveModelInfo: vi.fn(async () => ({ provider: 'up', id: 'u', name: 'Unknown', context: { contextWindow: 4096 } })) }) } as never
+    const unknownAdapter = new ImageInputVariantAdapter(unknownCtx, unknownCtx.llm, 'up', 'Upstream', () => undefined, new EvidenceCache(4))
+    await expect(unknownAdapter.resolveModel('vision-toolkit-up', 'u')).resolves.toEqual({ provider: 'vision-toolkit-up', id: 'u', name: `Unknown${VARIANT_SUFFIX}`, context: { contextWindow: 4096 } })
+  })
+
+  it.each([undefined, ['text', 'image']])('passes images through when modalities are %s', async (inputModalities) => {
+    const llm = llmStub({ resolveModelInfo: vi.fn(async () => ({ provider: 'up', id: 'plain', name: 'Plain', inputModalities })) })
+    const ctx = { llm } as never
+    const adapter = new ImageInputVariantAdapter(ctx, llm as never, 'up', 'Upstream', () => undefined, new EvidenceCache(4))
+    const messages = [message('m1', [imageBlock('native')])]
+    for await (const _chunk of adapter.stream({ provider: 'vision-toolkit-up', model: 'plain', messages })) { /* drain */ }
+    expect(llm.stream).toHaveBeenCalledWith(expect.objectContaining({ provider: 'up', messages }))
   })
 
   it('names the provider group with the variant suffix', () => {
@@ -678,7 +690,7 @@ describe('ImageInputVariantAdapter', () => {
     })
     const ctx = {
       get: () => undefined,
-      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(), stream: upstreamStream },
+      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(async () => ({ provider: 'up', id: 'plain', name: 'Plain', inputModalities: ['text'] })), stream: upstreamStream },
     } as never
     const adapter = new ImageInputVariantAdapter(ctx, ctx.llm, 'up', 'Upstream', () => undefined, new EvidenceCache(4))
     // The exact shape an official-helper caller produces: a frozen user message
@@ -808,7 +820,7 @@ describe('ImageInputVariantAdapter', () => {
     const ctx = {
       get: (name: string) => name === 'attachments' ? attachments : undefined,
       sessions: { get: vi.fn(() => ({ header: { cwd: workspace, createdAt: 1 } })) },
-      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(), stream: upstreamStream },
+      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(async () => ({ provider: 'up', id: 'plain', name: 'Plain', inputModalities: ['text'] })), stream: upstreamStream },
     } as never
     const adapter = new ImageInputVariantAdapter(
       ctx,
@@ -848,7 +860,7 @@ describe('ImageInputVariantAdapter', () => {
     })
     const ctx = {
       get: (name: string) => name === 'attachments' ? attachments : undefined,
-      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(), stream: upstreamStream },
+      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(async () => ({ provider: 'up', id: 'plain', name: 'Plain', inputModalities: ['text'] })), stream: upstreamStream },
     } as never
     const adapter = new ImageInputVariantAdapter(
       ctx,
@@ -879,7 +891,7 @@ describe('ImageInputVariantAdapter', () => {
     })
     const ctx = {
       get: () => undefined,
-      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(), stream: upstreamStream },
+      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(async () => ({ provider: 'up', id: 'plain', name: 'Plain', inputModalities: ['text'] })), stream: upstreamStream },
     } as never
     const adapter = new ImageInputVariantAdapter(ctx, ctx.llm, 'up', 'Upstream', () => runtime, new EvidenceCache(4))
 
@@ -904,7 +916,7 @@ describe('ImageInputVariantAdapter', () => {
     })
     const ctx = {
       get: (name: string) => name === 'attachments' ? attachments : undefined,
-      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(), stream: upstreamStream },
+      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(async () => ({ provider: 'up', id: 'plain', name: 'Plain', inputModalities: ['text'] })), stream: upstreamStream },
     } as never
     const adapter = new ImageInputVariantAdapter(ctx, ctx.llm, 'up', 'Upstream', () => runtime, new EvidenceCache(4))
 
@@ -955,7 +967,7 @@ describe('ImageInputVariantAdapter', () => {
     })
     const ctx = {
       get: (name: string) => name === 'attachments' ? attachments : undefined,
-      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(), stream: upstreamStream },
+      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(async () => ({ provider: 'up', id: 'plain', name: 'Plain', inputModalities: ['text'] })), stream: upstreamStream },
     } as never
     const adapter = new ImageInputVariantAdapter(ctx, ctx.llm, 'up', 'Upstream', () => runtimeStub(glance), new EvidenceCache(4))
     const frozen: GenerateOptions = Object.freeze({
@@ -994,7 +1006,7 @@ describe('ImageInputVariantAdapter', () => {
     const ctx = {
       sessions: { get: () => sessionStub(durable) },
       get: () => undefined,
-      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(), stream: upstreamStream },
+      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(async () => ({ provider: 'up', id: 'plain', name: 'Plain', inputModalities: ['text'] })), stream: upstreamStream },
     } as never
     const adapter = new ImageInputVariantAdapter(ctx, ctx.llm, 'up', 'Upstream', () => undefined, new EvidenceCache(4))
 
@@ -1033,7 +1045,7 @@ describe('ImageInputVariantAdapter', () => {
     const ctx = {
       sessions: { get: () => undefined },
       get: () => undefined,
-      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(), stream: upstreamStream },
+      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(async () => ({ provider: 'up', id: 'plain', name: 'Plain', inputModalities: ['text'] })), stream: upstreamStream },
     } as never
     const adapter = new ImageInputVariantAdapter(ctx, ctx.llm, 'up', 'Upstream', () => undefined, new EvidenceCache(4))
 
@@ -1059,7 +1071,7 @@ describe('ImageInputVariantAdapter', () => {
     // No `sessions` service: the adapter must not require one.
     const ctx = {
       get: () => undefined,
-      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(), stream: upstreamStream },
+      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(async () => ({ provider: 'up', id: 'plain', name: 'Plain', inputModalities: ['text'] })), stream: upstreamStream },
     } as never
     const adapter = new ImageInputVariantAdapter(ctx, ctx.llm, 'up', 'Upstream', () => undefined, new EvidenceCache(4))
     const history: Message[] = [assistantMessage('a1', 'up')]
@@ -1088,7 +1100,7 @@ describe('ImageInputVariantAdapter', () => {
     const ctx = {
       sessions: { get: () => sessionStub([rewritten]) },
       get: () => undefined,
-      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(), stream: upstreamStream },
+      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(async () => ({ provider: 'up', id: 'plain', name: 'Plain', inputModalities: ['text'] })), stream: upstreamStream },
     } as never
     const adapter = new ImageInputVariantAdapter(ctx, ctx.llm, 'up', 'Upstream', () => undefined, new EvidenceCache(4))
     const history: Message[] = [assistantMessage('a1', 'up')]
@@ -1182,7 +1194,7 @@ describe('ImageInputVariantAdapter', () => {
     })
     const ctx = {
       get: (name: string) => name === 'attachments' ? attachments : undefined,
-      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(), stream: upstreamStream },
+      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(async () => ({ provider: 'up', id: 'plain', name: 'Plain', inputModalities: ['text'] })), stream: upstreamStream },
     } as never
     const cache = new EvidenceCache(4)
     const runtime = runtimeStub(glance)
@@ -1227,7 +1239,7 @@ describe('ImageInputVariantAdapter', () => {
     })
     const ctx = {
       get: (name: string) => name === 'attachments' ? attachments : undefined,
-      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(), stream: upstreamStream },
+      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(async () => ({ provider: 'up', id: 'plain', name: 'Plain', inputModalities: ['text'] })), stream: upstreamStream },
     } as never
     const cache = new EvidenceCache(4)
     const firstAdapter = new ImageInputVariantAdapter(ctx, ctx.llm, 'up-a', 'A', () => runtime, cache)
@@ -1256,7 +1268,7 @@ describe('ImageInputVariantAdapter', () => {
     })
     const ctx = {
       get: (name: string) => name === 'attachments' ? attachments : undefined,
-      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(), stream: upstreamStream },
+      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(async () => ({ provider: 'up', id: 'plain', name: 'Plain', inputModalities: ['text'] })), stream: upstreamStream },
     } as never
     let current: ReturnType<typeof runtimeStub> = first
     const cache = new EvidenceCache(4)
@@ -1300,7 +1312,7 @@ describe('ImageInputVariantAdapter', () => {
     const ctx = {
       get: (name: string) => name === 'attachments' ? attachments : undefined,
       sessions: { get: () => ({ header: { createdAt: 1, cwd: workspace } }) },
-      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(), stream: upstreamStream },
+      llm: { listModels: vi.fn(async () => []), resolveModelInfo: vi.fn(async () => ({ provider: 'up', id: 'plain', name: 'Plain', inputModalities: ['text'] })), stream: upstreamStream },
     } as never
     const adapter = new ImageInputVariantAdapter(ctx, ctx.llm, 'up', 'Upstream', () => current, new EvidenceCache(4))
 
