@@ -4,8 +4,19 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+## [0.1.49] - 2026-11-07
+
+### Compatibility
+
+- Support exact DSH `0.2.1-rc.5` across all DSH peers and compatibility metadata, with mandatory real-Profile acceptance on Linux and Windows. Preserve earlier supported releases.
+- 所有 DSH peer 与兼容性元数据明确支持 `0.2.1-rc.5`，并增加 Linux、Windows 必跑的真实 Profile 验收，保留此前支持版本。
+
 ### Fixed
 
+- Prepare Python in the background without blocking Profile startup. Keep the Skill available on the first turn, wait for readiness at tool execution, and cancel preparation on unload or replacement. Settings remain available after setup failures.
+- 后台准备 Python，不阻塞 Profile 启动；首轮即可使用 Skill，工具执行时等待准备完成，卸载或替换配置时取消准备；准备失败后仍可通过设置修复。
+- Pin the documented official PyPI fallback instead of inheriting a user-configured mirror.
+- 明确固定文档约定的官方 PyPI 备用源，避免被用户环境中的镜像覆盖。
 - Resolve models outside an image-input variant's scope without failing the provider picker, and preserve native image handling when such a route is used.
 - 修复图片输入变体解析范围外的模型时导致提供商列表加载失败的问题，并在使用该路由时保留原生图片处理。
 
