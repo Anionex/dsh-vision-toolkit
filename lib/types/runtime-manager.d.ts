@@ -28,7 +28,7 @@ export interface RuntimeStorageGeneration {
     storageDir?: string;
 }
 /** Test seam for preparing one generation. */
-export type RuntimeGenerationFactory = (ctx: Context, config: ResolvedVisionToolkitConfig, readableStorageDirs: readonly string[]) => Promise<VisionToolkitRuntime>;
+export type RuntimeGenerationFactory = (ctx: Context, config: ResolvedVisionToolkitConfig, readableStorageDirs: readonly string[], signal?: AbortSignal) => Promise<VisionToolkitRuntime>;
 /** Async commit prerequisite run after preparation and before a generation becomes active. */
 export type RuntimeGenerationBeforePublish = (candidate: PreparedRuntimeGeneration) => Promise<void>;
 /** Internal runtime source with prepare-before-swap semantics. */
@@ -41,6 +41,9 @@ export declare class VisionToolkitRuntimeManager {
     private lastError;
     private validatedStartupStorageDir;
     private readonly readableStorageDirs;
+    private readonly lifetime;
+    private preparation;
+    private pending;
     constructor(ctx: Context, factory?: RuntimeGenerationFactory);
     /** The currently serving runtime; unavailable until one generation prepares. */
     current(): VisionToolkitRuntime;
@@ -48,6 +51,13 @@ export declare class VisionToolkitRuntimeManager {
     currentConfig(): ResolvedVisionToolkitConfig;
     /** Whether at least one generation is available. */
     get ready(): boolean;
+    /** Start preparation without holding up Profile boot. */
+    start(raw: VisionToolkitConfig, beforePublish?: RuntimeGenerationBeforePublish): Promise<void>;
+    private track;
+    /** Wait for the first generation; a caller cancellation does not cancel shared preparation. */
+    whenReady(signal?: AbortSignal): Promise<VisionToolkitRuntime>;
+    /** Invalidate queued generations and cancel their subprocesses/downloads. */
+    dispose(): void;
     /** Storage config safe for paste writes even when initial runtime preparation failed. */
     storageGeneration(): RuntimeStorageGeneration;
     /** Validated storage for best-effort consumers; undefined when startup preflight failed. */
@@ -68,6 +78,7 @@ export declare class VisionToolkitRuntimeManager {
      * @param beforePublish - optional durable prerequisite run after preparation.
      */
     initialize(raw: VisionToolkitConfig, beforePublish?: RuntimeGenerationBeforePublish): Promise<void>;
+    private initializeGeneration;
     /**
      * Apply an externally committed Settings generation. Concurrent edits are
      * last-write-wins; a slower obsolete prepare can never overwrite a newer one.
@@ -76,6 +87,7 @@ export declare class VisionToolkitRuntimeManager {
      * @returns whether this call published a new active generation.
      */
     reconfigure(raw: VisionToolkitConfig, beforePublish?: RuntimeGenerationBeforePublish): Promise<boolean>;
+    private reconfigureGeneration;
     /** Record a failed preflight while retaining the previous generation. */
     recordFailure(error: unknown): void;
     /** Secret-free status snapshot for health/configuration surfaces. */

@@ -45,6 +45,73 @@ function config(model: string) {
 }
 
 describe('VisionToolkitRuntimeManager', () => {
+  it('waits for background preparation, isolates caller cancellation, and follows replacement Settings', async () => {
+    const ctx = new Context()
+    contexts.push(ctx)
+    const signals: AbortSignal[] = []
+    let finish!: () => void
+    const manager = new VisionToolkitRuntimeManager(ctx, async (_ctx, resolved, _dirs, signal) => {
+      signals.push(signal!)
+      if (resolved.provider.model === 'slow') {
+        await new Promise<void>((resolve, reject) => {
+          finish = resolve
+          signal!.addEventListener('abort', () => reject(signal!.reason), { once: true })
+        })
+      }
+      return fakeRuntime(resolved)
+    })
+    const startup = manager.start(config('slow'))
+    expect(manager.ready).toBe(false)
+    const caller = new AbortController()
+    const cancelled = manager.whenReady(caller.signal)
+    caller.abort(new Error('caller stopped'))
+    await expect(cancelled).rejects.toThrow('caller stopped')
+    expect(signals[0]!.aborted).toBe(false)
+    const waiting = manager.whenReady()
+    await manager.reconfigure(config('replacement'))
+    await expect(startup).rejects.toThrow()
+    expect(signals[0]!.aborted).toBe(true)
+    expect(await waiting).toBe(manager.current())
+    expect(manager.currentConfig().provider.model).toBe('replacement')
+    finish()
+    manager.dispose()
+    await expect(manager.whenReady()).rejects.toThrow()
+  })
+
+  it('cancels background work on unload and prevents late publication', async () => {
+    const ctx = new Context()
+    contexts.push(ctx)
+    let finish!: () => void
+    let preparationSignal!: AbortSignal
+    const manager = new VisionToolkitRuntimeManager(ctx, async (_ctx, resolved, _dirs, signal) => {
+      preparationSignal = signal!
+      await new Promise<void>(resolve => { finish = resolve })
+      return fakeRuntime(resolved)
+    })
+    const startup = manager.start(config('slow'))
+    const waiting = manager.whenReady()
+    manager.dispose()
+    await expect(waiting).rejects.toThrow()
+    expect(preparationSignal.aborted).toBe(true)
+    finish()
+    await expect(startup).rejects.toThrow()
+    expect(manager.ready).toBe(false)
+  })
+
+  it('reports startup failure and permits Settings to repair the first generation', async () => {
+    const ctx = new Context()
+    contexts.push(ctx)
+    const manager = new VisionToolkitRuntimeManager(ctx, async (_ctx, resolved) => {
+      if (resolved.provider.model === 'broken') throw new Error('preparation failed')
+      return fakeRuntime(resolved)
+    })
+    await expect(manager.start(config('broken'))).rejects.toThrow('preparation failed')
+    await expect(manager.whenReady()).rejects.toThrow('preparation failed')
+    await manager.reconfigure(config('repaired'))
+    expect(await manager.whenReady()).toBe(manager.current())
+    expect(manager.status().lastError).toBeUndefined()
+  })
+
   it('prepares before publishing and retains the serving generation after failure', async () => {
     const ctx = new Context()
     contexts.push(ctx)

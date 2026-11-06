@@ -7,6 +7,8 @@
  */
 
 import { createHash, randomUUID } from 'node:crypto'
+import { AsyncLocalStorage } from 'node:async_hooks'
+import { setTimeout as delay } from 'node:timers/promises'
 import {
   access,
   chmod,
@@ -35,6 +37,13 @@ import { request as undiciRequest } from 'undici'
 import type { ResolvedVisionToolkitConfig } from './config.ts'
 import { VisionToolkitError } from './errors.ts'
 import { UPSTREAM_COMMIT, UPSTREAM_REPOSITORY, UPSTREAM_VERSION } from './version.ts'
+
+// Each concurrent Settings generation owns its cancellation scope; no process-global signal.
+const preparationScope = new AsyncLocalStorage<AbortSignal>()
+function checkPreparation(): void { preparationScope.getStore()?.throwIfAborted() }
+function preparationDelay(ms: number): Promise<void> {
+  return delay(ms, undefined, { signal: preparationScope.getStore() })
+}
 
 /** One executable plus fixed prefix arguments (for example Windows `py -3`). */
 export interface RuntimeCommand {
@@ -328,6 +337,7 @@ async function runCollected(
   cwd: string,
   options: { timeoutMs?: number; env?: NodeJS.ProcessEnv } = {},
 ): Promise<CommandResult> {
+  checkPreparation()
   const controller = new AbortController()
   let timedOut = false
   const timer = setTimeout(() => {
@@ -344,10 +354,11 @@ async function runCollected(
         stderr: { maxBytes: 256 * 1024 },
       },
       graceMs: 2000,
-      signal: controller.signal,
+      signal: preparationScope.getStore() === undefined ? controller.signal : AbortSignal.any([controller.signal, preparationScope.getStore()!]),
       ...(options.env === undefined ? {} : { env: options.env }),
     })
     const outcome = await handle.done
+    checkPreparation()
     return {
       stdout: handle.collected.stdout?.readFrom(0).text ?? '',
       stderr: handle.collected.stderr?.readFrom(0).text ?? '',
@@ -355,6 +366,7 @@ async function runCollected(
       timedOut,
     }
   } catch (error) {
+    checkPreparation()
     if (timedOut) return { stdout: '', stderr: '', exitCode: null, timedOut: true }
     throw error
   } finally {
@@ -370,9 +382,14 @@ async function installDependenciesWithFallback(
   label: string,
 ): Promise<void> {
   let lastResult: CommandResult | undefined
-  for (const indexUrl of [PYPI_MIRROR_BASE_URL, undefined]) {
-    const indexArgs = indexUrl === undefined ? [] : ['--index-url', indexUrl]
-    const result = await runCollected(ctx, [...argv, ...indexArgs], stateRoot, { timeoutMs: PREPARE_TIMEOUT_MS, env })
+  // An omitted index inherits shell/user configuration and can retry a broken
+  // third-party mirror instead of the documented official fallback.
+  for (const indexUrl of [PYPI_MIRROR_BASE_URL, 'https://pypi.org/simple']) {
+    const indexArgs = ['--index-url', indexUrl]
+    const result = await runCollected(ctx, [...argv, ...indexArgs], stateRoot, {
+      timeoutMs: PREPARE_TIMEOUT_MS,
+      env: { ...env, UV_DEFAULT_INDEX: indexUrl, UV_INDEX_URL: indexUrl, PIP_INDEX_URL: indexUrl },
+    })
     if (result.exitCode === 0 && !result.timedOut) return
     lastResult = result
   }
@@ -624,7 +641,9 @@ async function downloadBundledPythonOnce(
   destination: string,
   requestImpl: DownloadRequest = defaultDownloadRequest,
 ): Promise<void> {
-  const signal = AbortSignal.timeout(PYTHON_DOWNLOAD_TIMEOUT_MS)
+  checkPreparation()
+  const timeout = AbortSignal.timeout(PYTHON_DOWNLOAD_TIMEOUT_MS)
+  const signal = preparationScope.getStore() === undefined ? timeout : AbortSignal.any([timeout, preparationScope.getStore()!])
   let response: DownloadResponse
   try {
     response = await requestImpl(url, signal)
@@ -642,7 +661,7 @@ async function downloadBundledPythonOnce(
         callback(null, chunk)
       },
     })
-    await pipeline(response.body, hasher, createWriteStream(destination))
+    await pipeline(response.body, hasher, createWriteStream(destination), { signal })
     if (bytes !== artifact.size) throw new Error(`size mismatch: expected ${artifact.size}, received ${bytes}`)
     if (hash.digest('hex') !== artifact.sha256) throw new Error('sha256 mismatch')
   } finally {
@@ -664,14 +683,16 @@ async function downloadBundledPython(
   ]
   let lastError: unknown
   for (let attempt = 0; attempt < PYTHON_DOWNLOAD_ATTEMPTS; attempt++) {
+    checkPreparation()
     const source = sources[Math.min(attempt, sources.length - 1)] ?? artifact.url
     try {
       await downloadBundledPythonOnce(source, artifact, destination, requestImpl)
       return
     } catch (error) {
+      checkPreparation()
       lastError = error
       if (attempt + 1 < PYTHON_DOWNLOAD_ATTEMPTS) {
-        await new Promise(resolveWait => setTimeout(resolveWait, 500 * 2 ** attempt))
+        await preparationDelay(500 * 2 ** attempt)
       }
     }
   }
@@ -683,6 +704,7 @@ async function downloadBundledPython(
  * matching the managed-runtime lock semantics.
  */
 async function withDirectoryLock<T>(lockPath: string, fn: () => Promise<T>): Promise<T> {
+  checkPreparation()
   const owner = randomUUID()
   let acquired = false
   await mkdir(dirname(lockPath), { recursive: true })
@@ -698,6 +720,7 @@ async function withDirectoryLock<T>(lockPath: string, fn: () => Promise<T>): Pro
     if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
     const started = Date.now()
     while (Date.now() - started < PREPARE_TIMEOUT_MS) {
+      checkPreparation()
       try {
         const info = await stat(lockPath)
         if (Date.now() - info.mtimeMs > LOCK_STALE_MS) {
@@ -707,7 +730,7 @@ async function withDirectoryLock<T>(lockPath: string, fn: () => Promise<T>): Pro
       } catch {
         return withDirectoryLock(lockPath, fn)
       }
-      await new Promise(resolveWait => setTimeout(resolveWait, 250))
+      await preparationDelay(250)
     }
     throw new VisionToolkitError('runtime', 'timed out waiting for another process to prepare the bundled Python')
   }
@@ -1024,6 +1047,7 @@ async function waitForManagedRuntime(
 ): Promise<RuntimeMarker | undefined> {
   const started = Date.now()
   while (Date.now() - started < PREPARE_TIMEOUT_MS) {
+    checkPreparation()
     const marker = await readRuntimeMarker(markerPath)
     if (
       marker?.upstreamContentSha256 === expected.upstreamContentSha256
@@ -1038,7 +1062,7 @@ async function waitForManagedRuntime(
     } catch {
       return undefined
     }
-    await new Promise(resolveWait => setTimeout(resolveWait, 250))
+    await preparationDelay(250)
   }
   throw new VisionToolkitError('runtime', 'timed out waiting for another process to prepare the managed vision runtime')
 }
@@ -1057,6 +1081,7 @@ async function prepareManaged(
   config: ResolvedVisionToolkitConfig,
   manifest: UpstreamManifest,
 ): Promise<PreparedUpstreamRuntime> {
+  checkPreparation()
   const stateRoot = visionToolkitStateRoot()
   await mkdir(stateRoot, { recursive: true })
   await garbageCollectRuntimeCache(ctx, stateRoot)
@@ -1109,6 +1134,7 @@ async function prepareManaged(
       throw error
     }
     if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+    ctx.logger.info('dsh-vision-toolkit: waiting for another process to prepare the managed Python runtime')
     const completed = await waitForManagedRuntime(markerPath, lockPath, {
       upstreamContentSha256: manifest.contentSha256,
       requirementsSha256,
@@ -1140,6 +1166,8 @@ async function prepareManaged(
   }, LOCK_HEARTBEAT_MS)
   heartbeat.unref()
   try {
+    checkPreparation()
+    ctx.logger.info('dsh-vision-toolkit: preparing the managed Python runtime in the background')
     let manager: RuntimeMarker['manager'] = 'venv-pip'
     let created = false
     if (bootstrap.command.prefix.length === 0) {
@@ -1209,6 +1237,7 @@ async function prepareManaged(
     if (metadata === undefined) throw new VisionToolkitError('runtime', 'managed Python runtime did not start after installation')
     const dependencies = await dependencyVersions(ctx, stagedPython, cleanHome)
     assertLockedDependencies(dependencies, expectedDependencies)
+    checkPreparation()
     const marker: RuntimeMarker = {
       schemaVersion: 1,
       upstreamCommit: UPSTREAM_COMMIT,
@@ -1364,9 +1393,15 @@ async function prepareExternal(
 export async function prepareUpstreamRuntime(
   ctx: Context,
   config: ResolvedVisionToolkitConfig,
+  signal?: AbortSignal,
 ): Promise<PreparedUpstreamRuntime> {
-  const manifest = await verifyBundledUpstream()
-  return config.runtime.mode === 'managed'
-    ? prepareManaged(ctx, config, manifest)
-    : prepareExternal(ctx, config, manifest)
+  const prepare = async (): Promise<PreparedUpstreamRuntime> => {
+    checkPreparation()
+    const manifest = await verifyBundledUpstream()
+    checkPreparation()
+    return config.runtime.mode === 'managed'
+      ? prepareManaged(ctx, config, manifest)
+      : prepareExternal(ctx, config, manifest)
+  }
+  return signal === undefined ? prepare() : preparationScope.run(signal, prepare)
 }

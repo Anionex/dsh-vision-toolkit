@@ -1,12 +1,9 @@
 /**
  * @anionex/dsh-vision-toolkit — DSH Vision Toolkit profile bundle.
  *
- * Plugin lifecycle follows the documented readiness chain: verify the pinned
- * upstream checkout, publish the vision-skills Skill and its one-shot bootstrap,
- * then mount the execution tools only in Agents that load that Skill or invoke
- * the bootstrap. Any
- * failure leaves no model capability behind, and disposal unregisters every
- * global and Agent-scoped contribution the plugin mounted.
+ * Verify bundled assets and publish the Skill/bootstrap before preparing the
+ * runtime in the background. Skill-scoped calls wait for readiness and report
+ * preparation failures; disposal cancels preparation and removes contributions.
  * @module @anionex/dsh-vision-toolkit
  */
 import type { Context } from '@deepseek-ai/cordis';

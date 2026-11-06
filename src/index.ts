@@ -1,12 +1,9 @@
 /**
  * @anionex/dsh-vision-toolkit — DSH Vision Toolkit profile bundle.
  *
- * Plugin lifecycle follows the documented readiness chain: verify the pinned
- * upstream checkout, publish the vision-skills Skill and its one-shot bootstrap,
- * then mount the execution tools only in Agents that load that Skill or invoke
- * the bootstrap. Any
- * failure leaves no model capability behind, and disposal unregisters every
- * global and Agent-scoped contribution the plugin mounted.
+ * Verify bundled assets and publish the Skill/bootstrap before preparing the
+ * runtime in the background. Skill-scoped calls wait for readiness and report
+ * preparation failures; disposal cancels preparation and removes contributions.
  * @module @anionex/dsh-vision-toolkit
  */
 
@@ -25,6 +22,7 @@ import {
 import { VisionToolExposure } from './exposure.ts'
 import { createPasteTakeoverResolver, installImageInputVariants } from './image-input-variants.ts'
 import { VisionToolkitRuntimeManager } from './runtime-manager.ts'
+import { verifyBundledUpstream } from './runtime-install.ts'
 import { VISION_SKILLS_SKILL } from './skill.ts'
 import { StorageHistoryStore } from './storage-history.ts'
 import { bindVisionSettings } from './settings-compat.ts'
@@ -78,9 +76,9 @@ export async function apply(ctx: Context, config: VisionToolkitConfig = {}): Pro
   }
 
   const ensureOperational = (): void => {
-    if (!manager.ready || operationalDisposers !== undefined) return
+    if (lifecycle.signal.aborted || operationalDisposers !== undefined) return
     const exposure = new VisionToolExposure(ctx, () => createVisionTools(
-      () => manager.current(),
+      signal => manager.whenReady(signal),
       value => artifacts.presentationMeta(value),
       lifecycle.signal,
     ))
@@ -92,14 +90,6 @@ export async function apply(ctx: Context, config: VisionToolkitConfig = {}): Pro
       skill = ctx.skills.register(VISION_SKILLS_SKILL)
       exposureDisposer = exposure.install()
       operationalDisposers = { activationTool, exposure: exposureDisposer, skill }
-      const info = manager.current().upstreamVersion
-      ctx.logger.info(
-        'dsh-vision-toolkit %s ready (upstream %s @ %s, checkout %s)',
-        PLUGIN_VERSION,
-        info.version,
-        info.commit,
-        info.path,
-      )
     } catch (error) {
       exposureDisposer?.()
       if (skill !== undefined) skill()
@@ -109,10 +99,17 @@ export async function apply(ctx: Context, config: VisionToolkitConfig = {}): Pro
   }
 
   const initialConfig = await storageHistory.restore(settings.get())
-  try {
-    await manager.initialize(initialConfig, candidate => persistStorageHistory(candidate.config, false))
+  // Verify the shipped Skill/tool implementation before discovery. Interpreter
+  // probing, downloads and installation are cancellable background work.
+  await verifyBundledUpstream()
+  const preparation = manager.start(initialConfig, candidate => persistStorageHistory(candidate.config, false))
+  ensureOperational()
+  void preparation.then(() => {
+    if (lifecycle.signal.aborted) return
     ensureOperational()
-  } catch (error) {
+    variants.reconcile()
+  }).catch(async error => {
+    if (lifecycle.signal.aborted || manager.ready) return
     const resolvedInitial = resolveConfig(initialConfig)
     if (resolvedInitial.storageDir === undefined
       || manager.validatedStorageDirectory() === resolvedInitial.storageDir) {
@@ -120,11 +117,11 @@ export async function apply(ctx: Context, config: VisionToolkitConfig = {}): Pro
     }
     const message = error instanceof Error ? error.message : String(error)
     ctx.logger.error(
-      'dsh-vision-toolkit %s: runtime not ready; the vision-skills skill, activation bootstrap, and Agent-scoped visual tools are NOT registered. Settings remain available for repair. %s',
+      'dsh-vision-toolkit %s: runtime preparation failed; visual calls report this failure. Settings remain available for repair. %s',
       PLUGIN_VERSION,
       message,
     )
-  }
+  })
 
   const backend = new VisionToolkitWebBackend(ctx, manager, artifacts, ensureOperational)
   const currentConfig = (): ResolvedVisionToolkitConfig => manager.ready
@@ -185,6 +182,7 @@ export async function apply(ctx: Context, config: VisionToolkitConfig = {}): Pro
 
   return () => {
     lifecycle.abort()
+    manager.dispose()
     if (operationalDisposers !== undefined) {
       operationalDisposers.exposure()
       operationalDisposers.activationTool()

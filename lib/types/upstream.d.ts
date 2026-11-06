@@ -187,7 +187,7 @@ export declare class UpstreamAdapter {
     get versionInfo(): UpstreamVersionInfo;
     private requirePrepared;
     /** Verify and prepare the configured source plus Python dependencies. */
-    prepare(): Promise<void>;
+    prepare(signal?: AbortSignal): Promise<void>;
     /** Run one upstream CLI without a shell. */
     run(tool: UpstreamTool, args: readonly string[], options: {
         signal: AbortSignal;

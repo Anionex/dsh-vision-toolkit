@@ -785,8 +785,8 @@ export class UpstreamAdapter {
   }
 
   /** Verify and prepare the configured source plus Python dependencies. */
-  async prepare(): Promise<void> {
-    this.prepared = await prepareUpstreamRuntime(this.ctx, this.config)
+  async prepare(signal?: AbortSignal): Promise<void> {
+    this.prepared = await prepareUpstreamRuntime(this.ctx, this.config, signal)
   }
 
   /** Run one upstream CLI without a shell. */

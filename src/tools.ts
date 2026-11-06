@@ -176,13 +176,14 @@ const dominantAnalysisSchema = {
 const requiredDominantAnalysisSchema = { ...dominantAnalysisSchema, required: true } as const
 
 /** Runtime lookup accepted by tools so Settings can atomically swap generations. */
-export type VisionToolkitRuntimeSource = VisionToolkitRuntime | (() => VisionToolkitRuntime)
+export type VisionToolkitRuntimeSource = VisionToolkitRuntime | ((signal?: AbortSignal) => VisionToolkitRuntime | Promise<VisionToolkitRuntime>)
 
 /** Browser-only metadata projector; the model-visible value remains unchanged. */
 export type VisionToolkitPresentationProjector = (value: JsonValue) => JsonValue
 
-function runtimeFrom(source: VisionToolkitRuntimeSource): VisionToolkitRuntime {
-  return typeof source === 'function' ? source() : source
+async function runtimeFrom(source: VisionToolkitRuntimeSource, signal: AbortSignal): Promise<VisionToolkitRuntime> {
+  signal.throwIfAborted()
+  return typeof source === 'function' ? source(signal) : source
 }
 
 /**
@@ -229,7 +230,8 @@ export function createVisionTools(
           ...(args.ocr === true ? { ocr: true } : {}),
           ...(args.region === undefined ? {} : { region: args.region }),
         }
-        return runtimeFrom(source).glance(request, callOptions(exec, args.timeoutMs, lifecycleSignal))
+        const options = callOptions(exec, args.timeoutMs, lifecycleSignal)
+        return (await runtimeFrom(source, options.signal)).glance(request, options)
       },
       isConcurrencySafe: () => true,
       presentCall: args => ({
@@ -273,7 +275,8 @@ export function createVisionTools(
           ...(args.preview === true ? { preview: true } : {}),
           ...(args.previewOutput === undefined ? {} : { previewOutput: args.previewOutput }),
         }
-        return runtimeFrom(source).ground(request, callOptions(exec, args.timeoutMs, lifecycleSignal))
+        const options = callOptions(exec, args.timeoutMs, lifecycleSignal)
+        return (await runtimeFrom(source, options.signal)).ground(request, options)
       },
       isConcurrencySafe: args => args.preview !== true,
       presentCall: args => ({ card: 'generic', title: `Locate ${args.target}`, kind: 'search', locations: [{ path: args.image }] }),
@@ -322,7 +325,8 @@ export function createVisionTools(
           ...(args.preview === true ? { preview: true } : {}),
           ...(args.previewOutput === undefined ? {} : { previewOutput: args.previewOutput }),
         }
-        return runtimeFrom(source).detect(request, callOptions(exec, args.timeoutMs, lifecycleSignal))
+        const options = callOptions(exec, args.timeoutMs, lifecycleSignal)
+        return (await runtimeFrom(source, options.signal)).detect(request, options)
       },
       isConcurrencySafe: args => args.preview !== true,
       presentCall: args => ({ card: 'generic', title: `Detect ${args.category ?? 'UI elements'}`, kind: 'search', locations: [{ path: args.image }] }),
@@ -367,7 +371,8 @@ export function createVisionTools(
           ...(args.polygon === true ? { polygon: true } : {}),
           ...(args.output === undefined ? {} : { output: args.output }),
         }
-        return runtimeFrom(source).trace(request, callOptions(exec, args.timeoutMs, lifecycleSignal))
+        const options = callOptions(exec, args.timeoutMs, lifecycleSignal)
+        return (await runtimeFrom(source, options.signal)).trace(request, options)
       },
       presentCall: args => ({ card: 'generic', title: `Trace ${args.image}`, kind: 'execute', locations: [{ path: args.image }] }),
     }),
@@ -400,7 +405,8 @@ export function createVisionTools(
           ...(args.scale === undefined ? {} : { scale: args.scale }),
           ...(args.output === undefined ? {} : { output: args.output }),
         }
-        return runtimeFrom(source).crop(request, callOptions(exec, args.timeoutMs, lifecycleSignal))
+        const options = callOptions(exec, args.timeoutMs, lifecycleSignal)
+        return (await runtimeFrom(source, options.signal)).crop(request, options)
       },
       presentCall: args => ({ card: 'generic', title: `Crop ${args.image}`, kind: 'edit', locations: [{ path: args.image }] }),
     }),
@@ -442,7 +448,8 @@ export function createVisionTools(
           ...(args.top === undefined ? {} : { top: args.top }),
           ...(args.runName === undefined ? {} : { runName: args.runName }),
         }
-        return runtimeFrom(source).pixelDiff(request, callOptions(exec, args.timeoutMs, lifecycleSignal))
+        const options = callOptions(exec, args.timeoutMs, lifecycleSignal)
+        return (await runtimeFrom(source, options.signal)).pixelDiff(request, options)
       },
       presentCall: args => ({ card: 'generic', title: `Compare ${args.original} with ${args.rebuilt}`, kind: 'search', locations: [{ path: args.original }, { path: args.rebuilt }] }),
     }),
@@ -499,7 +506,8 @@ export function createVisionTools(
           ...(args.splitOnly === true ? { splitOnly: true } : {}),
           ...(args.resume === true ? { resume: true } : {}),
         }
-        return runtimeFrom(source).longScreenshotOcr(request, callOptions(exec, args.timeoutMs, lifecycleSignal))
+        const options = callOptions(exec, args.timeoutMs, lifecycleSignal)
+        return (await runtimeFrom(source, options.signal)).longScreenshotOcr(request, options)
       },
       presentCall: args => ({ card: 'generic', title: args.splitOnly === true ? `Split ${args.image}` : `OCR ${args.image}`, kind: 'execute', locations: [{ path: args.image }] }),
     }),
@@ -535,7 +543,8 @@ export function createVisionTools(
           ...(args.padding === undefined ? {} : { padding: args.padding }), ...(args.keepWhites === undefined ? {} : { keepWhites: args.keepWhites }),
           ...(args.output === undefined ? {} : { output: args.output }),
         }
-        return runtimeFrom(source).extractForeground(request, callOptions(exec, args.timeoutMs, lifecycleSignal))
+        const options = callOptions(exec, args.timeoutMs, lifecycleSignal)
+        return (await runtimeFrom(source, options.signal)).extractForeground(request, options)
       },
       presentCall: args => ({ card: 'generic', title: `Extract foreground from ${args.image}`, kind: 'edit', locations: [{ path: args.image }] }),
     }),
@@ -561,7 +570,8 @@ export function createVisionTools(
           ...(args.maxPixels === undefined ? {} : { maxPixels: args.maxPixels }), ...(args.mergeTolerance === undefined ? {} : { mergeTolerance: args.mergeTolerance }),
           ...(args.candidateTolerance === undefined ? {} : { candidateTolerance: args.candidateTolerance }),
         }
-        return runtimeFrom(source).dominantColors(request, callOptions(exec, args.timeoutMs, lifecycleSignal))
+        const options = callOptions(exec, args.timeoutMs, lifecycleSignal)
+        return (await runtimeFrom(source, options.signal)).dominantColors(request, options)
       },
       isConcurrencySafe: () => true,
       presentCall: args => ({ card: 'generic', title: `Measure colors in ${args.image}`, kind: 'read', locations: [{ path: args.image }] }),
@@ -594,7 +604,8 @@ export function createVisionTools(
           ...(args.fullPage === undefined ? {} : { fullPage: args.fullPage }),
           ...(args.output === undefined ? {} : { output: args.output }),
         }
-        return runtimeFrom(source).htmlScreenshot(request, callOptions(exec, args.timeoutMs, lifecycleSignal))
+        const options = callOptions(exec, args.timeoutMs, lifecycleSignal)
+        return (await runtimeFrom(source, options.signal)).htmlScreenshot(request, options)
       },
       presentCall: args => ({ card: 'generic', title: `Screenshot ${args.source}`, kind: 'execute', locations: [{ path: args.source }] }),
     }),

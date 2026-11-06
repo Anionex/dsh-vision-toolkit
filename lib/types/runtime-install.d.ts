@@ -108,6 +108,6 @@ export declare function rewriteVenvConfig(cfg: string, homeDir: string): string;
  */
 export declare function storePythonProbeEnvironment(installEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv;
 /** Prepare the configured pinned runtime without making any vision API call. */
-export declare function prepareUpstreamRuntime(ctx: Context, config: ResolvedVisionToolkitConfig): Promise<PreparedUpstreamRuntime>;
+export declare function prepareUpstreamRuntime(ctx: Context, config: ResolvedVisionToolkitConfig, signal?: AbortSignal): Promise<PreparedUpstreamRuntime>;
 export {};
 //# sourceMappingURL=runtime-install.d.ts.map
