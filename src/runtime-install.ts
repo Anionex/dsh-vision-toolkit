@@ -834,6 +834,7 @@ export async function resolveBootstrapPython(
   cwd: string,
   manifestOverride?: PythonBootstrapManifest,
   requestImpl?: DownloadRequest,
+  maximumMinor?: number,
 ): Promise<{ command: RuntimeCommand; version: string; major: number; minor: number }> {
   const candidates: RuntimeCommand[] = configured === undefined
     ? process.platform === 'win32'
@@ -849,12 +850,14 @@ export async function resolveBootstrapPython(
     : [{ program: configured, prefix: [], display: configured }]
   for (const command of candidates) {
     const metadata = await pythonMetadata(ctx, command, cwd)
-    if (metadata !== undefined && (metadata.major > 3 || metadata.major === 3 && metadata.minor >= 11)) {
+    if (metadata !== undefined && (metadata.major > 3 || metadata.major === 3 && metadata.minor >= 11)
+      && (maximumMinor === undefined || metadata.major === 3 && metadata.minor <= maximumMinor)) {
       return { command, ...metadata }
     }
   }
   if (configured !== undefined) {
-    throw new VisionToolkitError('runtime', `vision-toolkit requires Python 3.11 or newer: ${configured}`)
+    const supported = maximumMinor === undefined ? '3.11 or newer' : `3.11 through 3.${maximumMinor} for the managed runtime`
+    throw new VisionToolkitError('runtime', `vision-toolkit requires Python ${supported}: ${configured}`)
   }
   try {
     const stateRoot = visionToolkitStateRoot()
@@ -1087,7 +1090,9 @@ async function prepareManaged(
   await garbageCollectRuntimeCache(ctx, stateRoot)
   const cleanHome = join(stateRoot, 'home')
   await mkdir(cleanHome, { recursive: true })
-  const bootstrap = await resolveBootstrapPython(ctx, config.runtime.python, cleanHome)
+  // Locked numpy/vtracer wheels currently cover CPython 3.11–3.14. A newer
+  // system interpreter must not prevent the bundled supported Python fallback.
+  const bootstrap = await resolveBootstrapPython(ctx, config.runtime.python, cleanHome, undefined, undefined, 14)
   const requirements = await readFile(REQUIREMENTS_PATH)
   const requirementsSha256 = sha256(requirements)
   const expectedDependencies = parseLockedDependencies(requirements)

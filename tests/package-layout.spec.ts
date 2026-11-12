@@ -78,7 +78,7 @@ describe('package layout contract', () => {
 
   it('declares the exact DSH release window and runtime compatibility contract', () => {
     expect(PACKAGE.engines?.node).toBe('^22.19.0 || >=24.0.0')
-    expect(PACKAGE.dsh?.compatibility?.dsh).toBe('>=0.1.0-rc.8 <0.2.0 || 0.2.0-rc.2 || 0.2.1-rc.2 || 0.2.1-rc.3 || 0.2.1-rc.5')
+    expect(PACKAGE.dsh?.compatibility?.dsh).toBe('>=0.1.0-rc.8 <0.2.0 || 0.2.0-rc.2 || 0.2.1-rc.2 || 0.2.1-rc.3 || 0.2.1-rc.5 || 0.2.2-rc.1')
     expect(PACKAGE.dsh?.compatibility?.dshReleases?.['0.2.1-rc.2']).toBe('compatible')
     expect(PACKAGE.dsh?.compatibility?.dshReleases?.['0.2.1-rc.5']).toBe('compatible')
     expect(PACKAGE.dsh?.compatibility?.dshReleases).not.toHaveProperty('0.2.1-rc.4')
@@ -155,7 +155,7 @@ describe('package layout contract', () => {
     // next to the real host.
     for (const [name, spec] of Object.entries(peers)) {
       if (name.startsWith('@deepseek-ai/dsh-')) {
-        expect(spec, name).toBe('>=0.1.0-rc.8 <0.2.0 || ^0.1.1-rc.1 || ^0.1.2-alpha.1 || ^0.1.5-rc.1 || 0.2.0-rc.2 || 0.2.1-rc.2 || 0.2.1-rc.3 || 0.2.1-rc.5')
+        expect(spec, name).toBe('>=0.1.0-rc.8 <0.2.0 || ^0.1.1-rc.1 || ^0.1.2-alpha.1 || ^0.1.5-rc.1 || 0.2.0-rc.2 || 0.2.1-rc.2 || 0.2.1-rc.3 || 0.2.1-rc.5 || 0.2.2-rc.1')
       }
     }
     expect(peers).toHaveProperty('@deepseek-ai/dsh-client-ui-input-trigger')

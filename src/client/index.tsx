@@ -228,7 +228,7 @@ const en = {
   healthServiceRejectedCredential: 'Service rejected the configured credential (HTTP {status}).',
   healthServiceForbidden: 'Service is reachable, but GET /models is restricted (HTTP {status}). This is often an account or model-list permission limit, not an invalid key; you can ignore this warning when the vision-model test reports success.',
   healthServiceNoModels: 'Service is reachable but does not support GET /models (HTTP {status}).',
-  healthServiceRateLimited: 'Service is reachable, but the connection test was rate-limited (HTTP 429).',
+  healthServiceRateLimited: 'Service is reachable, but the connection test was rate-limited (HTTP 429). Wait for the Retry-After interval or configure your own vision endpoint in Settings.',
   healthServiceHttpFailed: 'Connection test failed with HTTP {status}.',
   healthServiceUnreachable: 'Could not reach {endpoint}.',
   healthModelNotTested: 'Vision model not tested. Run Test vision model to make one real multimodal request.',
@@ -422,7 +422,7 @@ const zh: Record<LocaleKey, string> = {
   healthServiceRejectedCredential: '服务拒绝了当前 API 密钥（HTTP {status}）。',
   healthServiceForbidden: '服务可以访问，但对 GET /models 的访问被限制（HTTP {status}）。这通常是账号或模型列表权限限制，不代表密钥无效；若“视觉模型已实测正常”，此警告可忽略。',
   healthServiceNoModels: '服务可以访问，但不支持 GET /models（HTTP {status}）。',
-  healthServiceRateLimited: '服务可以访问，但本次连接测试触发了限流（HTTP 429）。',
+  healthServiceRateLimited: '服务可以访问，但本次连接测试触发了限流（HTTP 429）。请按 Retry-After 等待后重试，或在设置中配置自己的视觉端点。',
   healthServiceHttpFailed: '连接测试失败（HTTP {status}）。',
   healthServiceUnreachable: '无法连接到 {endpoint}。',
   healthModelNotTested: '尚未测试视觉模型。点击“测试视觉模型”可执行一次真实多模态请求。',
@@ -925,7 +925,9 @@ function PaletteView({ block, t = key => en[key] }: ViewProps) {
 }
 
 async function apiRequest<T>(init?: RequestInit): Promise<T> {
-  const response = await fetch(SETTINGS_ROUTE, { credentials: 'same-origin', ...init })
+  const headers = new Headers(init?.headers)
+  headers.set('X-DSH-Vision-Request', '1')
+  const response = await fetch(SETTINGS_ROUTE, { credentials: 'same-origin', ...init, headers })
   const body = await response.json() as ApiSuccess<T> | ApiFailure
   if (!response.ok || !body.ok) {
     const failure = body as ApiFailure

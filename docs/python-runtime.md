@@ -1,5 +1,9 @@
 # Configure the Python runtime
 
+The managed runtime supports Python **3.11–3.14** with its locked dependency wheels. Automatic discovery skips newer system interpreters and falls back to the bundled Python 3.13.15. If you explicitly configure an unsupported interpreter, Settings reports the supported range so you can select another executable. External runtimes retain their own dependency management.
+
+An installer saying “No matching distribution” does not necessarily mean a version was removed: check the interpreter version and wheel platform tags. The pinned NumPy 2.4.6 and vtracer 0.6.15 releases have Windows x64 wheels through CPython 3.14, but not 3.15. Do not replace the pins with prereleases to repair managed installation.
+
 By default the plugin picks a system Python 3.11+, or downloads a standalone Python from the domestic mirror (`dsh-vision-python-bootstrap-1317715800.cos.ap-guangzhou.myqcloud.com`) when none is found, falling back to the GitHub release when the mirror is unreachable; most users never need to configure this section. The rest is for advanced setups where automatic discovery fails, a specific interpreter is required, or an external runtime is used.
 
 The packaged `managed` runtime creates its own isolated virtual environment. `runtime.python` selects the Python executable used to bootstrap or refresh that environment; it does not replace the managed environment with the interpreter's global site-packages. Set it when automatic discovery fails or when several Python installations exist. The override is also used by `runtime.mode: external`.

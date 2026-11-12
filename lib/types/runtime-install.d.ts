@@ -88,7 +88,7 @@ export declare function acquireBundledPython(ctx: Context, stateRoot: string, cw
     command: RuntimeCommand;
     version: string;
 }>;
-export declare function resolveBootstrapPython(ctx: Context, configured: string | undefined, cwd: string, manifestOverride?: PythonBootstrapManifest, requestImpl?: DownloadRequest): Promise<{
+export declare function resolveBootstrapPython(ctx: Context, configured: string | undefined, cwd: string, manifestOverride?: PythonBootstrapManifest, requestImpl?: DownloadRequest, maximumMinor?: number): Promise<{
     command: RuntimeCommand;
     version: string;
     major: number;

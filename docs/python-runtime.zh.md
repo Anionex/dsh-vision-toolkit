@@ -1,5 +1,9 @@
 # 配置 Python 运行时
 
+托管运行时的锁定依赖 wheel 支持 Python **3.11–3.14**。自动发现会跳过更新的系统解释器，回退到内置 Python 3.13.15 下载。如果手动指定了不支持的解释器，设置页会提示支持范围，供你选择其他可执行文件。外部运行时保留自己的依赖管理方式。
+
+安装器提示“No matching distribution”时，请核对解释器版本和 wheel 平台标签。固定的 NumPy 2.4.6、vtracer 0.6.15 仍有适用于 CPython 3.14 及此前支持版本的 Windows x64 wheel，但没有 3.15 wheel。请勿通过换成预发布依赖修复托管安装。
+
 默认情况下插件会自动选择系统 Python 3.11+，找不到时从国内镜像（`dsh-vision-python-bootstrap-1317715800.cos.ap-guangzhou.myqcloud.com`）下载托管 Python，镜像不可用时自动回退到 GitHub 官方发布源，普通用户无需配置本节。以下内容供自动发现失败、需要固定版本或使用外部运行时的高级场景参考。
 
 打包的 `managed` 运行时会创建自己的隔离虚拟环境。`runtime.python` 指定的是引导或刷新该环境时使用的 Python 解释器，并不会把 managed 运行时替换成系统解释器的全局 site-packages。当自动发现失败或机器上有多个 Python 时，应设置这个选项；`runtime.mode: external` 也使用该覆盖值。
