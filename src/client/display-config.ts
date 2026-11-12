@@ -32,7 +32,7 @@ export async function readDisplayConfig(): Promise<{ hidden: boolean }> {
     }
     const epoch = cacheEpoch
     try {
-      const response = await fetch(DISPLAY_CONFIG_ROUTE, { cache: 'no-store' })
+      const response = await fetch(DISPLAY_CONFIG_ROUTE, { cache: 'no-store', headers: { 'X-DSH-Vision-Request': '1' } })
       if (epoch !== cacheEpoch) continue
       const body = await response.json() as { ok?: boolean; value?: { hidden?: unknown } }
       if (epoch !== cacheEpoch) continue

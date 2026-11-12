@@ -414,7 +414,7 @@ export class PasteImageController {
       }
       let request: Promise<Response>
       try {
-        request = fetch(`${PASTE_POLICY_ROUTE}?${query.toString()}`)
+        request = fetch(`${PASTE_POLICY_ROUTE}?${query.toString()}`, { headers: { 'X-DSH-Vision-Request': '1' } })
       } catch {
         // No fetch surface (test runtime, pre-fetch bootstrap): leave the
         // verdict unconfirmed rather than letting the paste listener die.
@@ -679,7 +679,7 @@ export class PasteImageController {
             })
             const body = await responseJson(await fetch(`${PASTE_IMAGES_ROUTE}?${query.toString()}`, {
               method: 'POST',
-              headers: { 'Content-Type': record.file.type },
+              headers: { 'Content-Type': record.file.type, 'X-DSH-Vision-Request': '1' },
               body: record.file,
               signal,
             }))

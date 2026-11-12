@@ -194,7 +194,7 @@ declare const en: {
     readonly healthServiceRejectedCredential: "Service rejected the configured credential (HTTP {status}).";
     readonly healthServiceForbidden: "Service is reachable, but GET /models is restricted (HTTP {status}). This is often an account or model-list permission limit, not an invalid key; you can ignore this warning when the vision-model test reports success.";
     readonly healthServiceNoModels: "Service is reachable but does not support GET /models (HTTP {status}).";
-    readonly healthServiceRateLimited: "Service is reachable, but the connection test was rate-limited (HTTP 429).";
+    readonly healthServiceRateLimited: "Service is reachable, but the connection test was rate-limited (HTTP 429). Wait for the Retry-After interval or configure your own vision endpoint in Settings.";
     readonly healthServiceHttpFailed: "Connection test failed with HTTP {status}.";
     readonly healthServiceUnreachable: "Could not reach {endpoint}.";
     readonly healthModelNotTested: "Vision model not tested. Run Test vision model to make one real multimodal request.";

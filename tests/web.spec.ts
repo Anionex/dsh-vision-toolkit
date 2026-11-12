@@ -358,6 +358,24 @@ describe('VisionToolkitWebBackend', () => {
     expect(manager.healthCalls).toEqual([])
   })
 
+  it('saves through the Desktop bridge while rejecting missing evidence and foreign origins', async () => {
+    const { base } = await setup()
+    const snapshot = await (await fetch(base)).json() as { value: { settings: { value: Record<string, unknown> } } }
+    const body = JSON.stringify({ action: 'save', expectedRevision: 0, value: { ...snapshot.value.settings.value, concurrency: 3 } })
+    const send = (headers: Record<string, string>, method = 'POST') => fetch(base, {
+      method, headers: { 'Content-Type': 'application/json', ...headers }, ...(method === 'POST' ? { body } : {}),
+    })
+    expect((await send({})).status).toBe(403)
+    expect((await send({ 'X-DSH-Vision-Request': '1', Origin: 'https://attacker.example' })).status).toBe(403)
+    expect((await send({ 'X-DSH-Vision-Request': '1', 'Sec-Fetch-Site': 'cross-site' })).status).toBe(403)
+    const preflight = await send({ Origin: 'https://attacker.example', 'Access-Control-Request-Headers': 'x-dsh-vision-request' }, 'OPTIONS')
+    expect(preflight.headers.get('access-control-allow-origin')).toBeNull()
+    const saved = await send({ 'X-DSH-Vision-Request': '1' })
+    expect(saved.status).toBe(200)
+    const reloaded = await (await fetch(base)).json() as { value: { settings: { value: { concurrency: number } } } }
+    expect(reloaded.value.settings.value.concurrency).toBe(3)
+  })
+
   it('rejects cross-site and non-JSON writes before touching Settings', async () => {
     const { base } = await setup()
     const crossSite = await fetch(base, {

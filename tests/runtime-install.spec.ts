@@ -232,6 +232,7 @@ describe('rewriteVenvConfig (Microsoft Store Python workaround)', () => {
 })
 
 class BundledPythonSubprocessService extends SubprocessRuntime {
+  systemMinor: number | undefined
   readonly spawns: SubprocessSpawnSpec[] = []
 
   override spawn(spec: SubprocessSpawnSpec): SubprocessHandle {
@@ -253,6 +254,10 @@ class BundledPythonSubprocessService extends SubprocessRuntime {
         } catch {
           // The bundled interpreter has not been extracted yet.
         }
+      } else if (this.systemMinor !== undefined) {
+        exitCode = 0
+        stdout = JSON.stringify({ version: `3.${this.systemMinor}.0`, major: 3, minor: this.systemMinor })
+        stderr = ''
       } else if (interpreter !== 'python3' && interpreter !== 'python' && interpreter !== 'py') {
         exitCode = 0
         stdout = '{"version":"3.13.15","major":3,"minor":13}\n'
@@ -402,6 +407,26 @@ describe('bundled Python bootstrap', () => {
     expect(resolved.command.program).toContain(join('python-bootstrap', '3.13.15-'))
     expect(requestMock).toHaveBeenCalledTimes(1)
     expect(await pathExists(orphan)).toBe(false)
+  })
+
+  it('uses bundled Python when system Python is too new for locked managed wheels', async () => {
+    const { archive, manifest } = await bundledPythonFixtureManifest()
+    const requestMock = stubBundledPythonDownload(archive)
+    const ctx = new Context()
+    contexts.push(ctx)
+    await ctx.plugin(BundledPythonSubprocessService)
+    const service = ctx.subprocess as BundledPythonSubprocessService
+    service.systemMinor = 15
+    const cwd = join(visionToolkitStateRoot(), 'home')
+    await mkdir(cwd, { recursive: true })
+    const resolved = await resolveBootstrapPython(ctx, undefined, cwd, manifest, requestMock, 14)
+    expect(resolved.version).toBe('3.13.15')
+    expect(requestMock).toHaveBeenCalledTimes(1)
+    await expect(resolveBootstrapPython(ctx, 'configured-python', cwd, manifest, requestMock, 14)).rejects.toThrow('3.11 through 3.14')
+    const external = await resolveBootstrapPython(ctx, 'configured-python', cwd)
+    expect(external.minor).toBe(15)
+    service.systemMinor = 14
+    expect((await resolveBootstrapPython(ctx, undefined, cwd, manifest, requestMock, 14)).minor).toBe(14)
   })
 
   it('does not auto-download when the user configured an interpreter', async () => {
