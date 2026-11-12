@@ -4,6 +4,22 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+## [0.1.50] - 2026-11-12
+
+### Compatibility
+
+- Support exact DSH `0.2.2-rc.1` with mandatory Linux and Windows Profile acceptance, preserving earlier supported releases.
+- 明确支持 DSH `0.2.2-rc.1`，通过 Linux、Windows 必跑的 Profile 验收，保留此前支持版本。
+
+### Fixed
+
+- Save settings and read paste policies through Desktop's authenticated request forwarding while retaining foreign-origin rejection and refusing CORS preflight.
+- 修复 Desktop 请求转发后的设置保存与粘贴策略读取，保留外站来源拦截及 CORS 预检拒绝。
+- Use Python 3.11–3.14 for managed dependency wheels; skip newer system interpreters and fall back to bundled Python 3.13.15. Explain unsupported explicit overrides and preserve external runtime behavior and dependency pins.
+- 托管依赖使用 Python 3.11–3.14，跳过更新的系统解释器并回退到内置 Python 3.13.15；明确提示不支持的手动覆盖，保留外部运行时行为及依赖固定版本。
+- Explain rate-limit recovery and document local Ollama credentials and Profile patch configuration in English and Chinese.
+- 补充限流恢复提示，以及本地 Ollama 凭据、Profile patch 配置的中英文文档。
+
 ## [0.1.49] - 2026-11-07
 
 ### Compatibility
@@ -520,7 +536,9 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 - Runtime teardown cancels in-flight operations before removing Agent-scoped tools, the activation bootstrap, and the Skill.
 - The Web client is published through the current nested `dsh.client` manifest and loader-compatible built artifact required by DSH snapshot0810.
 
-[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.48...HEAD
+[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.50...HEAD
+[0.1.50]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.49...v0.1.50
+[0.1.49]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.48...v0.1.49
 [0.1.48]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.47...v0.1.48
 [0.1.47]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.46...v0.1.47
 [0.1.46]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.45...v0.1.46
