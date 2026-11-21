@@ -4,6 +4,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+## [0.1.53] - 2026-11-21
+
 ### Added
 
 - Let Windows users opt in to private storage for read-only workspaces. When the workspace cannot be written, Vision Toolkit uses the current user's local app data, with separate storage per workspace and Windows permission checks. The setting is off by default (#169).
@@ -555,7 +557,8 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 - Runtime teardown cancels in-flight operations before removing Agent-scoped tools, the activation bootstrap, and the Skill.
 - The Web client is published through the current nested `dsh.client` manifest and loader-compatible built artifact required by DSH snapshot0810.
 
-[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.52...HEAD
+[Unreleased]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.53...HEAD
+[0.1.53]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.52...v0.1.53
 [0.1.52]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.51...v0.1.52
 [0.1.51]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.50...v0.1.51
 [0.1.50]: https://github.com/Anionex/dsh-vision-toolkit/compare/v0.1.49...v0.1.50
