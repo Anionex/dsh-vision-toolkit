@@ -60,6 +60,10 @@ dsh plugin --profile desktop add @anionex/dsh-vision-toolkit@<新版本号>
 | 装完插件没生效 | 确认命令装到了正确的 Profile，并**完全退出后重启**桌面版 |
 | 想装到 web Profile | 把命令中的 `desktop` 换成 `web`，重启桌面版后到 web Profile 使用 |
 
+### 在 Windows 只读工作区使用视觉工具
+
+打开 **设置 → 视觉工具 → 高级设置 → 本地文件**，开启 **只读工作区可使用私有存储** 并保存。将 **默认保存目录** 留空。工作区可写时，视觉工具文件仍保存在工作区。无法写入时，插件改用你在 Windows 上的本地应用数据目录下的固定位置，按工作区隔离保存。若无法校验存储位置的权限，请改用可写工作区。
+
 ## 相关链接
 
 - [项目主页](https://agent-vision.anionex.me)

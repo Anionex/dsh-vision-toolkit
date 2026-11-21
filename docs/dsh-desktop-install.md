@@ -60,6 +60,10 @@ If you installed without pinning an exact version, the official `dsh plugin upda
 | Plugin does not show up after install | Confirm the command targeted the right profile and **fully quit and restart** DSH Desktop |
 | Want to install into the web profile | Replace `desktop` with `web` in the command, then restart DSH Desktop and switch to the web profile |
 
+### Use vision tools in a read-only Windows workspace
+
+Open **Settings → Vision Toolkit → Advanced settings → Local files**, enable **Use private storage when the workspace is read-only**, and save. Leave **Default save directory** blank. Vision files stay in the workspace when it is writable. When storage cannot be written, the plugin uses a fixed folder in your local Windows app data and separates files by workspace. If the folder's permissions cannot be verified, use a writable workspace instead.
+
 ## Links
 
 - [Project website](https://agent-vision.anionex.me)

@@ -8,10 +8,11 @@
 
 import { createHash, randomUUID } from 'node:crypto'
 import type { Stats } from 'node:fs'
-import { cp, link, lstat, mkdir, mkdtemp, readdir, realpath, rename, rm, stat } from 'node:fs/promises'
+import { cp, link, lstat, mkdir, mkdtemp, readdir, realpath, rename, rm, rmdir, stat } from 'node:fs/promises'
 import { dirname, extname, isAbsolute, join, relative, resolve, sep, win32 } from 'node:path'
 import { homedir, tmpdir } from 'node:os'
 import { VisionToolkitError } from './errors.ts'
+import { assertWindowsFallbackDirectory, assertWindowsFallbackFile, findWindowsFallbackStorage, isWindowsFallbackStorageRoot } from './windows-fallback-storage.ts'
 
 /** Supported input image extensions (the upstream client's allowlist). */
 export const SUPPORTED_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp'] as const
@@ -38,6 +39,11 @@ export interface WorkspaceStorage {
   root: string
   /** Absolute user-visible spelling of the same managed root. */
   visibleRoot: string
+}
+
+export interface WorkspaceStorageOptions {
+  /** Opt in to private local storage when Windows cannot write to the workspace. */
+  windowsWorkspaceFallback?: boolean
 }
 
 /** Whether `child` equals or lies under `parent` on the same path root. */
@@ -235,16 +241,39 @@ async function managedDirectory(
   return canonical
 }
 
-/**
- * Resolve the plugin-managed root for one workspace. Blank configuration keeps
- * the legacy workspace-local `.dsh-vision-toolkit` directory. A configured
- * shared root receives one stable, automatically generated workspace child.
- * Workspace-local permission failures remain fail-closed and identify the
- * writable-session-workspace workaround; no alternate root is selected.
- */
+function windowsFallbackEnabled(options: WorkspaceStorageOptions): boolean {
+  return process.platform === 'win32' && options.windowsWorkspaceFallback === true
+}
+
+function fallbackWorkspaceId(workspace: string): string {
+  // Windows Local AppData and the validated ACL already isolate the user.
+  return workspaceStorageId(workspace, 'windows-local-app-data')
+}
+
+function workspacePermissionError(error: unknown): error is VisionToolkitError {
+  return error instanceof VisionToolkitError
+    && error.cause instanceof Error
+    && 'code' in error.cause
+    && ['EACCES', 'EPERM', 'EROFS'].includes(String(error.cause.code))
+}
+
+async function probeWorkspaceStorage(root: string): Promise<void> {
+  // mkdir on an existing root can succeed with EEXIST even after write access
+  // to that root has been removed. Probe before choosing where to write.
+  let probe: string
+  try {
+    probe = await mkdtemp(join(root, '.vision-toolkit-write-'))
+  } catch (cause) {
+    throw new VisionToolkitError('path', `plugin storage directory is not writable: ${root}`, { cause })
+  }
+  await rmdir(probe)
+}
+
+/** Resolve workspace-local, configured POSIX, or opted-in private Windows storage. */
 export async function resolveWorkspaceStorage(
   workspaceRaw: string,
   storageDirRaw?: string,
+  options: WorkspaceStorageOptions = {},
 ): Promise<WorkspaceStorage> {
   const expandedWorkspace = expandUserHome(workspaceRaw)
   const visibleWorkspace = resolve(expandedWorkspace)
@@ -259,17 +288,25 @@ export async function resolveWorkspaceStorage(
     const visibleRoot = join(visibleWorkspace, '.dsh-vision-toolkit')
     try {
       const root = await managedDirectory(workspace, visibleRoot, 'plugin storage directory')
+      if (windowsFallbackEnabled(options)) await probeWorkspaceStorage(root)
       return { workspace, root, visibleRoot }
     } catch (error) {
-      if (
-        error instanceof VisionToolkitError
-        && error.cause instanceof Error
-        && 'code' in error.cause
-        && ['EACCES', 'EPERM', 'EROFS'].includes(String(error.cause.code))
-      ) {
+      if (workspacePermissionError(error)) {
+        if (windowsFallbackEnabled(options)) {
+          const fallback = await findWindowsFallbackStorage(fallbackWorkspaceId(workspace), true)
+          if (fallback === undefined) throw new VisionToolkitError('path', 'Private Windows fallback storage is unavailable')
+          const root = await realpath(fallback)
+          if (relative(fallback, root) !== '') {
+            throw new VisionToolkitError('path', `Windows fallback storage changed after permission validation: ${fallback}`)
+          }
+          return { workspace, root, visibleRoot: fallback }
+        }
+        const guidance = process.platform === 'win32'
+          ? ' On Windows, leave storageDir blank. Enable Windows workspace fallback in Settings to keep using this workspace.'
+          : ''
         throw new VisionToolkitError(
           'path',
-          `${error.message}. Choose a session workspace writable by the current user and retry. On Windows, leave storageDir blank; configured shared storage requires ACL validation that is not yet available.`,
+          `${error.message}. Choose a session workspace writable by the current user and retry.${guidance}`,
           { cause: error.cause },
         )
       }
@@ -311,6 +348,7 @@ async function resolveReadableWorkspaceStorageRoot(
  * @param allowedDirs - configured extra allowed roots.
  * @param storageDirRaw - optional shared storage root.
  * @param readableStorageDirs - previously validated shared roots retained for persisted input paths.
+ * @param options - optional private Windows fallback policy.
  * @returns the resolved policy.
  */
 export async function createPathPolicy(
@@ -318,8 +356,9 @@ export async function createPathPolicy(
   allowedDirs: readonly string[],
   storageDirRaw?: string,
   readableStorageDirs: readonly string[] = [],
+  options: WorkspaceStorageOptions = {},
 ): Promise<PathPolicy> {
-  const storage = await resolveWorkspaceStorage(workspaceRaw, storageDirRaw)
+  const storage = await resolveWorkspaceStorage(workspaceRaw, storageDirRaw, options)
   const { workspace } = storage
   let tempDir: string
   const tempDirectoryRaw = platformTempDirectory()
@@ -329,6 +368,17 @@ export async function createPathPolicy(
     throw new VisionToolkitError('path', `platform temporary directory is not accessible: ${tempDirectoryRaw}`, { cause: error })
   }
   const roots = [workspace, tempDir, storage.root]
+  if (windowsFallbackEnabled(options) && !isWindowsFallbackStorageRoot(storage.root)) {
+    try {
+      const previous = await findWindowsFallbackStorage(fallbackWorkspaceId(workspace), false)
+      if (previous !== undefined) {
+        const canonical = await realpath(previous)
+        if (relative(previous, canonical) === '') roots.push(canonical)
+      }
+    } catch {
+      // An absent or newly unsafe fallback directory is never authorized.
+    }
+  }
   for (const raw of readableStorageDirs) {
     if (raw === storageDirRaw) continue
     try {
@@ -395,6 +445,8 @@ export async function resolveAuthorizedFile(
   if (!policy.allowedDirs.some(root => isWithin(root, real))) {
     throw new VisionToolkitError('path', `${kind} escapes the allowed directories: ${raw}`)
   }
+  const privateRoot = policy.allowedDirs.find(root => isWindowsFallbackStorageRoot(root) && isWithin(root, real))
+  if (privateRoot !== undefined) await assertWindowsFallbackFile(privateRoot, target)
   let info
   try {
     info = await stat(real)
@@ -535,6 +587,7 @@ export async function seedStagedDirectory(finalPath: string, staged: string, pol
   if (!isWithin(policy.outputDir, real)) {
     throw new VisionToolkitError('path', 'resume target escaped the managed output directory')
   }
+  if (isWindowsFallbackStorageRoot(policy.storageRoot)) await assertWindowsFallbackDirectory(policy.storageRoot, finalPath)
   await assertSafeDirectoryTree(real)
   await cp(real, staged, { recursive: true, force: true })
   await assertSafeDirectoryTree(staged)

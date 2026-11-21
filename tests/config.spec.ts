@@ -33,9 +33,16 @@ describe('resolveConfig', () => {
     expect(config.runtime.mode).toBe('managed')
     expect(config.runtime.python).toBeUndefined()
     expect(config.storageDir).toBeUndefined()
+    expect(config.windowsWorkspaceFallback).toBe(false)
     expect(config.storageHistory).toEqual([])
     expect(config.allowedDirs).toEqual([])
     expect(config.imageInputVariants).toEqual({ enabled: true, providers: [], autoSwitch: true, hidden: true })
+  })
+
+  it('requires an explicit boolean opt-in for Windows workspace fallback', () => {
+    expect(resolveConfig({ windowsWorkspaceFallback: true }).windowsWorkspaceFallback).toBe(true)
+    expect(resolveConfig({ windowsWorkspaceFallback: false }).windowsWorkspaceFallback).toBe(false)
+    expect(() => resolveConfig({ windowsWorkspaceFallback: 'true' } as never)).toThrow('must be a boolean')
   })
 
   it('normalizes and sorts provider header names', () => {

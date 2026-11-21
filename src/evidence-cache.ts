@@ -103,6 +103,7 @@ export function evidenceRuntimeFingerprint(
     maxImagePixels: config.maxImagePixels,
     runtime: config.runtime,
     storageDir: config.storageDir ?? null,
+    ...(config.windowsWorkspaceFallback ? { windowsWorkspaceFallback: true } : {}),
   }))
 }
 

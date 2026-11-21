@@ -730,9 +730,10 @@ export class VisionToolkitRuntime {
     return this.adapter.versionInfo
   }
 
-  /** Shared storage root belonging to this immutable runtime generation. */
-  get storageDirectory(): string | undefined {
-    return this.config.storageDir
+  /** Storage settings belonging to this immutable runtime generation. */
+  get storageSettings(): { storageDir?: string; windowsWorkspaceFallback: boolean } {
+    const { storageDir, windowsWorkspaceFallback } = this.config
+    return { ...(storageDir === undefined ? {} : { storageDir }), windowsWorkspaceFallback }
   }
 
   /** Stable identity for persisted image descriptions produced by this runtime. */
@@ -917,7 +918,9 @@ export class VisionToolkitRuntime {
   }
 
   private pathPolicy(workspace: string): Promise<PathPolicy> {
-    return createPathPolicy(workspace, this.config.allowedDirs, this.config.storageDir, this.readableStorageDirs)
+    return createPathPolicy(workspace, this.config.allowedDirs, this.config.storageDir, this.readableStorageDirs, {
+      windowsWorkspaceFallback: this.config.windowsWorkspaceFallback,
+    })
   }
 
   private async compressedImageRoot(policy: PathPolicy): Promise<string> {
@@ -2130,7 +2133,9 @@ export class VisionToolkitRuntime {
       let artifactDirectory: HealthCheck
       try {
         // allowedDirs are session input roots; they do not affect output readiness.
-        const policy = await createPathPolicy(options.workspace, [], this.config.storageDir)
+        const policy = await createPathPolicy(options.workspace, [], this.config.storageDir, [], {
+          windowsWorkspaceFallback: this.config.windowsWorkspaceFallback,
+        })
         artifactDirectory = await this.writableDirectoryCheck(policy.outputDir, 'Artifact directory')
       } catch {
         artifactDirectory = { status: 'error', detail: 'Artifact directory could not be prepared' }

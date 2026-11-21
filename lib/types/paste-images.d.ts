@@ -53,16 +53,19 @@ export interface PasteRoot {
     writeRoot: string;
     visibleRoot: string;
 }
+export interface PasteStorageSettings {
+    storageDir?: string;
+    windowsWorkspaceFallback?: boolean;
+}
 /**
  * Resolve the managed per-session image directory used by both browser pastes
  * and native attachment bridging. A configured shared storage root receives a
  * stable workspace-specific child, keeping projects isolated without writing
  * plugin files into the project directory.
  */
-export declare function sessionPasteRoot(ctx: Context, sessionId: string, storageDir?: string): Promise<PasteRoot>;
-export interface PasteStorageGeneration {
+export declare function sessionPasteRoot(ctx: Context, sessionId: string, storage?: PasteStorageSettings): Promise<PasteRoot>;
+export interface PasteStorageGeneration extends PasteStorageSettings {
     generation: number;
-    storageDir?: string;
 }
 /** Runtime limit face kept separate for focused backend tests. */
 export interface PasteImageRuntime {

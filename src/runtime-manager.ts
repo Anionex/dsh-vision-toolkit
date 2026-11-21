@@ -31,6 +31,7 @@ export interface RuntimeManagerStatus {
 export interface RuntimeStorageGeneration {
   generation: number
   storageDir?: string
+  windowsWorkspaceFallback: boolean
 }
 
 /** Test seam for preparing one generation. */
@@ -74,7 +75,7 @@ export class VisionToolkitRuntimeManager {
   private generation = 0
   private reconfigureTicket = 0
   private lastError: string | undefined
-  private validatedStartupStorageDir: string | null | undefined
+  private validatedStartupStorage: Omit<RuntimeStorageGeneration, 'generation'> | undefined
   private readonly readableStorageDirs = new Set<string>()
   private readonly lifetime = new AbortController()
   private preparation: AbortController | undefined
@@ -151,25 +152,20 @@ export class VisionToolkitRuntimeManager {
 
   /** Storage config safe for paste writes even when initial runtime preparation failed. */
   storageGeneration(): RuntimeStorageGeneration {
-    if (this.active !== undefined) {
-      return {
-        generation: this.generation,
-        ...(this.active.config.storageDir === undefined ? {} : { storageDir: this.active.config.storageDir }),
-      }
-    }
-    if (this.validatedStartupStorageDir === undefined) {
-      throw new Error('dsh-vision-toolkit storage configuration is not ready')
-    }
-    return {
-      generation: this.generation,
-      ...(this.validatedStartupStorageDir === null ? {} : { storageDir: this.validatedStartupStorageDir }),
-    }
+    const storage = this.validatedStorageGeneration()
+    if (storage === undefined) throw new Error('dsh-vision-toolkit storage configuration is not ready')
+    return storage
   }
 
-  /** Validated storage for best-effort consumers; undefined when startup preflight failed. */
-  validatedStorageDirectory(): string | undefined {
-    if (this.active !== undefined) return this.active.config.storageDir
-    return this.validatedStartupStorageDir ?? undefined
+  /** Validated storage for best-effort consumers, even before Python is ready. */
+  validatedStorageGeneration(): RuntimeStorageGeneration | undefined {
+    const storage = this.active?.config ?? this.validatedStartupStorage
+    if (storage === undefined) return undefined
+    return {
+      generation: this.generation,
+      ...(storage.storageDir === undefined ? {} : { storageDir: storage.storageDir }),
+      windowsWorkspaceFallback: storage.windowsWorkspaceFallback,
+    }
   }
 
   private async prepareResolvedCandidate(config: ResolvedVisionToolkitConfig, signal = this.lifetime.signal): Promise<PreparedRuntimeGeneration> {
@@ -247,7 +243,12 @@ export class VisionToolkitRuntimeManager {
     try {
       const config = resolveConfig(raw)
       if (config.storageDir !== undefined) await preflightSharedStorageBase(config.storageDir)
-      this.validatedStartupStorageDir = config.storageDir ?? null
+      signal.throwIfAborted()
+      if (ticket !== this.reconfigureTicket) return
+      this.validatedStartupStorage = {
+        ...(config.storageDir === undefined ? {} : { storageDir: config.storageDir }),
+        windowsWorkspaceFallback: config.windowsWorkspaceFallback,
+      }
       this.rememberStorageDirectories(config.storageHistory)
       this.rememberStorageDirectory(config.storageDir)
       const candidate = await this.prepareResolvedCandidate(config, signal)

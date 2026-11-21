@@ -91,7 +91,7 @@ function runtimeStub(
   return {
     glance,
     evidenceFingerprint,
-    storageDirectory,
+    storageSettings: { storageDir: storageDirectory, windowsWorkspaceFallback: false },
     captureEvidenceRuntime: vi.fn(async () => captured),
   } as unknown as VisionToolkitRuntime
 }
@@ -285,7 +285,7 @@ describe('convertImagesToEvidence', () => {
       undefined,
       'session-shared',
       'runtime-shared',
-      shared,
+      { storageDir: shared },
     )
 
     const imagePath = glance.mock.calls[0]?.[0]?.images[0]
@@ -830,7 +830,7 @@ describe('ImageInputVariantAdapter', () => {
       () => undefined,
       new EvidenceCache(4),
       () => false,
-      () => shared,
+      () => ({ storageDir: shared }),
     )
 
     for await (const _chunk of adapter.stream({

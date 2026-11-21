@@ -59,6 +59,8 @@ export interface VisionToolkitConfig {
      * `.dsh-vision-toolkit` into the workspace.
      */
     storageDir?: string;
+    /** Opt in to private Windows storage when the session workspace is not writable. */
+    windowsWorkspaceFallback?: boolean;
     /** Internal read-only history used to keep persisted paths valid after storage moves. */
     storageHistory?: string[];
     /** Extra directories (besides the workspace) inputs may come from. */
@@ -126,6 +128,7 @@ export interface ResolvedVisionToolkitConfig {
         python?: string;
     };
     storageDir?: string;
+    windowsWorkspaceFallback: boolean;
     storageHistory: string[];
     allowedDirs: string[];
     imageInputVariants: {

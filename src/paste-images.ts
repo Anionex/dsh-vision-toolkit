@@ -9,6 +9,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-session'
 import { resolveWorkspaceStorage } from './paths.ts'
 import { sameOriginPost } from './web-request.ts'
+import { assertWindowsFallbackDirectory, isWindowsFallbackStorageRoot } from './windows-fallback-storage.ts'
 
 /** Exact route used by the browser paste integration. */
 export const PASTE_IMAGES_ROUTE = '/_dsh/vision-toolkit/paste-images'
@@ -179,6 +180,11 @@ async function ensureManagedDirectory(workspace: string, path: string): Promise<
   return canonical
 }
 
+export interface PasteStorageSettings {
+  storageDir?: string
+  windowsWorkspaceFallback?: boolean
+}
+
 /**
  * Resolve the managed per-session image directory used by both browser pastes
  * and native attachment bridging. A configured shared storage root receives a
@@ -188,25 +194,26 @@ async function ensureManagedDirectory(workspace: string, path: string): Promise<
 export async function sessionPasteRoot(
   ctx: Context,
   sessionId: string,
-  storageDir?: string,
+  storage: PasteStorageSettings = {},
 ): Promise<PasteRoot> {
   const session = ctx.sessions.get(sessionId as never)
   if (session === undefined) throw new Error(`live Session not found: ${sessionId}`)
   const cwd = session.header.cwd
   if (cwd === undefined || !isAbsolute(cwd)) throw new Error(`Session has no absolute workspace: ${sessionId}`)
 
-  const storage = await resolveWorkspaceStorage(resolve(cwd), storageDir)
-  const pluginRoot = storage.root
+  const managedStorage = await resolveWorkspaceStorage(resolve(cwd), storage.storageDir, storage)
+  const pluginRoot = managedStorage.root
   const temporaryRoot = join(pluginRoot, 'tmp')
   await ensureManagedDirectory(pluginRoot, temporaryRoot)
   const requestedRoot = join(temporaryRoot, 'pasted-images')
   const root = await ensureManagedDirectory(temporaryRoot, requestedRoot)
-  const visibleRoot = join(storage.visibleRoot, 'tmp', 'pasted-images')
+  const visibleRoot = join(managedStorage.visibleRoot, 'tmp', 'pasted-images')
 
   const sessionKey = createHash('sha256').update(sessionId).digest('hex').slice(0, 20)
   const requestedSessionRoot = join(requestedRoot, sessionKey)
   const sessionRoot = await ensureManagedDirectory(root, requestedSessionRoot)
   ensurePathInside(root, sessionRoot)
+  if (isWindowsFallbackStorageRoot(pluginRoot)) await assertWindowsFallbackDirectory(pluginRoot, requestedSessionRoot)
   return { writeRoot: sessionRoot, visibleRoot: join(visibleRoot, sessionKey) }
 }
 
@@ -267,9 +274,8 @@ async function copyImage(
   }
 }
 
-export interface PasteStorageGeneration {
+export interface PasteStorageGeneration extends PasteStorageSettings {
   generation: number
-  storageDir?: string
 }
 
 class PasteStorageChangedError extends Error {}
@@ -321,16 +327,17 @@ export class PastedImageBackend {
         throw new TypeError('Content-Length does not match the declared size')
       }
       let storage = this.storageGeneration()
-      let directory = await sessionPasteRoot(this.ctx, sessionId, storage.storageDir)
+      let directory = await sessionPasteRoot(this.ctx, sessionId, storage)
       managedPath = await writeImage(req, directory.writeRoot, filename, size, this.runtime.maxUploadBytes())
       for (let attempt = 0; attempt < MAX_STORAGE_GENERATION_RETRIES; attempt += 1) {
         const current = this.storageGeneration()
-        if (current.generation === storage.generation && current.storageDir === storage.storageDir) {
+        if (current.generation === storage.generation && current.storageDir === storage.storageDir
+          && current.windowsWorkspaceFallback === storage.windowsWorkspaceFallback) {
           const absolutePath = join(directory.visibleRoot, basename(managedPath))
           responseJson(res, 201, { ok: true, value: { absolutePath, filename, bytes: size } })
           return
         }
-        const nextDirectory = await sessionPasteRoot(this.ctx, sessionId, current.storageDir)
+        const nextDirectory = await sessionPasteRoot(this.ctx, sessionId, current)
         const migratedPath = await copyImage(managedPath, nextDirectory.writeRoot, filename)
         await rm(managedPath, { force: true }).catch(() => {})
         managedPath = migratedPath

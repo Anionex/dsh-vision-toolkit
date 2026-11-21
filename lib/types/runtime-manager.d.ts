@@ -26,6 +26,7 @@ export interface RuntimeManagerStatus {
 export interface RuntimeStorageGeneration {
     generation: number;
     storageDir?: string;
+    windowsWorkspaceFallback: boolean;
 }
 /** Test seam for preparing one generation. */
 export type RuntimeGenerationFactory = (ctx: Context, config: ResolvedVisionToolkitConfig, readableStorageDirs: readonly string[], signal?: AbortSignal) => Promise<VisionToolkitRuntime>;
@@ -39,7 +40,7 @@ export declare class VisionToolkitRuntimeManager {
     private generation;
     private reconfigureTicket;
     private lastError;
-    private validatedStartupStorageDir;
+    private validatedStartupStorage;
     private readonly readableStorageDirs;
     private readonly lifetime;
     private preparation;
@@ -60,8 +61,8 @@ export declare class VisionToolkitRuntimeManager {
     dispose(): void;
     /** Storage config safe for paste writes even when initial runtime preparation failed. */
     storageGeneration(): RuntimeStorageGeneration;
-    /** Validated storage for best-effort consumers; undefined when startup preflight failed. */
-    validatedStorageDirectory(): string | undefined;
+    /** Validated storage for best-effort consumers, even before Python is ready. */
+    validatedStorageGeneration(): RuntimeStorageGeneration | undefined;
     private prepareResolvedCandidate;
     private rememberStorageDirectory;
     private rememberStorageDirectories;

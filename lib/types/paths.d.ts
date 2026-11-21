@@ -30,6 +30,10 @@ export interface WorkspaceStorage {
     /** Absolute user-visible spelling of the same managed root. */
     visibleRoot: string;
 }
+export interface WorkspaceStorageOptions {
+    /** Opt in to private local storage when Windows cannot write to the workspace. */
+    windowsWorkspaceFallback?: boolean;
+}
 /** Whether `child` equals or lies under `parent` on the same path root. */
 export declare function isWithin(parent: string, child: string): boolean;
 /** Current platform temporary directory before realpath canonicalization. */
@@ -47,14 +51,8 @@ export declare function assertSecureWorkspaceStorage(info: Stats, requested: str
 export declare function assertSecureSharedStorageBase(requested: string): Promise<string>;
 /** Validate and write-probe a configured shared root before Settings activation. */
 export declare function preflightSharedStorageBase(storageDirRaw: string): Promise<string>;
-/**
- * Resolve the plugin-managed root for one workspace. Blank configuration keeps
- * the legacy workspace-local `.dsh-vision-toolkit` directory. A configured
- * shared root receives one stable, automatically generated workspace child.
- * Workspace-local permission failures remain fail-closed and identify the
- * writable-session-workspace workaround; no alternate root is selected.
- */
-export declare function resolveWorkspaceStorage(workspaceRaw: string, storageDirRaw?: string): Promise<WorkspaceStorage>;
+/** Resolve workspace-local, configured POSIX, or opted-in private Windows storage. */
+export declare function resolveWorkspaceStorage(workspaceRaw: string, storageDirRaw?: string, options?: WorkspaceStorageOptions): Promise<WorkspaceStorage>;
 /**
  * Build the per-invocation path policy: resolve workspace storage, realpath the
  * platform temp directory and allowed directories, and create the artifact
@@ -63,9 +61,10 @@ export declare function resolveWorkspaceStorage(workspaceRaw: string, storageDir
  * @param allowedDirs - configured extra allowed roots.
  * @param storageDirRaw - optional shared storage root.
  * @param readableStorageDirs - previously validated shared roots retained for persisted input paths.
+ * @param options - optional private Windows fallback policy.
  * @returns the resolved policy.
  */
-export declare function createPathPolicy(workspaceRaw: string, allowedDirs: readonly string[], storageDirRaw?: string, readableStorageDirs?: readonly string[]): Promise<PathPolicy>;
+export declare function createPathPolicy(workspaceRaw: string, allowedDirs: readonly string[], storageDirRaw?: string, readableStorageDirs?: readonly string[], options?: WorkspaceStorageOptions): Promise<PathPolicy>;
 /**
  * Validate one input image path and return its fence-checked absolute path
  * and byte size.

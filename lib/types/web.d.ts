@@ -19,6 +19,7 @@ export declare const DISPLAY_CONFIG_ROUTE = "/_dsh/vision-toolkit/display-config
 export interface VisionToolkitSettingsSnapshot {
     schemaVersion: 1;
     writable: boolean;
+    windowsWorkspaceFallbackAvailable: boolean;
     settings: {
         value: VisionToolkitConfig;
         user?: unknown;

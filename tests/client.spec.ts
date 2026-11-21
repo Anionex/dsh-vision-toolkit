@@ -357,7 +357,42 @@ describe('Vision Toolkit client plugin', () => {
     expect(advanced?.contains(screen.getByLabelText('credential'))).toBe(true)
     expect(advanced?.contains(screen.getByLabelText('storageDir'))).toBe(true)
     expect((screen.getByLabelText('storageDir') as HTMLInputElement).placeholder).toBe('/tmp/dsh-vision-toolkit')
+    expect(screen.queryByLabelText(/windowsWorkspaceFallback/)).toBeNull()
     expect(view.container.querySelector('.dvt-settings-header')).toBeNull()
+  })
+
+  it('lets a Windows host opt in and explicitly opt back out through Settings', async () => {
+    const snapshot = { ...settingsSnapshot(), windowsWorkspaceFallbackAvailable: true }
+    const fetchMock = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        const update = JSON.parse(String(init.body))
+        Object.assign(snapshot.settings.value, update.value)
+        snapshot.settings.revision += 1
+      }
+      return jsonResponse({ ok: true, value: snapshot })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const { ctx, registrations } = fakeClientContext()
+    apply(ctx as never)
+    const settings = registrations.find(entry => entry.options.name === 'settings.section')
+    if (settings === undefined) throw new Error('Settings component was not registered')
+    const view = render(createElement(settings.component, {
+      controller: new VisionSettingsController(),
+      t: (key: string) => key,
+    }))
+    await screen.findAllByText('0.1.0')
+    const advanced = view.container.querySelector('details.dvt-advanced')
+    expect(advanced?.hasAttribute('open')).toBe(false)
+    fireEvent.click(screen.getByText('advanced'))
+    const toggle = screen.getByLabelText(/windowsWorkspaceFallback/) as HTMLInputElement
+    expect(toggle.checked).toBe(false)
+    for (const enabled of [true, false]) {
+      fireEvent.click(toggle)
+      fireEvent.click(screen.getByRole('button', { name: 'save' }))
+      await waitFor(() => expect(snapshot.settings.value).toMatchObject({ windowsWorkspaceFallback: enabled }))
+      await waitFor(() => expect(toggle.disabled).toBe(false))
+      expect(toggle.checked).toBe(enabled)
+    }
   })
 
   it('checks for a plugin release and requires confirmation before update and restart', async () => {

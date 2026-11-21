@@ -103,6 +103,8 @@ export interface VisionToolkitConfig {
    * `.dsh-vision-toolkit` into the workspace.
    */
   storageDir?: string
+  /** Opt in to private Windows storage when the session workspace is not writable. */
+  windowsWorkspaceFallback?: boolean
   /** Internal read-only history used to keep persisted paths valid after storage moves. */
   storageHistory?: string[]
   /** Extra directories (besides the workspace) inputs may come from. */
@@ -163,6 +165,7 @@ export const LegacyConfig: Schema<VisionToolkitConfig> = z.object({
     python: z.string(),
   }),
   storageDir: z.string(),
+  windowsWorkspaceFallback: z.boolean().default(false),
   storageHistory: z.array(z.string()).default([]),
   allowedDirs: z.array(z.string()).default([]),
   imageInputVariants: z.object({
@@ -233,6 +236,7 @@ export interface ResolvedVisionToolkitConfig {
     python?: string
   }
   storageDir?: string
+  windowsWorkspaceFallback: boolean
   storageHistory: string[]
   allowedDirs: string[]
   imageInputVariants: {
@@ -438,6 +442,9 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
     throw new VisionToolkitError('config', 'runtime.python must not be empty')
   }
   const storageDir = config.storageDir?.trim()
+  if (config.windowsWorkspaceFallback !== undefined && typeof config.windowsWorkspaceFallback !== 'boolean') {
+    throw new VisionToolkitError('config', 'windowsWorkspaceFallback must be a boolean')
+  }
   const storageHistory = [...new Set((config.storageHistory ?? [])
     .map(dir => dir.trim())
     .filter(dir => dir.length > 0 && dir !== storageDir))]
@@ -463,6 +470,7 @@ export function resolveConfig(config: VisionToolkitConfig = {}): ResolvedVisionT
       ...(python !== undefined ? { python } : {}),
     },
     ...(storageDir === undefined || storageDir.length === 0 ? {} : { storageDir }),
+    windowsWorkspaceFallback: config.windowsWorkspaceFallback ?? false,
     storageHistory,
     allowedDirs,
     imageInputVariants: {
