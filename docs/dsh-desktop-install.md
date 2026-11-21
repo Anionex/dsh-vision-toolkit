@@ -62,7 +62,7 @@ If you installed without pinning an exact version, the official `dsh plugin upda
 
 ### Use vision tools in a read-only Windows workspace
 
-Open **Settings → Vision Toolkit → Advanced settings → Storage**, enable **Use private storage when the workspace is read-only**, and save. Leave **Default save directory** blank. Vision files stay in the workspace when it is writable. When storage cannot be written, the plugin uses a fixed folder in your local Windows app data and separates files by workspace. If the folder's permissions cannot be verified, use a writable workspace instead.
+Open **Settings → Vision Toolkit → Advanced settings → Local files**, enable **Use private storage when the workspace is read-only**, and save. Leave **Default save directory** blank. Vision files stay in the workspace when it is writable. When storage cannot be written, the plugin uses a fixed folder in your local Windows app data and separates files by workspace. If the folder's permissions cannot be verified, use a writable workspace instead.
 
 ## Links
 
