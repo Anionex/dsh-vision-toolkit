@@ -86,6 +86,9 @@ const en = {
   python: 'Python override',
   storage: 'Local files',
   storageDir: 'Default save directory',
+  windowsStorageDirHint: 'Leave blank on Windows. Use the private storage option below if your workspace cannot be written.',
+  windowsWorkspaceFallback: 'Use private storage when the workspace is read-only',
+  windowsWorkspaceFallbackHint: 'If the workspace cannot be written, save vision files in your local Windows app data, separated by workspace. Off by default.',
   storageDirHint: 'Leave blank to keep .dsh-vision-toolkit in each workspace. On POSIX systems, set an absolute shared root such as /tmp/dsh-vision-toolkit to store artifacts, pasted images, and caches in an automatically generated per-user, workspace-specific child directory. Windows shared roots remain disabled until their ACLs can be verified safely.',
   allowedDirs: 'Additional allowed directories',
   allowedDirsHint: 'One path per line. The session workspace is always allowed.',
@@ -280,6 +283,9 @@ const zh: Record<LocaleKey, string> = {
   python: 'Python 解释器（可选）',
   storage: '本地文件',
   storageDir: '默认保存目录',
+  windowsStorageDirHint: 'Windows 上请留空。工作区不可写时，可开启下方的私有存储。',
+  windowsWorkspaceFallback: '只读工作区可使用私有存储',
+  windowsWorkspaceFallbackHint: '工作区不可写时，把视觉工具文件保存到你在 Windows 上的本地应用数据目录，并按工作区隔离。默认关闭。',
   storageDirHint: '留空时继续在各工作区创建 .dsh-vision-toolkit。在 POSIX 系统上填写绝对路径共享根目录（例如 /tmp/dsh-vision-toolkit）后，产物、粘贴图片和缓存会保存到自动生成的当前用户、工作区专属子目录中。Windows 共享目录会保持禁用，直到能够安全校验 ACL 权限。',
   allowedDirs: '允许读取的其他目录',
   allowedDirsHint: '每行填写一个目录。当前会话的工作目录始终可以读取，无需重复填写。',
@@ -508,6 +514,7 @@ interface SettingsValue {
   concurrency?: number
   runtime?: { mode?: 'managed' | 'external'; agentVisionToolkitPath?: string; python?: string }
   storageDir?: string
+  windowsWorkspaceFallback?: boolean
   storageHistory?: string[]
   allowedDirs?: string[]
   imageInputVariants?: {
@@ -562,6 +569,7 @@ type PluginUpdateResult = {
 interface SettingsSnapshot {
   schemaVersion: 1
   writable: boolean
+  windowsWorkspaceFallbackAvailable?: boolean
   settings: { value: SettingsValue; revision: number; applies: 'live' }
   credential: { ref: string; configured: boolean; source?: string; writable: boolean }
   runtime: {
@@ -1122,6 +1130,7 @@ interface Draft {
   toolkitPath: string
   python: string
   storageDir: string
+  windowsWorkspaceFallback: boolean
   allowedDirs: string
   hiddenVariants: boolean
   variantEnabled: boolean
@@ -1149,6 +1158,7 @@ function draftOf(value: SettingsValue): Draft {
     toolkitPath: value.runtime?.agentVisionToolkitPath ?? '',
     python: value.runtime?.python ?? '',
     storageDir: value.storageDir ?? '',
+    windowsWorkspaceFallback: value.windowsWorkspaceFallback ?? false,
     allowedDirs: (value.allowedDirs ?? []).join('\n'),
     hiddenVariants: value.imageInputVariants?.hidden ?? true,
     variantEnabled: value.imageInputVariants?.enabled ?? true,
@@ -1202,6 +1212,7 @@ function valueOf(draft: Draft, t: Translate): SettingsValue {
       ...(draft.python.trim().length === 0 ? {} : { python: draft.python.trim() }),
     },
     ...(draft.storageDir.trim().length === 0 ? {} : { storageDir: draft.storageDir.trim() }),
+    windowsWorkspaceFallback: draft.windowsWorkspaceFallback,
     allowedDirs: draft.allowedDirs.split(/\r?\n/).map(entry => entry.trim()).filter(Boolean),
     imageInputVariants: {
       ...(draft.variantEnabled ? {} : { enabled: false }),
@@ -1515,9 +1526,15 @@ function LoadedSettings({ controller, t }: SettingsInjected) {
           <section className="dvt-panel"><div className="dvt-panel-title"><h3>{t('imageInput')}</h3></div><label className="dvt-check"><input type="checkbox" checked={draft.hiddenVariants} disabled={!snapshot.writable || busy} onChange={(event) => { update('hiddenVariants', event.target.checked) }} /><span>{t('hiddenVariantsLabel')}</span><small>{t('hiddenVariantsHint')}</small></label></section>
 
           <section className="dvt-panel"><div className="dvt-panel-title"><h3>{t('storage')}</h3></div><div className="dvt-form-grid">
-            <Field label={t('storageDir')} hint={t('storageDirHint')}><Input aria-label={t('storageDir')} placeholder="/tmp/dsh-vision-toolkit" value={draft.storageDir} onChange={(event) => { update('storageDir', event.target.value) }} /></Field>
+            <Field label={t('storageDir')} hint={t(snapshot.windowsWorkspaceFallbackAvailable ? 'windowsStorageDirHint' : 'storageDirHint')}><Input aria-label={t('storageDir')} placeholder={snapshot.windowsWorkspaceFallbackAvailable ? undefined : '/tmp/dsh-vision-toolkit'} value={draft.storageDir} onChange={(event) => { update('storageDir', event.target.value) }} /></Field>
             <Field label={t('allowedDirs')} hint={t('allowedDirsHint')}><textarea rows={3} value={draft.allowedDirs} onChange={(event) => { update('allowedDirs', event.target.value) }} /></Field>
-          </div></section>
+          </div>
+            {snapshot.windowsWorkspaceFallbackAvailable === true ? <label className="dvt-check dvt-storage-check">
+              <input type="checkbox" checked={draft.windowsWorkspaceFallback} disabled={!snapshot.writable || busy} onChange={(event) => { update('windowsWorkspaceFallback', event.target.checked) }} />
+              <span>{t('windowsWorkspaceFallback')}</span>
+              <small>{t('windowsWorkspaceFallbackHint')}</small>
+            </label> : null}
+          </section>
 
           <section className="dvt-panel"><div className="dvt-panel-title"><h3>{t('runtime')}</h3><span className={`dvt-badge ${snapshot.runtime.ready ? 'ok' : 'error'}`}>{snapshot.runtime.ready ? snapshot.runtime.upstream?.source === 'managed' ? t('runtimeManaged') : snapshot.runtime.upstream?.source === 'external' ? t('runtimeExternal') : t('runtimeReady') : t('runtimeUnavailable')}</span></div><div className="dvt-form-grid">
             <Field label={t('runtimeMode')}><select value={draft.runtimeMode} onChange={(event) => { update('runtimeMode', event.target.value as 'managed' | 'external') }}><option value="managed">{t('runtimeManaged')}</option><option value="external">{t('runtimeExternal')}</option></select></Field>
@@ -1548,6 +1565,9 @@ const CSS = `
 .dvt-health-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px}.dvt-health-grid>div{padding:9px 10px;border-radius:9px;background:var(--dsw-alias-bg-layer-2);border-left:3px solid var(--dsw-alias-border-l4)}.dvt-health-grid>div[data-status=ok]{border-left-color:var(--dsw-alias-state-success-primary)}.dvt-health-grid>div[data-status=warning],.dvt-health-grid>div[data-status=not_tested]{border-left-color:var(--dsw-alias-state-warn-primary)}.dvt-health-grid>div[data-status=error]{border-left-color:var(--dsw-alias-state-error-primary)}.dvt-health-grid span{font-size:10px;text-transform:capitalize}.dvt-health-grid strong{float:right;font-size:9px;text-transform:uppercase;color:var(--dsw-alias-label-secondary)}.dvt-health-test-tag{display:inline-flex;margin-left:6px;padding:1px 6px;border-radius:999px;background:var(--dsw-alias-bg-layer-1);font-size:9px;font-style:normal;font-weight:600;color:var(--dsw-alias-label-secondary)}.dvt-health-test-tag[data-status=ok]{background:color-mix(in srgb,var(--dsw-alias-state-success-primary) 12%,transparent);color:var(--dsw-alias-state-success-primary)}.dvt-health-test-tag[data-status=warning]{background:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 12%,transparent);color:var(--dsw-alias-state-warn-label)}.dvt-health-test-tag[data-status=error]{background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 12%,transparent);color:var(--dsw-alias-state-error-primary)}.dvt-health-grid p{clear:both;margin:5px 0 0;font-size:10px;line-height:1.4;color:var(--dsw-alias-label-secondary)}.dvt-loading{padding:24px;border-radius:12px;background:var(--dsw-alias-bg-layer-2);font-size:12px;color:var(--dsw-alias-label-secondary)}
 .dvt-paste-dock{box-sizing:border-box;width:calc(100% - 32px);max-width:var(--dsh-composer-card-max-width,960px);margin:0 auto;display:flex;flex-wrap:wrap;gap:6px;padding:0 2px 6px}.dvt-paste-chip{max-width:100%;height:32px;box-sizing:border-box;display:flex;align-items:center;gap:7px;padding:0 6px 0 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:9px;background:var(--dsw-specific-tip);font-size:12px}.dvt-paste-chip[data-status=copying]{border-color:var(--dsw-alias-state-business-primary)}.dvt-paste-chip[data-status=error]{border-color:var(--dsw-alias-state-error-primary)}.dvt-paste-name{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dvt-paste-detail{color:var(--dsw-alias-label-caption);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dvt-paste-chip[data-status=error] .dvt-paste-detail{color:var(--dsw-alias-state-error-primary)}.dvt-paste-chip button{width:20px;height:20px;display:grid;place-items:center;border:0;border-radius:50%;padding:0;background:transparent;color:var(--dsw-alias-label-caption);font:inherit;font-size:16px;cursor:pointer}.dvt-paste-chip button:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}.dvt-paste-chip button:disabled{opacity:.4;cursor:default}
 @media(max-width:720px){.dvt-settings-footer{display:grid}.dvt-release{width:auto}.dvt-form-grid,.dvt-update-grid{grid-template-columns:1fr}.dvt-metrics{grid-template-columns:1fr}.dvt-artifact-meta{align-items:flex-start;flex-direction:column}.dvt-panel-title{flex-direction:column}}
+.dvt-check.dvt-storage-check{grid-template-columns:auto minmax(0,1fr);gap:4px 8px;align-items:center}
+.dvt-storage-check input{justify-self:start;margin:0}
+.dvt-storage-check>small{grid-column:2}
 `
 
 function installStyles(): () => void {

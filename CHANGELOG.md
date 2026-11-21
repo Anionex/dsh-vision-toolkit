@@ -4,6 +4,11 @@ All notable user-facing changes to DSH Vision Toolkit are documented in this fil
 
 ## [Unreleased]
 
+### Added
+
+- Let Windows users opt in to private storage for read-only workspaces. When the workspace cannot be written, Vision Toolkit uses the current user's local app data, with separate storage per workspace and Windows permission checks. The setting is off by default (#169).
+- Windows 用户可选择为只读工作区启用私有存储。工作区不可写时，视觉工具会在当前用户的本地应用数据目录中按工作区隔离保存，并校验 Windows 目录权限。默认关闭（#169）。
+
 ## [0.1.52] - 2026-11-21
 
 ### Compatibility

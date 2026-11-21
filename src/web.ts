@@ -55,6 +55,7 @@ export const DISPLAY_CONFIG_ROUTE = '/_dsh/vision-toolkit/display-config'
 export interface VisionToolkitSettingsSnapshot {
   schemaVersion: 1
   writable: boolean
+  windowsWorkspaceFallbackAvailable: boolean
   settings: {
     value: VisionToolkitConfig
     user?: unknown
@@ -282,6 +283,7 @@ export class VisionToolkitWebBackend {
     return {
       schemaVersion: 1,
       writable: this.ctx.settings.writable,
+      windowsWorkspaceFallbackAvailable: process.platform === 'win32',
       settings: {
         value,
         ...(descriptor.user === undefined ? {} : { user: descriptor.user }),

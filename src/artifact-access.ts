@@ -16,6 +16,7 @@ import type { ArtifactDescriptor, ArtifactKind } from './artifacts.ts'
 import { assertSecureSharedStorageBase, assertSecureWorkspaceStorage, isWithin } from './paths.ts'
 import { visionToolkitStateRoot } from './runtime-install.ts'
 import type { JsonValue } from './tools.ts'
+import { assertWindowsFallbackFile, isWindowsFallbackStorageRoot } from './windows-fallback-storage.ts'
 
 /** Prefix owned by the plugin's artifact capability route. */
 export const ARTIFACT_ROUTE_PREFIX = '/_dsh/vision-toolkit/artifacts'
@@ -217,6 +218,8 @@ function sameFile(opened: Stats, current: Stats): boolean {
 async function openVerifiedArtifact(payload: ArtifactTokenPayload): Promise<{ handle: FileHandle; info: Stats }> {
   const root = artifactRoot(payload.path)
   if (root === undefined) throw new Error('artifact path is outside the managed delivery tree')
+  const storageRoot = dirname(root)
+  if (isWindowsFallbackStorageRoot(storageRoot)) await assertWindowsFallbackFile(storageRoot, payload.path)
   await assertManagedArtifactRoot(root)
   await assertNoSymlinkPath(root, payload.path)
   const noFollow = typeof fsConstants.O_NOFOLLOW === 'number' ? fsConstants.O_NOFOLLOW : 0

@@ -205,8 +205,26 @@ describe('VisionToolkitRuntimeManager', () => {
       .rejects.toThrow('fixture runtime unavailable')
 
     expect(manager.ready).toBe(false)
-    expect(manager.storageGeneration()).toEqual({ generation: 0, storageDir: shared })
-    expect(manager.validatedStorageDirectory()).toBe(shared)
+    expect(manager.storageGeneration()).toEqual({ generation: 0, storageDir: shared, windowsWorkspaceFallback: false })
+    expect(manager.validatedStorageGeneration()?.storageDir).toBe(shared)
+  })
+
+  it('keeps the startup opt-in after preparation fails and honors later active settings', async () => {
+    const ctx = new Context()
+    contexts.push(ctx)
+    const manager = new VisionToolkitRuntimeManager(ctx, async (_ctx, resolved) => {
+      if (resolved.provider.model === 'broken') throw new Error('fixture runtime unavailable')
+      return fakeRuntime(resolved)
+    })
+
+    await expect(manager.initialize({ ...config('broken'), windowsWorkspaceFallback: true }))
+      .rejects.toThrow('fixture runtime unavailable')
+    expect(manager.storageGeneration()).toEqual({ generation: 0, windowsWorkspaceFallback: true })
+
+    await manager.reconfigure({ ...config('working'), windowsWorkspaceFallback: true })
+    expect(manager.storageGeneration()).toEqual({ generation: 1, windowsWorkspaceFallback: true })
+    await manager.reconfigure(config('working'))
+    expect(manager.storageGeneration()).toEqual({ generation: 2, windowsWorkspaceFallback: false })
   })
 
   it('keeps best-effort consumers usable when startup storage preflight fails', async () => {
@@ -222,7 +240,7 @@ describe('VisionToolkitRuntimeManager', () => {
       .rejects.toThrow(/configured storage directory/u)
 
     expect(manager.ready).toBe(false)
-    expect(manager.validatedStorageDirectory()).toBeUndefined()
+    expect(manager.validatedStorageGeneration()).toBeUndefined()
     expect(() => manager.storageGeneration()).toThrow('storage configuration is not ready')
     expect(factory).not.toHaveBeenCalled()
   })

@@ -112,7 +112,7 @@ export async function apply(ctx: Context, config: VisionToolkitConfig = {}): Pro
     if (lifecycle.signal.aborted || manager.ready) return
     const resolvedInitial = resolveConfig(initialConfig)
     if (resolvedInitial.storageDir === undefined
-      || manager.validatedStorageDirectory() === resolvedInitial.storageDir) {
+      || manager.validatedStorageGeneration()?.storageDir === resolvedInitial.storageDir) {
       await persistStorageHistory(initialConfig, false)
     }
     const message = error instanceof Error ? error.message : String(error)
@@ -138,7 +138,7 @@ export async function apply(ctx: Context, config: VisionToolkitConfig = {}): Pro
     ctx,
     currentConfig,
     () => manager.ready ? manager.current() : undefined,
-    () => manager.validatedStorageDirectory(),
+    () => manager.validatedStorageGeneration(),
   )
   installVisionToolkitWeb(
     ctx,

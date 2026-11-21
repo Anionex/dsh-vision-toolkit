@@ -52,6 +52,9 @@ declare const en: {
     readonly python: "Python override";
     readonly storage: "Local files";
     readonly storageDir: "Default save directory";
+    readonly windowsStorageDirHint: "Leave blank on Windows. Use the private storage option below if your workspace cannot be written.";
+    readonly windowsWorkspaceFallback: "Use private storage when the workspace is read-only";
+    readonly windowsWorkspaceFallbackHint: "If the workspace cannot be written, save vision files in your local Windows app data, separated by workspace. Off by default.";
     readonly storageDirHint: "Leave blank to keep .dsh-vision-toolkit in each workspace. On POSIX systems, set an absolute shared root such as /tmp/dsh-vision-toolkit to store artifacts, pasted images, and caches in an automatically generated per-user, workspace-specific child directory. Windows shared roots remain disabled until their ACLs can be verified safely.";
     readonly allowedDirs: "Additional allowed directories";
     readonly allowedDirsHint: "One path per line. The session workspace is always allowed.";
@@ -262,6 +265,7 @@ interface SettingsValue {
         python?: string;
     };
     storageDir?: string;
+    windowsWorkspaceFallback?: boolean;
     storageHistory?: string[];
     allowedDirs?: string[];
     imageInputVariants?: {
@@ -303,6 +307,7 @@ type PluginUpdateResult = {
 interface SettingsSnapshot {
     schemaVersion: 1;
     writable: boolean;
+    windowsWorkspaceFallbackAvailable?: boolean;
     settings: {
         value: SettingsValue;
         revision: number;

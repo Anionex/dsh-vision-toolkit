@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execa, execaSync } from 'execa'
 import { afterEach, describe, expect, it } from 'vitest'
+import { workspaceStorageId } from '../src/paths.ts'
 
 /** Keyless real-profile acceptance: clean DSH_HOME install → boot → tool call → uninstall. */
 
@@ -65,6 +66,15 @@ function packPlugin(destination: string): string {
     throw new Error(`npm pack returned no filename: ${result.stdout}`)
   }
   return join(destination, filename)
+}
+
+function packForHeadlessProfile(home: string): string {
+  const profileDir = join(home, 'profiles', 'headless')
+  mkdirSync(profileDir, { recursive: true })
+  writeFileSync(join(profileDir, 'pnpm-workspace.yaml'), 'packages:\n  - .\nnodeLinker: hoisted\nautoInstallPeers: false\n')
+  const packageDir = join(home, 'package')
+  mkdirSync(packageDir)
+  return packPlugin(packageDir)
 }
 
 async function runDsh(
@@ -264,7 +274,7 @@ function latestToolResultText(requests: ReadonlyArray<{ body: unknown }>): strin
 
 function fixturePatch(home: string, visionBaseUrl: string): string {
   const path = join(home, 'fixture-patch.yml')
-  writeFileSync(path, [
+  const lines = [
     '- id: vision-toolkit',
     '  config:',
     '    provider:',
@@ -282,8 +292,39 @@ function fixturePatch(home: string, visionBaseUrl: string): string {
     '- id: session-title-llm',
     '  disabled: true',
     '',
-  ].join('\n'))
+  ]
+  // DSH 0.2's official route speaks DeepSeek Messages. Keep this fixture
+  // explicitly on its OpenAI chat-completions protocol instead.
+  if (REQUIRED_DSH_VERSION.startsWith('0.2.')) {
+    lines.push(
+      '- id: llm-pi-ai',
+      '  config:',
+      '    providers:',
+      '      fixture:',
+      '        api: openai-completions',
+      '        baseURL: !!js process.env.DEEPSEEK_BASE_URL',
+      '        apiKeyEnv: DEEPSEEK_API_KEY',
+      '        models:',
+      '          - id: fixture-model',
+      '            contextWindow: 128000',
+      '            maxTokens: 4096',
+      '- id: agent-default-model',
+      '  config:',
+      '    provider: fixture',
+      '    model: fixture-model',
+      '',
+    )
+  }
+  writeFileSync(path, lines.join('\n'))
   return path
+}
+
+function windowsFixturePowerShell(script: string, env: Record<string, string>): string {
+  const source = `$ErrorActionPreference = 'Stop'\n[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)\n${script}`
+  return execaSync('powershell.exe', [
+    '-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand',
+    Buffer.from(source, 'utf16le').toString('base64'),
+  ], { timeout: 20_000, env }).stdout.trim()
 }
 
 const profileE2eAvailable = hasCompatibleDsh() && hasPnpm()
@@ -301,12 +342,7 @@ describe.skipIf(!profileE2eAvailable)('dsh-vision-toolkit profile install (keyle
   it('installs, boots, calls vision_glance through the real profile, and uninstalls cleanly', async () => {
     const home = mkdtempSync(join(tmpdir(), 'dsh-vt-profile-'))
     homes.push(home)
-    const profileDir = join(home, 'profiles', 'headless')
-    mkdirSync(profileDir, { recursive: true })
-    writeFileSync(join(profileDir, 'pnpm-workspace.yaml'), 'packages:\n  - .\nnodeLinker: hoisted\nautoInstallPeers: false\n')
-    const packageDir = join(home, 'package')
-    mkdirSync(packageDir)
-    const tarball = packPlugin(packageDir)
+    const tarball = packForHeadlessProfile(home)
     const visionServer = await startMockVisionServer()
     const patch = fixturePatch(home, visionServer.baseURL)
 
@@ -323,28 +359,6 @@ describe.skipIf(!profileE2eAvailable)('dsh-vision-toolkit profile install (keyle
         JSON.stringify({ images: [SAMPLE_IMAGE] }),
         'vision done',
       )
-      // DSH 0.2's official route speaks DeepSeek Messages. Keep this fixture
-      // explicitly on its OpenAI chat-completions protocol instead.
-      if (REQUIRED_DSH_VERSION.startsWith('0.2.')) {
-        writeFileSync(patch, [
-          '\n- id: llm-pi-ai',
-          '  config:',
-          '    providers:',
-          '      fixture:',
-          '        api: openai-completions',
-          '        baseURL: !!js process.env.DEEPSEEK_BASE_URL',
-          '        apiKeyEnv: DEEPSEEK_API_KEY',
-          '        models:',
-          '          - id: fixture-model',
-          '            contextWindow: 128000',
-          '            maxTokens: 4096',
-          '- id: agent-default-model',
-          '  config:',
-          '    provider: fixture',
-          '    model: fixture-model',
-          '',
-        ].join('\n'), { flag: 'a' })
-      }
       try {
         const run = await runDsh([
           '--profile', 'headless', '--patch', patch,
@@ -667,6 +681,115 @@ describe.skipIf(!profileE2eAvailable)('dsh-vision-toolkit profile install (keyle
       expect(dumpAfter.stdout).not.toContain('vision-toolkit')
     } finally {
       await visionServer.close()
+    }
+  }, 300_000)
+
+  it.skipIf(process.platform !== 'win32')('requires opt-in for Windows workspace fallback and reuses artifacts after restart', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'dsh-vt-windows-profile-'))
+    homes.push(home)
+    const tarball = packForHeadlessProfile(home)
+    const workspace = join(home, 'unwritable-workspace')
+    mkdirSync(workspace)
+    copyFileSync(join(repoRoot, SAMPLE_IMAGE), join(workspace, 'reference.png'))
+
+    const workspaceEnv = { DSH_VISION_TEST_WORKSPACE: workspace }
+    const originalAcl = windowsFixturePowerShell(`
+      $acl = Get-Acl -LiteralPath $env:DSH_VISION_TEST_WORKSPACE
+      $acl.GetSecurityDescriptorSddlForm([Security.AccessControl.AccessControlSections]::Access)
+    `, workspaceEnv)
+    const localAppData = windowsFixturePowerShell(`
+      [Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)
+    `, {})
+    expect(originalAcl).not.toBe('')
+    expect(localAppData).not.toBe('')
+    const fallbackWorkspace = join(
+      realpathSync(localAppData), 'DSH-Vision-Toolkit-Fallback',
+      workspaceStorageId(realpathSync(workspace), 'windows-local-app-data'),
+    )
+    expect(existsSync(fallbackWorkspace)).toBe(false)
+
+    const visionServer = await startMockVisionServer()
+    const patch = fixturePatch(home, visionServer.baseURL)
+    const fallbackPatch = join(home, 'enable-fallback.yml')
+    writeFileSync(fallbackPatch, '- id: vision-toolkit\n  config:\n    windowsWorkspaceFallback: true\n')
+
+    async function crop(image: string, output: string, optIn: boolean): Promise<string> {
+      const server = await startProgressiveToolServer(
+        'vision_crop', JSON.stringify({ image, region: '0,0,16,16', output }), 'crop done',
+      )
+      try {
+        const run = await runDsh([
+          '--profile', 'headless', '--patch', patch, ...(optIn ? ['--patch', fallbackPatch] : []),
+          'crop the image in the workspace fixture',
+        ], {
+          DSH_HOME: home,
+          DSH_TELEMETRY_DISABLED: '1',
+          DEEPSEEK_API_KEY: 'mock-vision-e2e-key',
+          DEEPSEEK_BASE_URL: server.baseURL,
+          VISION_API_KEY: 'fixture-vision-key',
+        }, workspace)
+        expect(run.stderr).not.toContain('did not activate')
+        expect(run.code, run.stderr).toBe(0)
+        expect(run.stdout).toBe('crop done')
+        expectProgressiveExposure(server.requests)
+        return latestToolResultText(server.requests)
+      } finally {
+        await server.close()
+      }
+    }
+
+    function expectCrop(result: string, filename: string): string {
+      const value = JSON.parse(result) as { outputPath: string; artifact: { path: string; filename: string } }
+      const expected = join(fallbackWorkspace, '.dsh-vision-toolkit', 'artifacts', filename)
+      expect(value).toMatchObject({ width: 16, height: 16, artifact: { filename, mimeType: 'image/png' } })
+      expect(value.artifact.path).toBe(value.outputPath)
+      expect(realpathSync(value.outputPath)).toBe(realpathSync(expected))
+      expect(readFileSync(expected).subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+      return value.outputPath
+    }
+
+    try {
+      const add = await runDsh(['plugin', '--profile', 'headless', 'add', tarball], { DSH_HOME: home })
+      expect(add.code, add.stderr).toBe(0)
+
+      // Deny subdirectory creation on this disposable directory only. Real
+      // Windows permissions still allow reads and updating the test fixture ACL.
+      windowsFixturePowerShell(`
+        $acl = Get-Acl -LiteralPath $env:DSH_VISION_TEST_WORKSPACE
+        $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User
+        $deny = [Security.AccessControl.FileSystemAccessRule]::new(
+          $sid, [Security.AccessControl.FileSystemRights]::CreateDirectories,
+          [Security.AccessControl.InheritanceFlags]::None,
+          [Security.AccessControl.PropagationFlags]::None,
+          [Security.AccessControl.AccessControlType]::Deny)
+        $acl.AddAccessRule($deny)
+        Set-Acl -LiteralPath $env:DSH_VISION_TEST_WORKSPACE -AclObject $acl
+      `, workspaceEnv)
+      expect(() => mkdirSync(join(workspace, 'denied-probe'))).toThrow(/EACCES|EPERM/)
+
+      expect(await crop('reference.png', 'blocked.png', false)).toContain('Choose a session workspace writable')
+      expect(existsSync(fallbackWorkspace)).toBe(false)
+
+      const first = expectCrop(await crop('reference.png', 'fallback.png', true), 'fallback.png')
+      // Another dsh process starts from the same installed Profile and reads a
+      // previous artifact through the actual tool input fence.
+      expectCrop(await crop(first, 'after-restart.png', true), 'after-restart.png')
+      expect(readdirSync(workspace)).toEqual(['reference.png'])
+      expect(visionServer.requests).toHaveLength(0)
+    } finally {
+      try {
+        windowsFixturePowerShell(`
+          $acl = Get-Acl -LiteralPath $env:DSH_VISION_TEST_WORKSPACE
+          $acl.SetSecurityDescriptorSddlForm($env:DSH_VISION_TEST_WORKSPACE_ACL, [Security.AccessControl.AccessControlSections]::Access)
+          Set-Acl -LiteralPath $env:DSH_VISION_TEST_WORKSPACE -AclObject $acl
+        `, { ...workspaceEnv, DSH_VISION_TEST_WORKSPACE_ACL: originalAcl })
+      } finally {
+        try {
+          rmSync(fallbackWorkspace, { recursive: true, force: true })
+        } finally {
+          await visionServer.close()
+        }
+      }
     }
   }, 300_000)
 })

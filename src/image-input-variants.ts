@@ -36,7 +36,7 @@ import {
   EvidenceCache,
   SessionEvidenceStore,
 } from './evidence-cache.ts'
-import { sessionPasteRoot, type PasteSelectionQuery, type PasteVerdict } from './paste-images.ts'
+import { sessionPasteRoot, type PasteSelectionQuery, type PasteStorageSettings, type PasteVerdict } from './paste-images.ts'
 import type { CapturedEvidenceRuntime, VisionToolkitRuntime } from './runtime.ts'
 
 export { EvidenceCache } from './evidence-cache.ts'
@@ -143,12 +143,12 @@ async function materializeImage(
   data: Uint8Array,
   extension: string,
   sessionId: string | undefined,
-  storageDir: string | undefined,
+  storage: PasteStorageSettings,
 ): Promise<MaterializedImage> {
   const session = sessionId === undefined ? undefined : ctx.sessions.get(sessionId as never)
   const cwd = session?.header.cwd
   if (sessionId !== undefined && cwd !== undefined && isAbsolute(cwd)) {
-    const root = await sessionPasteRoot(ctx, sessionId, storageDir)
+    const root = await sessionPasteRoot(ctx, sessionId, storage)
     const identity = createHash('sha256')
       .update(`${sessionId}\u0000${String(block.attachment.attachmentId)}`)
       .digest('hex')
@@ -360,8 +360,8 @@ async function readImageBlock(
   runtime: () => CapturedEvidenceRuntime | undefined,
   block: ImageBlock,
   query: string,
-  sessionId?: string,
-  storageDir?: string,
+  sessionId: string | undefined,
+  storage: PasteStorageSettings,
 ): Promise<ContentBlock> {
   const attachments = ctx.get('attachments')
   const current = runtime()
@@ -376,7 +376,7 @@ async function readImageBlock(
   let pathEvidence = ''
   try {
     const stored = await attachments.readImage(block.attachment)
-    const materialized = await materializeImage(ctx, block, stored.data, extension, sessionId, storageDir)
+    const materialized = await materializeImage(ctx, block, stored.data, extension, sessionId, storage)
     temporaryDirectory = materialized.temporaryDirectory
     if (materialized.persistent) pathEvidence = imagePathEvidence(materialized.file)
 
@@ -423,7 +423,7 @@ async function readImageBlock(
  * @param signal - the caller's cancellation for this conversion pass.
  * @param sessionId - the live Session identity, when available.
  * @param runtimeHash - stable fingerprint of the vision provider and evidence runtime.
- * @param storageDir - optional shared plugin storage root.
+ * @param storage - the storage settings captured for this conversion.
  * @returns the rewritten message list.
  */
 export async function convertImagesToEvidence(
@@ -434,7 +434,7 @@ export async function convertImagesToEvidence(
   signal?: AbortSignal,
   sessionId?: string,
   runtimeHash = 'process-only-runtime',
-  storageDir?: string,
+  storage: PasteStorageSettings = {},
 ): Promise<Message[]> {
   const session = sessionId === undefined ? undefined : ctx.sessions.get(sessionId as never)
   const sessionIdentity = session === undefined
@@ -494,7 +494,7 @@ export async function convertImagesToEvidence(
           prompt: query,
           runtimeHash,
         }), () =>
-          readImageBlock(ctx, runtime, block, query, sessionId, storageDir)),
+          readImageBlock(ctx, runtime, block, query, sessionId, storage)),
         signal,
       ),
       signal,
@@ -607,7 +607,7 @@ export class ImageInputVariantAdapter extends LlmAdapter {
     private readonly runtime: () => VisionToolkitRuntime | undefined,
     private readonly cache: EvidenceCache,
     private readonly hidden: () => boolean = () => false,
-    private readonly startupStorageDirectory: () => string | undefined = () => undefined,
+    private readonly startupStorageSettings: () => PasteStorageSettings | undefined = () => undefined,
   ) {
     super()
   }
@@ -678,7 +678,7 @@ export class ImageInputVariantAdapter extends LlmAdapter {
       return
     }
     const current = this.runtime()
-    const storageDir = current === undefined ? this.startupStorageDirectory() : current.storageDirectory
+    const storage = (current === undefined ? this.startupStorageSettings() : current.storageSettings) ?? {}
     let captured: CapturedEvidenceRuntime | undefined
     if (current !== undefined && options.messages.some(message => contentHasImage(message.content))) {
       try {
@@ -703,9 +703,10 @@ export class ImageInputVariantAdapter extends LlmAdapter {
       captured?.evidenceFingerprint ?? createHash('sha256')
         .update('process-only-runtime')
         .update('\0')
-        .update(storageDir ?? '')
+        .update(storage.storageDir ?? '')
+        .update(storage.windowsWorkspaceFallback === true ? '\0windows-workspace-fallback' : '')
         .digest('hex'),
-      storageDir,
+      storage,
     )
     // Delegate through the host service under the upstream route, so the
     // upstream's own middleware, retry policy, and replay handling still apply.
@@ -949,7 +950,7 @@ export function installImageInputVariants(
   ctx: Context,
   getConfig: () => ResolvedVisionToolkitConfig,
   getRuntime: () => VisionToolkitRuntime | undefined,
-  getStartupStorageDirectory: () => string | undefined = () => undefined,
+  getStartupStorageSettings: () => PasteStorageSettings | undefined = () => undefined,
 ): { dispose: () => void; reconcile: () => void } {
   const evidenceStore = new SessionEvidenceStore(ctx)
   const evidenceCache = new EvidenceCache(EVIDENCE_CACHE_LIMIT, evidenceStore)
@@ -1095,7 +1096,7 @@ export function installImageInputVariants(
               getRuntime,
               evidenceCache,
               () => getConfig().imageInputVariants.hidden,
-              getStartupStorageDirectory,
+              getStartupStorageSettings,
             ),
           )
           registrations.set(upstream, { dispose, retryPolicyKey: upstreamRetryPolicyKey })
