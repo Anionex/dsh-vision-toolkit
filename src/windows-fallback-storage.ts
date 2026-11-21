@@ -13,6 +13,11 @@ const execFileAsync = promisify(execFile)
 const VERIFY_PRIVATE_STORAGE = String.raw`
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+trap {
+  [Console]::Error.WriteLine($_.Exception.Message)
+  [Console]::Error.WriteLine($_.InvocationInfo.PositionMessage)
+  exit 1
+}
 $workspaceId = $env:DSH_VISION_FALLBACK_WORKSPACE
 if ($workspaceId -cnotmatch '^[a-f0-9]{20}$') { throw 'Invalid fallback workspace.' }
 $create = $env:DSH_VISION_FALLBACK_CREATE -eq '1'
@@ -25,14 +30,14 @@ $system = 'S-1-5-18'
 $administrators = 'S-1-5-32-544'
 $trustedInstaller = 'S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464'
 $trusted = @($userSid, $system, $administrators, $trustedInstaller)
-$sections = [Security.AccessControl.AccessControlSections]::Access -bor [Security.AccessControl.AccessControlSections]::Owner
+$sections = [Security.AccessControl.AccessControlSections]'Access, Owner'
 
 function Assert-SafeItem($path, $private, $directory, $protectedAcl = $false) {
   $attributes = [IO.File]::GetAttributes($path)
-  if (($attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+  if ($attributes.HasFlag([IO.FileAttributes]::ReparsePoint)) {
     throw 'Fallback storage cannot traverse a Windows reparse point.'
   }
-  if ((($attributes -band [IO.FileAttributes]::Directory) -ne 0) -ne $directory) {
+  if ($attributes.HasFlag([IO.FileAttributes]::Directory) -ne $directory) {
     throw 'Fallback storage encountered an unexpected entry type.'
   }
   if ($directory) { $security = [IO.Directory]::GetAccessControl($path, $sections) }
@@ -45,7 +50,7 @@ function Assert-SafeItem($path, $private, $directory, $protectedAcl = $false) {
     throw 'The private fallback base must not inherit permissions from its parent.'
   }
   foreach ($ace in $descriptor.DiscretionaryAcl) {
-    if (-not $private -and ($ace.AceFlags -band [Security.AccessControl.AceFlags]::InheritOnly) -ne 0) { continue }
+    if (-not $private -and $ace.AceFlags.HasFlag([Security.AccessControl.AceFlags]::InheritOnly)) { continue }
     if ($ace.AceType -eq [Security.AccessControl.AceType]::AccessDenied) { continue }
     if ($ace.AceType -ne [Security.AccessControl.AceType]::AccessAllowed) {
       throw 'Fallback storage encountered an unsupported Windows ACL entry.'
@@ -86,10 +91,16 @@ foreach ($path in @($base, $bucket, $root)) {
       $acl = [Security.AccessControl.DirectorySecurity]::new()
       $acl.SetAccessRuleProtection($true, $false)
       $acl.SetOwner($user)
-      $inherit = [Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [Security.AccessControl.InheritanceFlags]::ObjectInherit
+      $inherit = [Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'
       foreach ($principal in @($userSid, $system, $administrators)) {
         $sid = [Security.Principal.SecurityIdentifier]::new($principal)
-        $rule = [Security.AccessControl.FileSystemAccessRule]::new($sid, 'FullControl', $inherit, 'None', 'Allow')
+        $rule = [Security.AccessControl.FileSystemAccessRule]::new(
+          $sid,
+          [Security.AccessControl.FileSystemRights]::FullControl,
+          $inherit,
+          [Security.AccessControl.PropagationFlags]::None,
+          [Security.AccessControl.AccessControlType]::Allow
+        )
         $acl.AddAccessRule($rule)
       }
       [void][IO.Directory]::CreateDirectory($path, $acl)
@@ -169,7 +180,15 @@ async function verifyStorage(
     }
     return root
   } catch (cause) {
-    throw new VisionToolkitError('path', 'Could not verify private Windows fallback storage. Choose a writable session workspace and retry.', { cause })
+    // execFile's error message includes the entire encoded script. Retain the
+    // verifier diagnostics (or process exit status) without that command text.
+    const failure = cause instanceof Error && 'cmd' in cause
+      ? new Error(
+          ('stderr' in cause && typeof cause.stderr === 'string' && cause.stderr.trim().slice(0, 2_000))
+          || `Windows PowerShell failed (${String('code' in cause ? cause.code : 'unknown exit status')})`,
+        )
+      : cause
+    throw new VisionToolkitError('path', 'Could not verify private Windows fallback storage. Choose a writable session workspace and retry.', { cause: failure })
   }
 }
 

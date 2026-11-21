@@ -694,8 +694,9 @@ describe.skipIf(!profileE2eAvailable)('dsh-vision-toolkit profile install (keyle
 
     const workspaceEnv = { DSH_VISION_TEST_WORKSPACE: workspace }
     const originalAcl = windowsFixturePowerShell(`
-      $acl = Get-Acl -LiteralPath $env:DSH_VISION_TEST_WORKSPACE
-      $acl.GetSecurityDescriptorSddlForm([Security.AccessControl.AccessControlSections]::Access)
+      $access = [Security.AccessControl.AccessControlSections]::Access
+      $acl = [IO.Directory]::GetAccessControl($env:DSH_VISION_TEST_WORKSPACE, $access)
+      $acl.GetSecurityDescriptorSddlForm($access)
     `, workspaceEnv)
     const localAppData = windowsFixturePowerShell(`
       [Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)
@@ -755,7 +756,8 @@ describe.skipIf(!profileE2eAvailable)('dsh-vision-toolkit profile install (keyle
       // Deny subdirectory creation on this disposable directory only. Real
       // Windows permissions still allow reads and updating the test fixture ACL.
       windowsFixturePowerShell(`
-        $acl = Get-Acl -LiteralPath $env:DSH_VISION_TEST_WORKSPACE
+        $path = $env:DSH_VISION_TEST_WORKSPACE
+        $acl = [IO.Directory]::GetAccessControl($path, [Security.AccessControl.AccessControlSections]::Access)
         $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User
         $deny = [Security.AccessControl.FileSystemAccessRule]::new(
           $sid, [Security.AccessControl.FileSystemRights]::CreateDirectories,
@@ -763,7 +765,7 @@ describe.skipIf(!profileE2eAvailable)('dsh-vision-toolkit profile install (keyle
           [Security.AccessControl.PropagationFlags]::None,
           [Security.AccessControl.AccessControlType]::Deny)
         $acl.AddAccessRule($deny)
-        Set-Acl -LiteralPath $env:DSH_VISION_TEST_WORKSPACE -AclObject $acl
+        [IO.Directory]::SetAccessControl($path, $acl)
       `, workspaceEnv)
       expect(() => mkdirSync(join(workspace, 'denied-probe'))).toThrow(/EACCES|EPERM/)
 
@@ -779,9 +781,11 @@ describe.skipIf(!profileE2eAvailable)('dsh-vision-toolkit profile install (keyle
     } finally {
       try {
         windowsFixturePowerShell(`
-          $acl = Get-Acl -LiteralPath $env:DSH_VISION_TEST_WORKSPACE
-          $acl.SetSecurityDescriptorSddlForm($env:DSH_VISION_TEST_WORKSPACE_ACL, [Security.AccessControl.AccessControlSections]::Access)
-          Set-Acl -LiteralPath $env:DSH_VISION_TEST_WORKSPACE -AclObject $acl
+          $path = $env:DSH_VISION_TEST_WORKSPACE
+          $access = [Security.AccessControl.AccessControlSections]::Access
+          $acl = [IO.Directory]::GetAccessControl($path, $access)
+          $acl.SetSecurityDescriptorSddlForm($env:DSH_VISION_TEST_WORKSPACE_ACL, $access)
+          [IO.Directory]::SetAccessControl($path, $acl)
         `, { ...workspaceEnv, DSH_VISION_TEST_WORKSPACE_ACL: originalAcl })
       } finally {
         try {
