@@ -2,11 +2,10 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdir
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execa, execaSync } from 'execa'
 import { afterEach, describe, expect, it } from 'vitest'
-import { workspaceStorageId } from '../src/paths.ts'
 
 /** Keyless real-profile acceptance: clean DSH_HOME install → boot → tool call → uninstall. */
 
@@ -703,11 +702,10 @@ describe.skipIf(!profileE2eAvailable)('dsh-vision-toolkit profile install (keyle
     `, {})
     expect(originalAcl).not.toBe('')
     expect(localAppData).not.toBe('')
-    const fallbackWorkspace = join(
-      realpathSync(localAppData), 'DSH-Vision-Toolkit-Fallback',
-      workspaceStorageId(realpathSync(workspace), 'windows-local-app-data'),
-    )
-    expect(existsSync(fallbackWorkspace)).toBe(false)
+    const fallbackBase = join(realpathSync(localAppData), 'DSH-Vision-Toolkit-Fallback')
+    const listBuckets = () => existsSync(fallbackBase) ? readdirSync(fallbackBase).sort() : []
+    const originalBuckets = listBuckets()
+    let fallbackWorkspace: string | undefined
 
     const visionServer = await startMockVisionServer()
     const patch = fixturePatch(home, visionServer.baseURL)
@@ -741,11 +739,18 @@ describe.skipIf(!profileE2eAvailable)('dsh-vision-toolkit profile install (keyle
 
     function expectCrop(result: string, filename: string): string {
       const value = JSON.parse(result) as { outputPath: string; artifact: { path: string; filename: string } }
-      const expected = join(fallbackWorkspace, '.dsh-vision-toolkit', 'artifacts', filename)
       expect(value).toMatchObject({ width: 16, height: 16, artifact: { filename, mimeType: 'image/png' } })
       expect(value.artifact.path).toBe(value.outputPath)
-      expect(realpathSync(value.outputPath)).toBe(realpathSync(expected))
-      expect(readFileSync(expected).subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+      const actual = realpathSync(value.outputPath)
+      expect(relative(fallbackBase, realpathSync(fallbackBase))).toBe('')
+      const parts = relative(fallbackBase, actual).split(sep)
+      expect(parts).toEqual([expect.stringMatching(/^[a-f0-9]{20}$/), '.dsh-vision-toolkit', 'artifacts', filename])
+      const bucket = parts[0]!
+      expect(originalBuckets.map(name => name.toLowerCase())).not.toContain(bucket)
+      const observedWorkspace = join(fallbackBase, bucket)
+      if (fallbackWorkspace === undefined) fallbackWorkspace = observedWorkspace
+      else expect(observedWorkspace).toBe(fallbackWorkspace)
+      expect(readFileSync(actual).subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
       return value.outputPath
     }
 
@@ -770,7 +775,7 @@ describe.skipIf(!profileE2eAvailable)('dsh-vision-toolkit profile install (keyle
       expect(() => mkdirSync(join(workspace, 'denied-probe'))).toThrow(/EACCES|EPERM/)
 
       expect(await crop('reference.png', 'blocked.png', false)).toContain('Choose a session workspace writable')
-      expect(existsSync(fallbackWorkspace)).toBe(false)
+      expect(listBuckets()).toEqual(originalBuckets)
 
       const first = expectCrop(await crop('reference.png', 'fallback.png', true), 'fallback.png')
       // Another dsh process starts from the same installed Profile and reads a
@@ -789,7 +794,7 @@ describe.skipIf(!profileE2eAvailable)('dsh-vision-toolkit profile install (keyle
         `, { ...workspaceEnv, DSH_VISION_TEST_WORKSPACE_ACL: originalAcl })
       } finally {
         try {
-          rmSync(fallbackWorkspace, { recursive: true, force: true })
+          if (fallbackWorkspace !== undefined) rmSync(fallbackWorkspace, { recursive: true, force: true })
         } finally {
           await visionServer.close()
         }
