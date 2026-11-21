@@ -71,6 +71,8 @@ jobs:
             dsh: 0.2.2-rc.1
           - node: 24.x
             dsh: 0.2.2-rc.2
+          - node: 24.x
+            dsh: 0.2.2-rc.3
 
     steps:
       - name: Check out repository
@@ -183,7 +185,7 @@ jobs:
         shell: bash
         run: |
           npm install --global --prefix "$RUNNER_TEMP/dsh-cli" \
-            @deepseek-ai/dsh@0.2.2-rc.2 \
+            @deepseek-ai/dsh@0.2.2-rc.3 \
             --registry=https://registry.npmjs.org
           echo "$RUNNER_TEMP/dsh-cli" >> "$GITHUB_PATH"
 
@@ -196,7 +198,7 @@ jobs:
       - name: Run unit and required Profile acceptance tests
         run: pnpm test
         env:
-          DSH_VISION_PROFILE_DSH_VERSION: "0.2.2-rc.2"
+          DSH_VISION_PROFILE_DSH_VERSION: "0.2.2-rc.3"
           DSH_VISION_REQUIRE_PROFILE_E2E: "1"
 
       - name: Verify portable package surface
